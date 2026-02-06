@@ -89,4 +89,4 @@ launchctl load ~/Library/LaunchAgents/com.bekci.agent.plist
 
 ## License
 
-MIT
+MIT - Copyright (c) 2026 Objects Consulting Ltd, UK
