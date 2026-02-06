@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bekci - Service Status</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3C!-- crossbones --%3E%3Cg stroke='%23f97316' stroke-width='5' stroke-linecap='round'%3E%3Cline x1='10' y1='48' x2='54' y2='16'/%3E%3Cline x1='54' y1='48' x2='10' y2='16'/%3E%3Ccircle cx='10' cy='48' r='4' fill='%23f97316'/%3E%3Ccircle cx='54' cy='48' r='4' fill='%23f97316'/%3E%3Ccircle cx='10' cy='16' r='4' fill='%23f97316'/%3E%3Ccircle cx='54' cy='16' r='4' fill='%23f97316'/%3E%3C/g%3E%3C!-- skull --%3E%3Cellipse cx='32' cy='26' rx='16' ry='14' fill='%23f97316'/%3E%3Crect x='25' y='36' width='14' height='8' rx='2' fill='%23f97316'/%3E%3Ccircle cx='26' cy='24' r='4' fill='white'/%3E%3Ccircle cx='38' cy='24' r='4' fill='white'/%3E%3Cellipse cx='32' cy='32' rx='2.5' ry='2' fill='white'/%3E%3Crect x='29' y='37' width='2' height='6' fill='white'/%3E%3Crect x='33' y='37' width='2' height='6' fill='white'/%3E%3C/svg%3E">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f8fafc;
+            color: #1e293b;
+            line-height: 1.4;
+            padding: 1rem 1.5rem;
+        }
+        .container { max-width: 780px; margin: 0 auto; }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.2rem;
+        }
+        header h1 { font-size: 1.3rem; font-weight: 600; color: #0f172a; }
+        .header-left .last-updated { font-size: 0.75rem; color: #94a3b8; }
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 0.75rem;
+            color: #64748b;
+        }
+        .check-interval { background: #f1f5f9; padding: 0.2rem 0.5rem; border-radius: 4px; }
+        .btn-check-now {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 0.3rem 0.7rem;
+            border-radius: 5px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .btn-check-now:hover { background: #2563eb; }
+        .btn-check-now:active { background: #1d4ed8; }
+        .btn-check-now.running { background: #94a3b8; cursor: wait; }
+        .project {
+            background: white;
+            border-radius: 8px;
+            padding: 0.8rem 1rem;
+            margin-bottom: 0.8rem;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+        }
+        .project-header {
+            margin-bottom: 0.4rem;
+            padding-bottom: 0.4rem;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .project-name { font-size: 1rem; font-weight: 600; }
+        .service { padding: 0.5rem 0; border-bottom: 1px solid #f1f5f9; }
+        .service:last-child { border-bottom: none; padding-bottom: 0; }
+        .service-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.3rem;
+        }
+        .service-name {
+            font-weight: 500;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+        .check-target {
+            font-size: 0.7rem;
+            color: #94a3b8;
+            font-weight: 400;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+        }
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.1rem 0.5rem;
+            border-radius: 9999px;
+            font-size: 0.65rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+        }
+        .status-badge.operational { background: #dcfce7; color: #166534; }
+        .status-badge.down { background: #fee2e2; color: #991b1b; }
+        .status-badge.unknown { background: #f1f5f9; color: #475569; }
+        .service-meta {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.75rem;
+            color: #64748b;
+        }
+        .uptime-chart {
+            display: flex;
+            gap: 1px;
+            height: 20px;
+            margin-top: 0.3rem;
+        }
+        .uptime-bar {
+            flex: 1;
+            border-radius: 1px;
+            min-width: 2px;
+            transition: transform 0.15s;
+            cursor: pointer;
+        }
+        .uptime-bar:hover { transform: scaleY(1.3); }
+        .uptime-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.6rem;
+            color: #cbd5e1;
+            margin-top: 0.15rem;
+        }
+        .tooltip { position: relative; }
+        .tooltip:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1e293b;
+            color: white;
+            padding: 0.2rem 0.4rem;
+            border-radius: 3px;
+            font-size: 0.65rem;
+            white-space: nowrap;
+            z-index: 10;
+        }
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 1rem;
+            font-size: 0.65rem;
+            color: #94a3b8;
+        }
+        .legend-item { display: flex; align-items: center; gap: 0.3rem; }
+        .legend-color { width: 10px; height: 10px; border-radius: 2px; }
+        footer {
+            text-align: center;
+            margin-top: 1.2rem;
+            font-size: 0.7rem;
+            color: #cbd5e1;
+        }
+        @media (max-width: 640px) {
+            body { padding: 0.75rem; }
+            .service-meta { flex-wrap: wrap; gap: 0.4rem; }
+            .uptime-bar { min-width: 1px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-left">
+                <h1>Service Status</h1>
+                <span class="last-updated">Updated: {{.LastUpdated}}</span>
+            </div>
+            <div class="header-right">
+                <span class="check-interval">every {{.CheckInterval}}</span>
+                <button class="btn-check-now" onclick="checkNow(this)">Check Now</button>
+            </div>
+        </header>
+
+        {{range .Projects}}
+        <div class="project">
+            <div class="project-header">
+                <span class="project-name">{{.Name}}</span>
+            </div>
+
+            {{range .Services}}
+            <div class="service">
+                <div class="service-header">
+                    <span class="service-name">
+                        {{.Name}}
+                        {{if .CheckTarget}}<span class="check-target">({{.CheckTarget}})</span>{{end}}
+                        <span class="status-badge {{statusClass .Status}}">
+                            {{if eq .Status "up"}}Operational{{else if eq .Status "down"}}Down{{else}}Unknown{{end}}
+                        </span>
+                    </span>
+                    <span class="service-meta">
+                        {{if gt .UptimePct 0.0}}
+                        <span>{{printf "%.2f" .UptimePct}}%</span>
+                        {{end}}
+                        {{if gt .ResponseMs 0}}
+                        <span>{{.ResponseMs}}ms</span>
+                        {{end}}
+                    </span>
+                </div>
+
+                <div class="uptime-chart">
+                    {{range .DailyHistory}}
+                    <div class="uptime-bar tooltip"
+                         style="background-color: {{.Color}}"
+                         data-tooltip="{{.Date}}: {{if lt .UptimePct 0.0}}No data{{else}}{{printf "%.1f" .UptimePct}}%{{end}}">
+                    </div>
+                    {{end}}
+                </div>
+                <div class="uptime-label">
+                    <span>90 days ago</span>
+                    <span>Today</span>
+                </div>
+            </div>
+            {{end}}
+        </div>
+        {{end}}
+
+        <div class="legend">
+            <div class="legend-item"><div class="legend-color" style="background:#22c55e"></div><span>100%</span></div>
+            <div class="legend-item"><div class="legend-color" style="background:#eab308"></div><span>95-99%</span></div>
+            <div class="legend-item"><div class="legend-color" style="background:#f97316"></div><span>80-94%</span></div>
+            <div class="legend-item"><div class="legend-color" style="background:#ef4444"></div><span>&lt;80%</span></div>
+            <div class="legend-item"><div class="legend-color" style="background:#e5e7eb"></div><span>No data</span></div>
+        </div>
+
+        <footer>Bekci Service Monitor</footer>
+    </div>
+
+    <script>
+        function checkNow(btn) {
+            btn.textContent = 'Checking...';
+            btn.classList.add('running');
+            fetch('/api/check-now', { method: 'POST' })
+                .then(() => {
+                    setTimeout(() => location.reload(), 3000);
+                })
+                .catch(err => {
+                    console.error('Check failed:', err);
+                    btn.textContent = 'Check Now';
+                    btn.classList.remove('running');
+                });
+        }
+
+        setInterval(() => location.reload(), 30000);
+    </script>
+</body>
+</html>

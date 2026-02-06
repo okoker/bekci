@@ -1,0 +1,14 @@
+# Binary
+bin/
+
+# Runtime data
+*.db
+*.db-shm
+*.db-wal
+
+# Real config (contains hosts, SSH keys, credentials)
+config.yaml
+
+# Internal docs
+REQUIREMENTS.md
+PROGRESS.md

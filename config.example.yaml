@@ -1,0 +1,79 @@
+global:
+  check_interval: 5m          # Default check interval
+  alert_cooldown: 30m         # Minimum time between alerts for same service
+  history_days: 90            # Days of history to keep
+  restart_attempts: 3         # Number of restart attempts on failure
+  restart_delay: 15s          # Delay between restart attempts
+  web_port: 65000             # Web UI port
+  db_path: bekci.db           # SQLite database path
+  log_level: info             # Log level: debug, info, warn, error
+
+resend:
+  api_key: "re_xxxxx"         # Resend API key (leave empty to disable email)
+  from: "bekci@yourdomain.com"
+  to: ["you@email.com"]
+
+ssh_defaults:
+  key_path: "~/.ssh/id_rsa"   # Default SSH key
+  user: "root"                # Default SSH user
+  timeout: 10s                # SSH connection timeout
+
+projects:
+  - name: "My Web App"
+    services:
+      - name: "backend"
+        url: "backend.example.com:5183"
+        check:
+          type: https
+          endpoint: "/health"
+          expect_status: 200
+          timeout: 10s
+          skip_tls_verify: false
+          follow_redirect: true
+        restart:
+          type: local
+          command: "docker restart myapp-backend"
+        check_interval: 2m    # Override global interval
+
+      - name: "frontend"
+        url: "frontend.example.com:8000"
+        check:
+          type: https
+        restart:
+          type: ssh
+          host: "frontend.example.com"
+          command: "systemctl restart nginx"
+          key_path: "/path/to/special_key"  # Override default key
+
+  - name: "Dev Server"
+    services:
+      - name: "api"
+        url: "localhost:10300"
+        check:
+          type: process
+          name: "node"
+          args_contain: "server.js"
+        restart:
+          type: local
+          command: "cd /app && npm start &"
+
+      - name: "database"
+        url: "localhost:5432"
+        check:
+          type: tcp           # Just check if port is open
+          timeout: 5s
+        restart:
+          type: none          # Alert only, no restart
+
+# Check types:
+# - https: HTTP(S) GET request, check status code
+# - tcp: TCP port connect (up if connection succeeds, requires url as host:port)
+# - process: Local process check by name/args
+# - ssh_process: SSH to host, check process exists
+# - ssh_command: SSH to host, run command, check exit code 0
+
+# Restart types:
+# - local: Run local shell command
+# - ssh: SSH to host, run command
+# - docker: docker restart <container>
+# - none: Alert only, no restart
