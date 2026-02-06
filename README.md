@@ -1,8 +1,11 @@
-# Bekci
+# Bekçi
 
-Lightweight service watchdog written in Go. Monitors health of your services, auto-restarts on failure, sends email alerts via [Resend](https://resend.com), and displays a status dashboard.
+Lightweight service watchdog written in Go. Monitors health of your services, auto-restarts on failure, sends email alerts via Resend, and displays a status dashboard.
 
-![Status Page](https://img.shields.io/badge/dashboard-port_65000-blue)
+I have a lot of endpoints and devices running in my local/remote environments and i jump from project to project as i found it keeps me more dynamic and creative. However remembering whats what was becoming an issue. Also what i do can break things a lot (so i can make them unbreakable). I had tiny bashscripts runnng in the corner for tracking but when I recently became curios about Go I figured might as well make something out of it. Hence Bekçi (AKA Sentry). 
+
+![Status Page](https://img.shields.io/badge/dashboard-65000-blue)
+![Status Page](https://img.shields.io/badge/api-65000-purple)
 
 ## Features
 
@@ -86,6 +89,14 @@ projects:
 cp com.bekci.agent.plist ~/Library/LaunchAgents/
 launchctl load ~/Library/LaunchAgents/com.bekci.agent.plist
 ```
+
+
+## Road Map
+* Add scripted checks. 
+* Push results to a tiny mobile app. 
+* Add a scheduler to turn services on/off on the cloud.
+
+
 
 ## License
 
