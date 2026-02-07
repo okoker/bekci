@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/bekci/internal/config"
+	"github.com/bekci/internal/sshutil"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -53,6 +54,9 @@ func (c *Checker) checkSSHCommand(svc *config.Service) *Result {
 func (c *Checker) runSSHCommand(svc *config.Service, cmd string) (string, error) {
 	// Determine SSH settings
 	host := svc.Check.Host
+	if host == "" {
+		return "", fmt.Errorf("SSH host is empty")
+	}
 	user := svc.Check.User
 	if user == "" {
 		user = c.sshDefaults.User
@@ -77,22 +81,25 @@ func (c *Checker) runSSHCommand(svc *config.Service, cmd string) (string, error)
 		return "", fmt.Errorf("parsing SSH key: %w", err)
 	}
 
+	// Host key verification
+	hostKeyCallback, err := sshutil.HostKeyCallback(c.sshDefaults)
+	if err != nil {
+		return "", fmt.Errorf("loading known_hosts: %w", err)
+	}
+
 	// Connect
-	config := &ssh.ClientConfig{
+	sshConfig := &ssh.ClientConfig{
 		User: user,
 		Auth: []ssh.AuthMethod{
 			ssh.PublicKeys(signer),
 		},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		HostKeyCallback: hostKeyCallback,
 		Timeout:         timeout,
 	}
 
-	// Add port if not present
-	if host[len(host)-1] != ':' && !containsPort(host) {
-		host = host + ":22"
-	}
+	host = sshutil.NormalizeHost(host)
 
-	client, err := ssh.Dial("tcp", host, config)
+	client, err := ssh.Dial("tcp", host, sshConfig)
 	if err != nil {
 		return "", fmt.Errorf("SSH connection failed: %w", err)
 	}
@@ -106,16 +113,4 @@ func (c *Checker) runSSHCommand(svc *config.Service, cmd string) (string, error)
 
 	output, err := session.CombinedOutput(cmd)
 	return string(output), err
-}
-
-func containsPort(host string) bool {
-	for i := len(host) - 1; i >= 0; i-- {
-		if host[i] == ':' {
-			return true
-		}
-		if host[i] == '.' || host[i] == ']' {
-			return false
-		}
-	}
-	return false
 }

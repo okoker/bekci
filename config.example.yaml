@@ -15,9 +15,11 @@ resend:
   to: ["you@email.com"]
 
 ssh_defaults:
-  key_path: "~/.ssh/id_rsa"   # Default SSH key
-  user: "root"                # Default SSH user
-  timeout: 10s                # SSH connection timeout
+  key_path: "~/.ssh/id_rsa"              # Default SSH key
+  user: "root"                            # Default SSH user
+  timeout: 10s                            # SSH connection timeout
+  known_hosts_path: "~/.ssh/known_hosts"  # Host key verification file
+  skip_host_key_verify: false             # Set true to disable (insecure)
 
 projects:
   - name: "My Web App"

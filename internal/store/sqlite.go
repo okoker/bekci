@@ -1,9 +1,11 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"os"
 	"sync"
 	"time"
 
@@ -54,6 +56,9 @@ func New(dbPath string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("migrating database: %w", err)
 	}
+
+	// Restrict DB file permissions
+	os.Chmod(dbPath, 0600)
 
 	return s, nil
 }
@@ -327,7 +332,7 @@ func (s *Store) PurgeOldData(days int) (int64, error) {
 }
 
 // StartPurgeRoutine runs periodic cleanup of old data
-func (s *Store) StartPurgeRoutine(days int) {
+func (s *Store) StartPurgeRoutine(ctx context.Context, days int) {
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 
@@ -338,11 +343,16 @@ func (s *Store) StartPurgeRoutine(days int) {
 		slog.Info("Purged old check results", "count", deleted)
 	}
 
-	for range ticker.C {
-		if deleted, err := s.PurgeOldData(days); err != nil {
-			slog.Error("Error purging old data", "error", err)
-		} else if deleted > 0 {
-			slog.Info("Purged old check results", "count", deleted)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if deleted, err := s.PurgeOldData(days); err != nil {
+				slog.Error("Error purging old data", "error", err)
+			} else if deleted > 0 {
+				slog.Info("Purged old check results", "count", deleted)
+			}
 		}
 	}
 }

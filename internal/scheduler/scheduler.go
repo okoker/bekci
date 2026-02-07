@@ -20,8 +20,9 @@ type Scheduler struct {
 	restarter *restarter.Restarter
 	alerter   *alerter.Alerter
 
-	tickers map[string]*time.Ticker
-	mu      sync.Mutex
+	tickers  map[string]*time.Ticker
+	mu       sync.Mutex
+	checkMu  map[string]*sync.Mutex // per-service check lock
 }
 
 func New(cfg *config.Config, s *store.Store, c *checker.Checker, r *restarter.Restarter, a *alerter.Alerter) *Scheduler {
@@ -32,6 +33,7 @@ func New(cfg *config.Config, s *store.Store, c *checker.Checker, r *restarter.Re
 		restarter: r,
 		alerter:   a,
 		tickers:   make(map[string]*time.Ticker),
+		checkMu:   make(map[string]*sync.Mutex),
 	}
 }
 
@@ -104,8 +106,27 @@ func (s *Scheduler) CheckAllNow() {
 	}
 }
 
+func (s *Scheduler) getCheckMutex(serviceKey string) *sync.Mutex {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if m, ok := s.checkMu[serviceKey]; ok {
+		return m
+	}
+	m := &sync.Mutex{}
+	s.checkMu[serviceKey] = m
+	return m
+}
+
 func (s *Scheduler) checkService(projectName string, svc *config.Service) {
 	serviceKey := config.GetServiceKey(projectName, svc.Name)
+
+	// Prevent concurrent checks of the same service
+	mu := s.getCheckMutex(serviceKey)
+	if !mu.TryLock() {
+		slog.Debug("Check already in progress, skipping", "service", serviceKey)
+		return
+	}
+	defer mu.Unlock()
 
 	// Perform check
 	result := s.checker.Check(svc)
