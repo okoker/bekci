@@ -22,7 +22,7 @@ func (c *Checker) checkTCP(svc *config.Service) *Result {
 	if err != nil {
 		return resultDown(fmt.Sprintf("tcp connect failed: %v", err), responseMs)
 	}
-	conn.Close()
+	defer conn.Close()
 
 	return resultUp(0, responseMs)
 }

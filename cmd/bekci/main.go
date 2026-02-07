@@ -47,7 +47,7 @@ func main() {
 	}
 
 	// Setup logging
-	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
 		log.Fatalf("Failed to open log file %s: %v", logPath, err)
 	}
@@ -58,6 +58,10 @@ func main() {
 	handler := slog.NewTextHandler(writer, &slog.HandlerOptions{Level: level})
 	slog.SetDefault(slog.New(handler))
 
+	// Setup graceful shutdown context (used by purge routine, scheduler, etc.)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// Initialize store
 	db, err := store.New(cfg.Global.DBPath)
 	if err != nil {
@@ -67,7 +71,7 @@ func main() {
 	defer db.Close()
 
 	// Start purge routine for old entries
-	go db.StartPurgeRoutine(cfg.Global.HistoryDays)
+	go db.StartPurgeRoutine(ctx, cfg.Global.HistoryDays)
 
 	// Initialize alerter
 	alert := alerter.New(cfg.Resend, cfg.Global.AlertCooldown)
@@ -83,10 +87,6 @@ func main() {
 
 	// Create web server
 	srv := web.New(cfg.Global.WebPort, db, cfg, sched)
-
-	// Setup graceful shutdown
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)

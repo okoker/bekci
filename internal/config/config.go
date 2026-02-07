@@ -37,9 +37,11 @@ type ResendConfig struct {
 }
 
 type SSHConfig struct {
-	KeyPath string        `yaml:"key_path"`
-	User    string        `yaml:"user"`
-	Timeout time.Duration `yaml:"timeout"`
+	KeyPath            string        `yaml:"key_path"`
+	User               string        `yaml:"user"`
+	Timeout            time.Duration `yaml:"timeout"`
+	KnownHostsPath    string        `yaml:"known_hosts_path"`
+	SkipHostKeyVerify bool          `yaml:"skip_host_key_verify"`
 }
 
 type Project struct {
@@ -146,6 +148,14 @@ func applyDefaults(cfg *Config) {
 	if cfg.SSHDefaults.Timeout == 0 {
 		cfg.SSHDefaults.Timeout = 10 * time.Second
 	}
+	if cfg.SSHDefaults.KnownHostsPath == "" {
+		home, _ := os.UserHomeDir()
+		if home != "" {
+			cfg.SSHDefaults.KnownHostsPath = filepath.Join(home, ".ssh", "known_hosts")
+		}
+	} else {
+		cfg.SSHDefaults.KnownHostsPath = expandPath(cfg.SSHDefaults.KnownHostsPath)
+	}
 
 	// Service defaults
 	for i := range cfg.Projects {
@@ -185,6 +195,22 @@ func applyDefaults(cfg *Config) {
 func validate(cfg *Config) error {
 	if len(cfg.Projects) == 0 {
 		return fmt.Errorf("no projects defined")
+	}
+
+	// Validate global paths
+	if err := validatePath(cfg.Global.DBPath, "db_path"); err != nil {
+		return err
+	}
+	if err := validatePath(cfg.Global.LogPath, "log_path"); err != nil {
+		return err
+	}
+	if err := validatePath(cfg.SSHDefaults.KeyPath, "ssh_defaults.key_path"); err != nil {
+		return err
+	}
+
+	// Minimum check interval to prevent self-DoS
+	if cfg.Global.CheckInterval < 10*time.Second {
+		return fmt.Errorf("check_interval must be at least 10s")
 	}
 
 	for i, proj := range cfg.Projects {
@@ -256,6 +282,19 @@ func validate(cfg *Config) error {
 			default:
 				return fmt.Errorf("service %q: unknown restart type %q", svc.Name, svc.Restart.Type)
 			}
+
+			// Validate paths against traversal
+			if err := validatePath(svc.Check.KeyPath, fmt.Sprintf("service %q check.key_path", svc.Name)); err != nil {
+				return err
+			}
+			if err := validatePath(svc.Restart.KeyPath, fmt.Sprintf("service %q restart.key_path", svc.Name)); err != nil {
+				return err
+			}
+
+			// Validate minimum check interval
+			if svc.CheckInterval > 0 && svc.CheckInterval < 10*time.Second {
+				return fmt.Errorf("service %q: check_interval must be at least 10s", svc.Name)
+			}
 		}
 	}
 
@@ -264,10 +303,26 @@ func validate(cfg *Config) error {
 
 func expandPath(path string) string {
 	if strings.HasPrefix(path, "~/") {
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, path[2:])
+		home, err := os.UserHomeDir()
+		if err != nil || home == "" {
+			slog.Warn("Could not resolve home directory for path", "path", path)
+			return path
+		}
+		path = filepath.Join(home, path[2:])
 	}
-	return path
+	return filepath.Clean(path)
+}
+
+// validatePath checks for path traversal
+func validatePath(path, fieldName string) error {
+	if path == "" {
+		return nil
+	}
+	cleaned := filepath.Clean(path)
+	if strings.Contains(cleaned, "..") {
+		return fmt.Errorf("%s: path traversal not allowed: %q", fieldName, path)
+	}
+	return nil
 }
 
 // GetServiceKey returns a unique identifier for a service

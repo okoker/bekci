@@ -91,6 +91,37 @@ launchctl load ~/Library/LaunchAgents/com.bekci.agent.plist
 ```
 
 
+## Logging
+
+Bekci logs to a file and stderr simultaneously. Log level and path are set in `config.yaml`:
+
+```yaml
+global:
+  log_level: warn       # debug, info, warn, error
+  log_path: bekci.log   # relative to working directory
+```
+
+**From terminal** — logs print to your terminal _and_ the log file:
+
+```bash
+./bin/bekci &                    # logs visible in terminal + bekci.log
+./bin/bekci 2>/dev/null &        # terminal silent, logs go to bekci.log only
+./bin/bekci 2>&1 | tee /tmp/b &  # terminal + bekci.log + custom file
+```
+
+**As a launchd service** — when running under launchd (parent PID 1), bekci automatically writes to `/var/log/bekci.log` instead of the config path. Stderr output is captured by launchd to the paths set in the plist (`StandardErrorPath`).
+
+```bash
+# Install as user agent
+sudo mkdir -p /var/log
+sudo touch /var/log/bekci.log && sudo chown $(whoami) /var/log/bekci.log
+cp com.bekci.agent.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.bekci.agent.plist
+
+# View logs
+tail -f /var/log/bekci.log
+```
+
 ## Road Map
 * Add scripted checks. 
 * Push results to a tiny mobile app. 
