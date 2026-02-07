@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
@@ -37,7 +37,7 @@ func (a *Alerter) SendDownAlert(projectName, serviceName, errorMsg string) error
 	if lastAlert, ok := a.lastAlerts[serviceKey]; ok {
 		if time.Since(lastAlert) < a.cooldown {
 			a.mu.Unlock()
-			log.Printf("Alert cooldown active for %s, skipping", serviceKey)
+			slog.Info("Alert cooldown active, skipping", "service", serviceKey)
 			return nil
 		}
 	}
@@ -78,12 +78,12 @@ func (a *Alerter) SendRecoveryAlert(projectName, serviceName string, downtime ti
 
 func (a *Alerter) send(subject, htmlBody string) error {
 	if a.config.APIKey == "" {
-		log.Printf("No Resend API key configured, skipping email")
+		slog.Info("No Resend API key configured, skipping email")
 		return nil
 	}
 
 	if len(a.config.To) == 0 {
-		log.Printf("No recipients configured, skipping email")
+		slog.Info("No recipients configured, skipping email")
 		return nil
 	}
 
@@ -119,7 +119,7 @@ func (a *Alerter) send(subject, htmlBody string) error {
 		return fmt.Errorf("resend API error (%d): %s", resp.StatusCode, string(body))
 	}
 
-	log.Printf("Alert email sent: %s", subject)
+	slog.Warn("Alert email sent", "subject", subject)
 	return nil
 }
 

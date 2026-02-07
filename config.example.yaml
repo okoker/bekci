@@ -6,7 +6,8 @@ global:
   restart_delay: 15s          # Delay between restart attempts
   web_port: 65000             # Web UI port
   db_path: bekci.db           # SQLite database path
-  log_level: info             # Log level: debug, info, warn, error
+  log_level: warn              # Log level: debug, info, warn, error
+  log_path: bekci.log          # Log file path (default: bekci.log)
 
 resend:
   api_key: "re_xxxxx"         # Resend API key (leave empty to disable email)
@@ -32,6 +33,7 @@ projects:
           follow_redirect: true
         restart:
           type: local
+          enabled: true                  # Enable/disable restart (default: true when type != none)
           command: "docker restart myapp-backend"
         check_interval: 2m    # Override global interval
 
@@ -55,6 +57,7 @@ projects:
           args_contain: "server.js"
         restart:
           type: local
+          enabled: false                 # Disable restart even though type is set
           command: "cd /app && npm start &"
 
       - name: "database"

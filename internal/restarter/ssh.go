@@ -3,6 +3,7 @@ package restarter
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/bekci/internal/config"
 	"golang.org/x/crypto/ssh"
@@ -22,6 +23,11 @@ func (r *Restarter) restartSSH(svc *config.Service) *Result {
 		Success: true,
 		Output:  output,
 	}
+}
+
+type sshResult struct {
+	output string
+	err    error
 }
 
 func (r *Restarter) runSSHCommand(svc *config.Service, cmd string) (string, error) {
@@ -49,7 +55,7 @@ func (r *Restarter) runSSHCommand(svc *config.Service, cmd string) (string, erro
 	}
 
 	// Connect
-	config := &ssh.ClientConfig{
+	sshConfig := &ssh.ClientConfig{
 		User: user,
 		Auth: []ssh.AuthMethod{
 			ssh.PublicKeys(signer),
@@ -63,7 +69,7 @@ func (r *Restarter) runSSHCommand(svc *config.Service, cmd string) (string, erro
 		host = host + ":22"
 	}
 
-	client, err := ssh.Dial("tcp", host, config)
+	client, err := ssh.Dial("tcp", host, sshConfig)
 	if err != nil {
 		return "", fmt.Errorf("SSH connection failed: %w", err)
 	}
@@ -75,8 +81,23 @@ func (r *Restarter) runSSHCommand(svc *config.Service, cmd string) (string, erro
 	}
 	defer session.Close()
 
-	output, err := session.CombinedOutput(cmd)
-	return string(output), err
+	// Run with timeout to prevent blocking on background processes
+	ch := make(chan sshResult, 1)
+	go func() {
+		output, err := session.CombinedOutput(cmd)
+		ch <- sshResult{output: string(output), err: err}
+	}()
+
+	select {
+	case res := <-ch:
+		return res.output, res.err
+	case <-time.After(restartTimeout):
+		// Timeout: if command ends with &, treat as success (background process started)
+		if isBackgroundCommand(cmd) {
+			return "", nil
+		}
+		return "", fmt.Errorf("SSH command timed out after %v", restartTimeout)
+	}
 }
 
 func containsPort(host string) bool {

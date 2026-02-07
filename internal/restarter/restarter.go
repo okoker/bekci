@@ -2,7 +2,8 @@ package restarter
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/bekci/internal/config"
@@ -25,14 +26,17 @@ func New(sshDefaults config.SSHConfig) *Restarter {
 // Restart attempts to restart a service with retries
 func (r *Restarter) Restart(svc *config.Service, attempts int, delay time.Duration) *Result {
 	if svc.Restart.Type == "none" || svc.Restart.Type == "" {
-		return &Result{Success: false, Error: "restart disabled"}
+		return &Result{Success: false, Error: "restart disabled (type=none)"}
+	}
+	if svc.Restart.Enabled != nil && !*svc.Restart.Enabled {
+		return &Result{Success: false, Error: "restart disabled (enabled=false)"}
 	}
 
 	var lastResult *Result
 
 	for i := 0; i < attempts; i++ {
 		if i > 0 {
-			log.Printf("Restart attempt %d/%d for %s after %v delay", i+1, attempts, svc.Name, delay)
+			slog.Warn("Restart retry", "attempt", i+1, "of", attempts, "service", svc.Name, "delay", delay)
 			time.Sleep(delay)
 		}
 
@@ -41,10 +45,15 @@ func (r *Restarter) Restart(svc *config.Service, attempts int, delay time.Durati
 			return lastResult
 		}
 
-		log.Printf("Restart attempt %d failed for %s: %s", i+1, svc.Name, lastResult.Error)
+		slog.Warn("Restart attempt failed", "attempt", i+1, "service", svc.Name, "error", lastResult.Error)
 	}
 
 	return lastResult
+}
+
+// isBackgroundCommand checks if a command is intended to run in the background (ends with &)
+func isBackgroundCommand(cmd string) bool {
+	return strings.HasSuffix(strings.TrimSpace(cmd), "&")
 }
 
 func (r *Restarter) doRestart(svc *config.Service) *Result {

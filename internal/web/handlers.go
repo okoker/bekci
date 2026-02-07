@@ -3,7 +3,7 @@ package web
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -91,7 +91,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tmpl.ExecuteTemplate(w, "status.html", data); err != nil {
-		log.Printf("Template error: %v", err)
+		slog.Error("Template error", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
 }

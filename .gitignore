@@ -10,5 +10,4 @@ bin/
 config.yaml
 
 # Internal docs
-REQUIREMENTS.md
-PROGRESS.md
+docs/

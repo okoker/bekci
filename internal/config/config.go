@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -73,6 +74,7 @@ type CheckConfig struct {
 
 type RestartConfig struct {
 	Type      string `yaml:"type"` // local, ssh, docker, none
+	Enabled   *bool  `yaml:"enabled"`
 	Command   string `yaml:"command"`
 	Container string `yaml:"container"`
 	Host      string `yaml:"host"`
@@ -125,7 +127,10 @@ func applyDefaults(cfg *Config) {
 		cfg.Global.DBPath = "bekci.db"
 	}
 	if cfg.Global.LogLevel == "" {
-		cfg.Global.LogLevel = "info"
+		cfg.Global.LogLevel = "warn"
+	}
+	if cfg.Global.LogPath == "" {
+		cfg.Global.LogPath = "bekci.log"
 	}
 
 	// SSH defaults
@@ -165,6 +170,10 @@ func applyDefaults(cfg *Config) {
 			// Restart defaults
 			if svc.Restart.Type == "" {
 				svc.Restart.Type = "none"
+			}
+			if svc.Restart.Enabled == nil {
+				enabled := svc.Restart.Type != "none"
+				svc.Restart.Enabled = &enabled
 			}
 			if svc.Restart.KeyPath != "" {
 				svc.Restart.KeyPath = expandPath(svc.Restart.KeyPath)
@@ -264,4 +273,20 @@ func expandPath(path string) string {
 // GetServiceKey returns a unique identifier for a service
 func GetServiceKey(projectName, serviceName string) string {
 	return fmt.Sprintf("%s/%s", projectName, serviceName)
+}
+
+// ParseLogLevel converts a log level string to slog.Level
+func ParseLogLevel(level string) slog.Level {
+	switch strings.ToLower(level) {
+	case "debug":
+		return slog.LevelDebug
+	case "info":
+		return slog.LevelInfo
+	case "warn", "warning":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	default:
+		return slog.LevelWarn
+	}
 }

@@ -2,7 +2,7 @@ package scheduler
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -40,7 +40,7 @@ func (s *Scheduler) Start(ctx context.Context) {
 	var wg sync.WaitGroup
 
 	// Check all services immediately on startup
-	log.Println("Running initial health checks...")
+	slog.Info("Running initial health checks...")
 	for _, proj := range s.cfg.Projects {
 		for i := range proj.Services {
 			svc := &proj.Services[i]
@@ -73,11 +73,11 @@ func (s *Scheduler) Start(ctx context.Context) {
 				}
 			}(proj.Name, svc, ticker)
 
-			log.Printf("Started monitoring %s (interval: %v)", serviceKey, svc.CheckInterval)
+			slog.Info("Started monitoring", "service", serviceKey, "interval", svc.CheckInterval)
 		}
 	}
 
-	log.Println("Scheduler ready")
+	slog.Info("Scheduler ready")
 
 	// Wait for context cancellation
 	<-ctx.Done()
@@ -90,12 +90,12 @@ func (s *Scheduler) Start(ctx context.Context) {
 	s.mu.Unlock()
 
 	wg.Wait()
-	log.Println("Scheduler stopped")
+	slog.Info("Scheduler stopped")
 }
 
 // CheckAllNow triggers an immediate check of all services
 func (s *Scheduler) CheckAllNow() {
-	log.Println("Manual check triggered")
+	slog.Info("Manual check triggered")
 	for _, proj := range s.cfg.Projects {
 		for i := range proj.Services {
 			svc := &proj.Services[i]
@@ -123,7 +123,7 @@ func (s *Scheduler) checkService(projectName string, svc *config.Service) {
 		CheckedAt:  time.Now(),
 	}
 	if err := s.store.SaveCheckResult(checkResult); err != nil {
-		log.Printf("Error saving check result for %s: %v", serviceKey, err)
+		slog.Error("Error saving check result", "service", serviceKey, "error", err)
 	}
 
 	// Handle status transitions
@@ -131,12 +131,12 @@ func (s *Scheduler) checkService(projectName string, svc *config.Service) {
 		failures++
 
 		// Log the failure
-		log.Printf("[DOWN] %s: %s (failure #%d)", serviceKey, result.Error, failures)
+		slog.Warn("Service down", "service", serviceKey, "error", result.Error, "failures", failures)
 
 		// Send alert on first failure (or after recovery)
 		if prevStatus != "down" {
 			if err := s.alerter.SendDownAlert(projectName, svc.Name, result.Error); err != nil {
-				log.Printf("Error sending alert for %s: %v", serviceKey, err)
+				slog.Error("Error sending alert", "service", serviceKey, "error", err)
 			}
 
 			// Save alert record
@@ -149,13 +149,13 @@ func (s *Scheduler) checkService(projectName string, svc *config.Service) {
 		}
 
 		// Attempt restart
-		if svc.Restart.Type != "none" && svc.Restart.Type != "" {
-			log.Printf("Attempting restart for %s...", serviceKey)
+		if svc.Restart.Enabled != nil && *svc.Restart.Enabled {
+			slog.Warn("Attempting restart", "service", serviceKey)
 			restartResult := s.restarter.Restart(svc, s.cfg.Global.RestartAttempts, s.cfg.Global.RestartDelay)
 			if restartResult.Success {
-				log.Printf("Restart successful for %s: %s", serviceKey, restartResult.Output)
+				slog.Warn("Restart successful", "service", serviceKey, "output", restartResult.Output)
 			} else {
-				log.Printf("Restart failed for %s: %s", serviceKey, restartResult.Error)
+				slog.Error("Restart failed", "service", serviceKey, "error", restartResult.Error)
 			}
 		}
 	} else if result.Status == "up" {
@@ -163,11 +163,11 @@ func (s *Scheduler) checkService(projectName string, svc *config.Service) {
 		if prevStatus == "down" {
 			// Recovery!
 			downtime := time.Since(lastChange)
-			log.Printf("[RECOVERY] %s is back up after %v", serviceKey, downtime)
+			slog.Warn("Service recovered", "service", serviceKey, "downtime", downtime)
 
 			// Send recovery alert
 			if err := s.alerter.SendRecoveryAlert(projectName, svc.Name, downtime); err != nil {
-				log.Printf("Error sending recovery alert for %s: %v", serviceKey, err)
+				slog.Error("Error sending recovery alert", "service", serviceKey, "error", err)
 			}
 
 			// Save alert record
@@ -186,6 +186,6 @@ func (s *Scheduler) checkService(projectName string, svc *config.Service) {
 
 	// Update service state
 	if err := s.store.UpdateServiceState(serviceKey, result.Status, failures); err != nil {
-		log.Printf("Error updating service state for %s: %v", serviceKey, err)
+		slog.Error("Error updating service state", "service", serviceKey, "error", err)
 	}
 }

@@ -3,7 +3,7 @@ package store
 import (
 	"database/sql"
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -333,16 +333,16 @@ func (s *Store) StartPurgeRoutine(days int) {
 
 	// Run once at startup
 	if deleted, err := s.PurgeOldData(days); err != nil {
-		log.Printf("Error purging old data: %v", err)
+		slog.Error("Error purging old data", "error", err)
 	} else if deleted > 0 {
-		log.Printf("Purged %d old check results", deleted)
+		slog.Info("Purged old check results", "count", deleted)
 	}
 
 	for range ticker.C {
 		if deleted, err := s.PurgeOldData(days); err != nil {
-			log.Printf("Error purging old data: %v", err)
+			slog.Error("Error purging old data", "error", err)
 		} else if deleted > 0 {
-			log.Printf("Purged %d old check results", deleted)
+			slog.Info("Purged old check results", "count", deleted)
 		}
 	}
 }
