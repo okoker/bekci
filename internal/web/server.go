@@ -5,7 +5,7 @@ import (
 	"embed"
 	"fmt"
 	"html/template"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -42,7 +42,7 @@ func New(port int, s *store.Store, cfg *config.Config, sched *scheduler.Schedule
 		"statusClass": statusClass,
 	}).ParseFS(templatesFS, "templates/*.html")
 	if err != nil {
-		log.Printf("Warning: Could not parse templates: %v", err)
+		slog.Error("Could not parse templates", "error", err)
 	}
 
 	return srv
@@ -64,7 +64,7 @@ func (s *Server) Start() error {
 		WriteTimeout: 30 * time.Second,
 	}
 
-	log.Printf("Web server starting on port %d", s.port)
+	slog.Info("Web server starting", "port", s.port)
 	return s.server.ListenAndServe()
 }
 

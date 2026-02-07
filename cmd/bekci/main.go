@@ -4,7 +4,9 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -38,10 +40,29 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
+	// Detect run mode: if parent is PID 1 (launchd), we're running as a service
+	logPath := cfg.Global.LogPath
+	if os.Getppid() == 1 {
+		logPath = "/var/log/bekci.log"
+	}
+
+	// Setup logging
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		log.Fatalf("Failed to open log file %s: %v", logPath, err)
+	}
+	defer logFile.Close()
+
+	level := config.ParseLogLevel(cfg.Global.LogLevel)
+	writer := io.MultiWriter(os.Stderr, logFile)
+	handler := slog.NewTextHandler(writer, &slog.HandlerOptions{Level: level})
+	slog.SetDefault(slog.New(handler))
+
 	// Initialize store
 	db, err := store.New(cfg.Global.DBPath)
 	if err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
+		slog.Error("Failed to initialize database", "error", err)
+		os.Exit(1)
 	}
 	defer db.Close()
 
@@ -76,23 +97,23 @@ func main() {
 	// Start web server
 	go func() {
 		if err := srv.Start(); err != nil {
-			log.Printf("Web server error: %v", err)
+			slog.Error("Web server error", "error", err)
 		}
 	}()
 
-	log.Printf("Bekci v%s started on port %d", version, cfg.Global.WebPort)
+	slog.Warn("Bekci started", "version", version, "port", cfg.Global.WebPort)
 
 	// Wait for shutdown signal
 	<-sigCh
-	log.Println("Shutting down...")
+	slog.Warn("Shutting down...")
 
 	// Cancel context to stop scheduler
 	cancel()
 
 	// Shutdown web server
 	if err := srv.Shutdown(context.Background()); err != nil {
-		log.Printf("Web server shutdown error: %v", err)
+		slog.Error("Web server shutdown error", "error", err)
 	}
 
-	log.Println("Shutdown complete")
+	slog.Warn("Shutdown complete")
 }
