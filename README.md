@@ -1,133 +1,161 @@
-# Bekçi
+# Bekci
 
-Lightweight service watchdog written in Go. Monitors health of your services, auto-restarts on failure, sends email alerts via Resend, and displays a status dashboard.
+Web-managed monitoring platform written in Go + Vue 3. Multi-check monitoring with composite rules engine, RBAC, email alerts, and Docker-first deployment.
 
-I have a lot of endpoints and devices running in my local/remote environments and i jump from project to project as i found it keeps me more dynamic and creative. However remembering whats what was becoming an issue. Also what i do can break things a lot (so i can make them unbreakable). I had tiny bashscripts runnng in the corner for tracking but when I recently became curios about Go I figured might as well make something out of it. Hence Bekçi (AKA Sentry). 
+Evolved from a lightweight YAML-configured watchdog into a full web UI for managing targets, checks, rules, and alerts — all from a single binary.
 
-![Status Page](https://img.shields.io/badge/dashboard-65000-blue)
-![Status Page](https://img.shields.io/badge/api-65000-purple)
+![Dashboard](https://img.shields.io/badge/dashboard-65000-blue)
+![API](https://img.shields.io/badge/api-65000-purple)
 
 ## Features
 
-- **Health checks**: HTTP(S), TCP port, local process, SSH remote process, SSH remote command
-- **Auto-restart**: Local shell, SSH remote, Docker container
-- **Email alerts**: Failure and recovery notifications via Resend API (with cooldown)
-- **Web dashboard**: Real-time status page with 90-day uptime history
-- **Check Now**: Manual trigger via dashboard button or API
-- **macOS service**: Launchd plist included for running as a background agent
+- **Web UI** — Vue 3 SPA with login, dashboard, user management, settings, profile
+- **Auth & RBAC** — JWT + server-side sessions, bcrypt passwords, three roles (admin / operator / viewer)
+- **User management** — Create, suspend, reset passwords, last-admin protection
+- **Settings** — Runtime-configurable session timeout, history retention, check interval
+- **Single binary** — Frontend embedded in Go binary via `go:embed`
+- **Docker ready** — Multi-stage Dockerfile, docker-compose included
+
+### Planned (Phase 2+)
+
+- Health checks: Ping (ICMP), HTTP/HTTPS, TCP, DNS, SNMP, Page Hash, TLS Certificate
+- Composite rules engine (AND/OR conditions with thresholds)
+- Email alerts via Resend API (with cooldown + recovery)
+- Dashboard with 90-day + 4-hour uptime bars
 
 ## Quick Start
 
+### Prerequisites
+
+- Go 1.22+
+- Node.js 20+ (for frontend build)
+- GCC (for SQLite CGO)
+
+### Build & Run
+
 ```bash
-# Build
-go mod tidy
-make build
-
-# Configure
 cp config.example.yaml config.yaml
-# Edit config.yaml with your services
+# Edit config.yaml — set auth.jwt_secret and init_admin.password
 
-# Run
+make build
 ./bin/bekci
 ```
 
-Dashboard at `http://localhost:65000`
+Or with environment variables only (no config file needed):
+
+```bash
+BEKCI_JWT_SECRET=your-secret-here BEKCI_ADMIN_PASSWORD=changeme123 make run
+```
+
+Open `http://localhost:65000` — login with the initial admin credentials.
+
+### Development Mode
+
+Run the Go backend and Vite dev server separately for hot-reload:
+
+```bash
+# Terminal 1 — backend (no embedded frontend)
+BEKCI_JWT_SECRET=dev-secret BEKCI_ADMIN_PASSWORD=admin1234 make dev
+
+# Terminal 2 — frontend with API proxy
+cd frontend && npm run dev
+```
+
+Frontend dev server at `http://localhost:5173` proxies `/api/*` to the backend.
+
+### Docker
+
+```bash
+BEKCI_JWT_SECRET=your-secret BEKCI_ADMIN_PASSWORD=changeme123 docker-compose up -d
+```
 
 ## Configuration
 
-See `config.example.yaml` for the full reference. Key sections:
+Bootstrap config in `config.yaml` (or env vars). Runtime settings managed via web UI.
 
 ```yaml
-global:
-  check_interval: 5m      # How often to check services
-  web_port: 65000          # Dashboard port
+server:
+  port: 65000
+  db_path: bekci.db
 
-projects:
-  - name: "My App"
-    services:
-      - name: "backend"
-        url: "http://myapp.com:8000"
-        check:
-          type: https
-          endpoint: "/health"
-        restart:
-          type: local
-          command: "systemctl restart myapp"
+auth:
+  jwt_secret: "your-secret-here"   # REQUIRED
+
+logging:
+  level: warn     # debug, info, warn, error
+  path: bekci.log
+
+init_admin:
+  username: admin
+  password: "changeme123"          # Only used on first boot
 ```
 
-### Check Types
+### Environment Overrides
 
-| Type | Description | Required |
-|------|-------------|----------|
-| `https` | HTTP(S) GET, check status code | `url` |
-| `tcp` | TCP port connect | `url` (host:port) |
-| `process` | Local process by name | `name` |
-| `ssh_process` | Remote process via SSH | `host`, `name` |
-| `ssh_command` | Remote command via SSH | `host`, `command` |
-
-### Restart Types
-
-| Type | Description |
-|------|-------------|
-| `local` | Run local shell command |
-| `ssh` | Run command on remote host via SSH |
-| `docker` | `docker restart <container>` |
-| `none` | Alert only, no restart |
+| Variable | Config Key | Description |
+|----------|-----------|-------------|
+| `BEKCI_JWT_SECRET` | `auth.jwt_secret` | JWT signing secret (required) |
+| `BEKCI_ADMIN_PASSWORD` | `init_admin.password` | Initial admin password (first boot) |
+| `BEKCI_PORT` | `server.port` | HTTP port (default: 65000) |
+| `BEKCI_DB_PATH` | `server.db_path` | SQLite database path (default: bekci.db) |
 
 ## API
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/` | GET | HTML status dashboard |
-| `/health` | GET | Self-check (`{"status":"ok"}`) |
-| `/api/status` | GET | JSON status for all services |
-| `/api/check-now` | POST | Trigger immediate check of all services |
+### Public
 
-## macOS Launchd
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/login` | Authenticate, returns JWT |
+| GET | `/api/health` | Health check (`{status, version}`) |
 
-```bash
-cp com.bekci.agent.plist ~/Library/LaunchAgents/
-launchctl load ~/Library/LaunchAgents/com.bekci.agent.plist
+### Authenticated
+
+| Method | Endpoint | Role | Description |
+|--------|----------|------|-------------|
+| POST | `/api/logout` | any | End session |
+| GET | `/api/me` | any | Current user profile |
+| PUT | `/api/me` | any | Update own email |
+| PUT | `/api/me/password` | any | Change own password |
+| GET | `/api/settings` | any | View settings |
+| PUT | `/api/settings` | admin | Update settings |
+
+### Admin Only
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/users` | List all users |
+| POST | `/api/users` | Create user |
+| GET | `/api/users/:id` | Get user |
+| PUT | `/api/users/:id` | Update user (email, role) |
+| PUT | `/api/users/:id/suspend` | Suspend / activate user |
+| PUT | `/api/users/:id/password` | Reset user password |
+
+## RBAC
+
+| Capability | Admin | Operator | Viewer |
+|-----------|-------|----------|--------|
+| Dashboard | view | view | view |
+| Users | CRUD | - | - |
+| Settings | read/write | read | read |
+| Own profile | edit | edit | edit |
+
+## Project Structure
+
 ```
-
-
-## Logging
-
-Bekci logs to a file and stderr simultaneously. Log level and path are set in `config.yaml`:
-
-```yaml
-global:
-  log_level: warn       # debug, info, warn, error
-  log_path: bekci.log   # relative to working directory
+cmd/bekci/main.go          Entry point, wiring, embed
+internal/
+  config/                   YAML + env config loader
+  store/                    SQLite: users, sessions, settings
+  auth/                     JWT, bcrypt, login/logout
+  api/                      HTTP router, middleware, handlers
+  checker/                  (v1, pending Phase 2 rework)
+  scheduler/                (v1, pending Phase 2 rework)
+  alerter/                  (v1, pending Phase 2 rework)
+frontend/                   Vue 3 + Vite SPA
+Makefile                    Build targets
+Dockerfile                  3-stage production build
+docker-compose.yml          Single-service deployment
 ```
-
-**From terminal** — logs print to your terminal _and_ the log file:
-
-```bash
-./bin/bekci &                    # logs visible in terminal + bekci.log
-./bin/bekci 2>/dev/null &        # terminal silent, logs go to bekci.log only
-./bin/bekci 2>&1 | tee /tmp/b &  # terminal + bekci.log + custom file
-```
-
-**As a launchd service** — when running under launchd (parent PID 1), bekci automatically writes to `/var/log/bekci.log` instead of the config path. Stderr output is captured by launchd to the paths set in the plist (`StandardErrorPath`).
-
-```bash
-# Install as user agent
-sudo mkdir -p /var/log
-sudo touch /var/log/bekci.log && sudo chown $(whoami) /var/log/bekci.log
-cp com.bekci.agent.plist ~/Library/LaunchAgents/
-launchctl load ~/Library/LaunchAgents/com.bekci.agent.plist
-
-# View logs
-tail -f /var/log/bekci.log
-```
-
-## Road Map
-* Add scripted checks. 
-* Push results to a tiny mobile app. 
-* Add a scheduler to turn services on/off on the cloud.
-
-
 
 ## License
 

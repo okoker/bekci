@@ -5,9 +5,20 @@ bin/
 *.db
 *.db-shm
 *.db-wal
+*.log
 
 # Real config (contains hosts, SSH keys, credentials)
 config.yaml
 
 # Internal docs
 docs/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# OS
+.DS_Store
+
+# Private
+__user_private/
