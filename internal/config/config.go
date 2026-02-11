@@ -1,9 +1,12 @@
 package config
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -95,12 +98,44 @@ func applyDefaults(cfg *Config) {
 	if cfg.InitAdmin.Username == "" {
 		cfg.InitAdmin.Username = "admin"
 	}
+	if cfg.InitAdmin.Password == "" {
+		cfg.InitAdmin.Password = "admin1234"
+	}
+
+	// Auto-generate JWT secret if not provided — persist next to DB so it survives restarts
+	if cfg.Auth.JWTSecret == "" {
+		cfg.Auth.JWTSecret = loadOrGenerateSecret(cfg.Server.DBPath)
+	}
+}
+
+// loadOrGenerateSecret reads a persisted secret from <db_dir>/.jwt_secret,
+// or generates a new one and saves it.
+func loadOrGenerateSecret(dbPath string) string {
+	secretPath := filepath.Join(filepath.Dir(dbPath), ".jwt_secret")
+
+	data, err := os.ReadFile(secretPath)
+	if err == nil && len(strings.TrimSpace(string(data))) > 0 {
+		return strings.TrimSpace(string(data))
+	}
+
+	// Generate random 32-byte secret
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		// Fallback — should never happen
+		return "bekci-fallback-secret-change-me"
+	}
+	secret := hex.EncodeToString(b)
+
+	if err := os.WriteFile(secretPath, []byte(secret+"\n"), 0600); err != nil {
+		slog.Warn("Could not persist JWT secret", "path", secretPath, "error", err)
+	} else {
+		slog.Warn("Generated and persisted JWT secret", "path", secretPath)
+	}
+
+	return secret
 }
 
 func validate(cfg *Config) error {
-	if cfg.Auth.JWTSecret == "" {
-		return fmt.Errorf("jwt_secret is required (set auth.jwt_secret in config or BEKCI_JWT_SECRET env var)")
-	}
 	if cfg.Server.Port < 1 || cfg.Server.Port > 65535 {
 		return fmt.Errorf("port must be between 1 and 65535")
 	}

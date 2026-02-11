@@ -73,14 +73,6 @@ func main() {
 		os.Exit(1)
 	}
 	if count == 0 {
-		if cfg.InitAdmin.Password == "" {
-			slog.Error("No users exist and init_admin.password is empty. Set BEKCI_ADMIN_PASSWORD env var or init_admin.password in config.")
-			os.Exit(1)
-		}
-		if len(cfg.InitAdmin.Password) < 8 {
-			slog.Error("init_admin.password must be at least 8 characters")
-			os.Exit(1)
-		}
 		hash, err := auth.HashPassword(cfg.InitAdmin.Password)
 		if err != nil {
 			slog.Error("Failed to hash admin password", "error", err)
@@ -101,7 +93,9 @@ func main() {
 			slog.Error("Failed to create initial admin", "error", err)
 			os.Exit(1)
 		}
-		slog.Warn("Created initial admin user", "username", cfg.InitAdmin.Username)
+		slog.Warn("Created initial admin user — change the password after first login",
+			"username", cfg.InitAdmin.Username,
+			"password", cfg.InitAdmin.Password)
 	}
 
 	// Initialize auth service
