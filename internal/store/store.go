@@ -57,6 +57,7 @@ func (s *Store) migrate() error {
 	migrations := []func() error{
 		s.migration001,
 		s.migration002,
+		s.migration003,
 	}
 
 	for i := current; i < len(migrations); i++ {
@@ -161,5 +162,14 @@ func (s *Store) migration002() error {
 	CREATE INDEX idx_checks_target_id ON checks(target_id);
 	`
 	_, err := s.db.Exec(schema)
+	return err
+}
+
+// migration003 adds preferred_check_type to targets and soc_public setting.
+func (s *Store) migration003() error {
+	_, err := s.db.Exec(`
+		ALTER TABLE targets ADD COLUMN preferred_check_type TEXT NOT NULL DEFAULT 'ping';
+		INSERT OR IGNORE INTO settings (key, value) VALUES ('soc_public', 'false');
+	`)
 	return err
 }

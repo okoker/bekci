@@ -2,6 +2,7 @@ package checker
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	probing "github.com/prometheus-community/pro-bing"
@@ -21,7 +22,10 @@ func runPing(host string, config map[string]any) *Result {
 	}
 	pinger.Count = count
 	pinger.Timeout = time.Duration(timeoutS) * time.Second
-	pinger.SetPrivileged(true) // requires NET_RAW capability
+
+	// Use privileged (raw ICMP) if running as root or in Docker with NET_RAW,
+	// otherwise use unprivileged (UDP) mode which works without special caps.
+	pinger.SetPrivileged(os.Getuid() == 0)
 
 	start := time.Now()
 	if err := pinger.Run(); err != nil {
@@ -50,8 +54,8 @@ func runPing(host string, config map[string]any) *Result {
 		ResponseMs: elapsed,
 		Message:    msg,
 		Metrics: map[string]any{
-			"packet_loss": packetLoss,
-			"avg_rtt_ms":  avgRtt,
+			"packet_loss":  packetLoss,
+			"avg_rtt_ms":   avgRtt,
 			"packets_sent": stats.PacketsSent,
 			"packets_recv": stats.PacketsRecv,
 		},

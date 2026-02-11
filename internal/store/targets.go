@@ -9,14 +9,15 @@ import (
 )
 
 type Target struct {
-	ID          string    `json:"id"`
-	ProjectID   string    `json:"project_id"`
-	Name        string    `json:"name"`
-	Host        string    `json:"host"`
-	Description string    `json:"description"`
-	Enabled     bool      `json:"enabled"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID                 string    `json:"id"`
+	ProjectID          string    `json:"project_id"`
+	Name               string    `json:"name"`
+	Host               string    `json:"host"`
+	Description        string    `json:"description"`
+	Enabled            bool      `json:"enabled"`
+	PreferredCheckType string    `json:"preferred_check_type"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
 }
 
 type TargetWithChecks struct {
@@ -33,10 +34,13 @@ func (s *Store) CreateTarget(t *Target) error {
 	if t.Enabled {
 		enabled = 1
 	}
+	if t.PreferredCheckType == "" {
+		t.PreferredCheckType = "ping"
+	}
 	_, err := s.db.Exec(`
-		INSERT INTO targets (id, project_id, name, host, description, enabled, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-	`, t.ID, t.ProjectID, t.Name, t.Host, t.Description, enabled, t.CreatedAt, t.UpdatedAt)
+		INSERT INTO targets (id, project_id, name, host, description, enabled, preferred_check_type, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, t.ID, t.ProjectID, t.Name, t.Host, t.Description, enabled, t.PreferredCheckType, t.CreatedAt, t.UpdatedAt)
 	return err
 }
 
@@ -44,9 +48,9 @@ func (s *Store) GetTarget(id string) (*Target, error) {
 	t := &Target{}
 	var enabled int
 	err := s.db.QueryRow(`
-		SELECT id, project_id, name, host, description, enabled, created_at, updated_at
+		SELECT id, project_id, name, host, description, enabled, preferred_check_type, created_at, updated_at
 		FROM targets WHERE id = ?
-	`, id).Scan(&t.ID, &t.ProjectID, &t.Name, &t.Host, &t.Description, &enabled, &t.CreatedAt, &t.UpdatedAt)
+	`, id).Scan(&t.ID, &t.ProjectID, &t.Name, &t.Host, &t.Description, &enabled, &t.PreferredCheckType, &t.CreatedAt, &t.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -59,12 +63,12 @@ func (s *Store) ListTargets(projectID string) ([]Target, error) {
 	var err error
 	if projectID != "" {
 		rows, err = s.db.Query(`
-			SELECT id, project_id, name, host, description, enabled, created_at, updated_at
+			SELECT id, project_id, name, host, description, enabled, preferred_check_type, created_at, updated_at
 			FROM targets WHERE project_id = ? ORDER BY name ASC
 		`, projectID)
 	} else {
 		rows, err = s.db.Query(`
-			SELECT id, project_id, name, host, description, enabled, created_at, updated_at
+			SELECT id, project_id, name, host, description, enabled, preferred_check_type, created_at, updated_at
 			FROM targets ORDER BY name ASC
 		`)
 	}
@@ -77,7 +81,7 @@ func (s *Store) ListTargets(projectID string) ([]Target, error) {
 	for rows.Next() {
 		var t Target
 		var enabled int
-		if err := rows.Scan(&t.ID, &t.ProjectID, &t.Name, &t.Host, &t.Description, &enabled, &t.CreatedAt, &t.UpdatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.ProjectID, &t.Name, &t.Host, &t.Description, &enabled, &t.PreferredCheckType, &t.CreatedAt, &t.UpdatedAt); err != nil {
 			return nil, err
 		}
 		t.Enabled = enabled == 1
@@ -89,15 +93,18 @@ func (s *Store) ListTargets(projectID string) ([]Target, error) {
 	return targets, rows.Err()
 }
 
-func (s *Store) UpdateTarget(id, name, host, description string, enabled bool) error {
+func (s *Store) UpdateTarget(id, name, host, description string, enabled bool, preferredCheckType string) error {
 	en := 0
 	if enabled {
 		en = 1
 	}
+	if preferredCheckType == "" {
+		preferredCheckType = "ping"
+	}
 	res, err := s.db.Exec(`
-		UPDATE targets SET name = ?, host = ?, description = ?, enabled = ?, updated_at = CURRENT_TIMESTAMP
+		UPDATE targets SET name = ?, host = ?, description = ?, enabled = ?, preferred_check_type = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
-	`, name, host, description, en, id)
+	`, name, host, description, en, preferredCheckType, id)
 	if err != nil {
 		return err
 	}

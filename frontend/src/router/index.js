@@ -7,6 +7,7 @@ import TargetsView from '../views/TargetsView.vue'
 import UsersView from '../views/UsersView.vue'
 import SettingsView from '../views/SettingsView.vue'
 import ProfileView from '../views/ProfileView.vue'
+import SocView from '../views/SocView.vue'
 
 const routes = [
   { path: '/login', name: 'Login', component: LoginView, meta: { public: true } },
@@ -15,6 +16,7 @@ const routes = [
   { path: '/users', name: 'Users', component: UsersView, meta: { requiresAuth: true, requiresAdmin: true } },
   { path: '/settings', name: 'Settings', component: SettingsView, meta: { requiresAuth: true } },
   { path: '/profile', name: 'Profile', component: ProfileView, meta: { requiresAuth: true } },
+  { path: '/soc', name: 'SOC', component: SocView, meta: { public: true } },
 ]
 
 const router = createRouter({

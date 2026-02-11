@@ -10,6 +10,12 @@ var knownSettings = map[string]bool{
 	"session_timeout_hours":  true,
 	"history_days":           true,
 	"default_check_interval": true,
+	"soc_public":             true,
+}
+
+// Boolean settings that accept "true"/"false" instead of positive integers.
+var boolSettings = map[string]bool{
+	"soc_public": true,
 }
 
 func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
@@ -28,16 +34,23 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate: only known keys, must be positive integers
+	// Validate: only known keys, must be positive integers (or bool for soc_public)
 	for key, val := range req {
 		if !knownSettings[key] {
 			writeError(w, http.StatusBadRequest, "unknown setting: "+key)
 			return
 		}
-		n, err := strconv.Atoi(val)
-		if err != nil || n < 1 {
-			writeError(w, http.StatusBadRequest, "setting "+key+" must be a positive integer")
-			return
+		if boolSettings[key] {
+			if val != "true" && val != "false" {
+				writeError(w, http.StatusBadRequest, "setting "+key+" must be 'true' or 'false'")
+				return
+			}
+		} else {
+			n, err := strconv.Atoi(val)
+			if err != nil || n < 1 {
+				writeError(w, http.StatusBadRequest, "setting "+key+" must be a positive integer")
+				return
+			}
 		}
 	}
 

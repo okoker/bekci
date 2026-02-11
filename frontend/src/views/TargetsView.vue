@@ -22,7 +22,7 @@ const projectForm = ref({ name: '', description: '' })
 // Target form
 const showTargetForm = ref(false)
 const editingTarget = ref(null)
-const targetForm = ref({ name: '', host: '', description: '', enabled: true })
+const targetForm = ref({ name: '', host: '', description: '', enabled: true, preferred_check_type: 'ping' })
 
 // Check form
 const showCheckForm = ref(false)
@@ -116,8 +116,8 @@ async function deleteProject(id) {
 function openTargetForm(target = null) {
   editingTarget.value = target
   targetForm.value = target
-    ? { name: target.name, host: target.host, description: target.description, enabled: target.enabled }
-    : { name: '', host: '', description: '', enabled: true }
+    ? { name: target.name, host: target.host, description: target.description, enabled: target.enabled, preferred_check_type: target.preferred_check_type || 'ping' }
+    : { name: '', host: '', description: '', enabled: true, preferred_check_type: 'ping' }
   showTargetForm.value = true
   error.value = ''
 }
@@ -397,6 +397,12 @@ loadProjects()
           <div class="form-group">
             <label>Description</label>
             <input v-model="targetForm.description" placeholder="Optional description" />
+          </div>
+          <div class="form-group">
+            <label>Preferred Check Type</label>
+            <select v-model="targetForm.preferred_check_type">
+              <option v-for="t in checkTypes" :key="t.value" :value="t.value">{{ t.label }}</option>
+            </select>
           </div>
           <div class="form-group">
             <label><input type="checkbox" v-model="targetForm.enabled" /> Enabled</label>

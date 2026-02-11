@@ -13,7 +13,10 @@ const labels = {
   session_timeout_hours: 'Session Timeout (hours)',
   history_days: 'History Retention (days)',
   default_check_interval: 'Default Check Interval (seconds)',
+  soc_public: 'SOC View Public Access',
 }
+
+const boolSettings = new Set(['soc_public'])
 
 async function loadSettings() {
   try {
@@ -51,7 +54,16 @@ onMounted(loadSettings)
       <form @submit.prevent="saveSettings">
         <div v-for="(value, key) in settings" :key="key" class="form-group">
           <label>{{ labels[key] || key }}</label>
+          <select
+            v-if="boolSettings.has(key)"
+            v-model="settings[key]"
+            :disabled="!auth.isAdmin"
+          >
+            <option value="true">Yes</option>
+            <option value="false">No</option>
+          </select>
           <input
+            v-else
             v-model="settings[key]"
             type="number"
             min="1"
