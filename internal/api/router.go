@@ -90,6 +90,10 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/dashboard/status", anyAuth(s.handleDashboardStatus))
 	mux.Handle("GET /api/dashboard/history/{checkId}", anyAuth(s.handleCheckHistory))
 
+	// SOC — conditional auth based on soc_public setting
+	mux.Handle("GET /api/soc/status", s.socAuth(http.HandlerFunc(s.handleSocStatus)))
+	mux.Handle("GET /api/soc/history/{checkId}", s.socAuth(http.HandlerFunc(s.handleSocHistory)))
+
 	// SPA handler — serve frontend for all non-API routes
 	mux.Handle("/", s.spaHandler())
 

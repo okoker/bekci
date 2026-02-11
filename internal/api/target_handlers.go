@@ -19,11 +19,12 @@ func (s *Server) handleListTargets(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleCreateTarget(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		ProjectID   string `json:"project_id"`
-		Name        string `json:"name"`
-		Host        string `json:"host"`
-		Description string `json:"description"`
-		Enabled     *bool  `json:"enabled"`
+		ProjectID          string `json:"project_id"`
+		Name               string `json:"name"`
+		Host               string `json:"host"`
+		Description        string `json:"description"`
+		Enabled            *bool  `json:"enabled"`
+		PreferredCheckType string `json:"preferred_check_type"`
 	}
 	if err := readJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
@@ -48,12 +49,18 @@ func (s *Server) handleCreateTarget(w http.ResponseWriter, r *http.Request) {
 		enabled = *req.Enabled
 	}
 
+	preferredCheckType := req.PreferredCheckType
+	if preferredCheckType == "" {
+		preferredCheckType = "ping"
+	}
+
 	t := &store.Target{
-		ProjectID:   req.ProjectID,
-		Name:        req.Name,
-		Host:        req.Host,
-		Description: req.Description,
-		Enabled:     enabled,
+		ProjectID:          req.ProjectID,
+		Name:               req.Name,
+		Host:               req.Host,
+		Description:        req.Description,
+		Enabled:            enabled,
+		PreferredCheckType: preferredCheckType,
 	}
 	if err := s.store.CreateTarget(t); err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
@@ -83,10 +90,11 @@ func (s *Server) handleGetTarget(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleUpdateTarget(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var req struct {
-		Name        string `json:"name"`
-		Host        string `json:"host"`
-		Description string `json:"description"`
-		Enabled     *bool  `json:"enabled"`
+		Name               string `json:"name"`
+		Host               string `json:"host"`
+		Description        string `json:"description"`
+		Enabled            *bool  `json:"enabled"`
+		PreferredCheckType string `json:"preferred_check_type"`
 	}
 	if err := readJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
@@ -104,7 +112,12 @@ func (s *Server) handleUpdateTarget(w http.ResponseWriter, r *http.Request) {
 		enabled = *req.Enabled
 	}
 
-	if err := s.store.UpdateTarget(id, req.Name, req.Host, req.Description, enabled); err != nil {
+	preferredCheckType := req.PreferredCheckType
+	if preferredCheckType == "" {
+		preferredCheckType = "ping"
+	}
+
+	if err := s.store.UpdateTarget(id, req.Name, req.Host, req.Description, enabled, preferredCheckType); err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			writeError(w, http.StatusNotFound, "target not found")
 			return

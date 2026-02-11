@@ -17,11 +17,12 @@ type dashboardCheck struct {
 }
 
 type dashboardTarget struct {
-	ID        string           `json:"id"`
-	Name      string           `json:"name"`
-	Host      string           `json:"host"`
-	ProjectID string           `json:"project_id"`
-	Checks    []dashboardCheck `json:"checks"`
+	ID                 string           `json:"id"`
+	Name               string           `json:"name"`
+	Host               string           `json:"host"`
+	ProjectID          string           `json:"project_id"`
+	PreferredCheckType string           `json:"preferred_check_type"`
+	Checks             []dashboardCheck `json:"checks"`
 }
 
 type dashboardProject struct {
@@ -48,10 +49,11 @@ func (s *Server) handleDashboardStatus(w http.ResponseWriter, r *http.Request) {
 
 		for _, t := range targets {
 			dt := dashboardTarget{
-				ID:        t.ID,
-				Name:      t.Name,
-				Host:      t.Host,
-				ProjectID: t.ProjectID,
+				ID:                 t.ID,
+				Name:               t.Name,
+				Host:               t.Host,
+				ProjectID:          t.ProjectID,
+				PreferredCheckType: t.PreferredCheckType,
 			}
 
 			checks, err := s.store.ListChecksByTarget(t.ID)
@@ -102,6 +104,15 @@ func (s *Server) handleDashboardStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, result)
+}
+
+// SOC handlers — delegate to same logic as dashboard, with conditional auth.
+func (s *Server) handleSocStatus(w http.ResponseWriter, r *http.Request) {
+	s.handleDashboardStatus(w, r)
+}
+
+func (s *Server) handleSocHistory(w http.ResponseWriter, r *http.Request) {
+	s.handleCheckHistory(w, r)
 }
 
 func (s *Server) handleCheckHistory(w http.ResponseWriter, r *http.Request) {

@@ -72,6 +72,20 @@ func requireRole(roles ...string) func(http.Handler) http.Handler {
 	}
 }
 
+// socAuth conditionally requires auth based on the soc_public setting.
+// If soc_public is "true", allow anonymous access; otherwise require Bearer token.
+func (s *Server) socAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		val, err := s.store.GetSetting("soc_public")
+		if err == nil && val == "true" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		// Fall through to standard auth
+		s.requireAuth(next).ServeHTTP(w, r)
+	})
+}
+
 // loggingMiddleware logs HTTP requests.
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

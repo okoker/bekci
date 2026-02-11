@@ -12,29 +12,25 @@ async function handleLogout() {
 </script>
 
 <template>
-  <div class="layout">
-    <aside class="sidebar">
-      <div class="sidebar-brand">Bekci</div>
-      <nav class="sidebar-nav">
-        <router-link to="/" class="nav-item">Dashboard</router-link>
-        <router-link to="/targets" class="nav-item">Targets</router-link>
-        <router-link v-if="auth.isAdmin" to="/users" class="nav-item">Users</router-link>
-        <router-link to="/settings" class="nav-item">Settings</router-link>
-        <router-link to="/profile" class="nav-item">Profile</router-link>
-      </nav>
-    </aside>
-    <div class="main">
-      <header class="topbar">
-        <div class="topbar-left"></div>
-        <div class="topbar-right">
-          <span class="topbar-user">{{ auth.user?.username }}</span>
-          <span class="topbar-role">({{ auth.user?.role }})</span>
-          <button class="btn btn-sm" @click="handleLogout">Logout</button>
-        </div>
-      </header>
-      <main class="content">
-        <slot />
-      </main>
-    </div>
+  <div class="layout-v">
+    <nav class="navbar">
+      <div class="navbar-left">
+        <router-link to="/" class="navbar-brand">Bekci</router-link>
+        <router-link to="/" class="nav-link">Dashboard</router-link>
+        <router-link to="/targets" class="nav-link">Targets</router-link>
+        <router-link to="/soc" class="nav-link">SOC</router-link>
+        <router-link v-if="auth.isAdmin" to="/users" class="nav-link">Users</router-link>
+        <router-link to="/settings" class="nav-link">Settings</router-link>
+        <router-link to="/profile" class="nav-link">Profile</router-link>
+      </div>
+      <div class="navbar-right">
+        <span class="navbar-user">{{ auth.user?.username }}</span>
+        <span class="navbar-role">({{ auth.user?.role }})</span>
+        <button class="btn btn-sm" @click="handleLogout">Logout</button>
+      </div>
+    </nav>
+    <main class="content">
+      <slot />
+    </main>
   </div>
 </template>

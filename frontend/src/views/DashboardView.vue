@@ -9,11 +9,16 @@ const loading = ref(true)
 const error = ref('')
 const lastUpdated = ref(null)
 
-// Per-check history data (loaded on expand)
+// Per-check history data
 const historyData = ref({}) // checkId -> { bar90d: [], bar4h: [] }
+const expandedTargetId = ref(null)
 const expandedCheckId = ref(null)
 
 let refreshTimer = null
+
+// Pre-built empty bar arrays (gray placeholders before data loads)
+const empty90d = Array.from({ length: 90 }, () => ({ date: '', uptime_pct: -1, total_checks: 0 }))
+const empty4h = Array.from({ length: 48 }, () => ({ status: 'none', response_ms: 0, checked_at: '' }))
 
 async function loadDashboard() {
   try {
@@ -21,6 +26,21 @@ async function loadDashboard() {
     dashboardData.value = data
     lastUpdated.value = new Date()
     error.value = ''
+
+    // Auto-load history for all checks
+    const allCheckIds = []
+    for (const proj of data) {
+      for (const t of proj.targets || []) {
+        for (const c of t.checks || []) {
+          allCheckIds.push(c.id)
+        }
+      }
+    }
+    for (const cid of allCheckIds) {
+      if (!historyData.value[cid]) {
+        loadHistory(cid)
+      }
+    }
   } catch (e) {
     error.value = 'Failed to load dashboard'
   } finally {
@@ -29,28 +49,80 @@ async function loadDashboard() {
 }
 
 async function loadHistory(checkId) {
-  if (historyData.value[checkId]) return // already loaded
   try {
     const [res90d, res4h] = await Promise.all([
       api.get(`/dashboard/history/${checkId}?range=90d`),
       api.get(`/dashboard/history/${checkId}?range=4h`),
     ])
     historyData.value[checkId] = {
-      bar90d: res90d.data,
-      bar4h: res4h.data,
+      bar90d: pad90dBars(res90d.data),
+      bar4h: pad4hBars(res4h.data),
     }
   } catch {
     // silently fail
   }
 }
 
-function toggleCheck(checkId) {
-  if (expandedCheckId.value === checkId) {
-    expandedCheckId.value = null
-  } else {
-    expandedCheckId.value = checkId
-    loadHistory(checkId)
+// Pad 90d data to exactly 90 entries (one per day, oldest first)
+function pad90dBars(data) {
+  const map = {}
+  for (const d of data) map[d.date] = d
+
+  const bars = []
+  const now = new Date()
+  for (let i = 89; i >= 0; i--) {
+    const dt = new Date(now)
+    dt.setDate(dt.getDate() - i)
+    const key = dt.toISOString().slice(0, 10)
+    if (map[key]) {
+      bars.push(map[key])
+    } else {
+      bars.push({ date: key, uptime_pct: -1, total_checks: 0 })
+    }
   }
+  return bars
+}
+
+// Pad 4h data to exactly 48 entries (one per 5-min slot, oldest first)
+function pad4hBars(data) {
+  const bars = []
+  const now = new Date()
+  const slotMs = 5 * 60 * 1000
+  const start = new Date(now.getTime() - 4 * 60 * 60 * 1000)
+
+  for (let i = 0; i < 48; i++) {
+    const slotStart = new Date(start.getTime() + i * slotMs)
+    const slotEnd = new Date(slotStart.getTime() + slotMs)
+    const inSlot = data.filter(r => {
+      const t = new Date(r.checked_at).getTime()
+      return t >= slotStart.getTime() && t < slotEnd.getTime()
+    })
+    if (inSlot.length > 0) {
+      const last = inSlot[inSlot.length - 1]
+      bars.push({ status: last.status, response_ms: last.response_ms, checked_at: last.checked_at })
+    } else {
+      bars.push({ status: 'none', response_ms: 0, checked_at: slotStart.toISOString() })
+    }
+  }
+  return bars
+}
+
+function getPreferredCheck(target) {
+  return target.checks.find(c => c.type === target.preferred_check_type) || target.checks[0]
+}
+
+function toggleTarget(targetId) {
+  if (expandedTargetId.value === targetId) {
+    expandedTargetId.value = null
+  } else {
+    expandedTargetId.value = targetId
+    expandedCheckId.value = null
+  }
+}
+
+function toggleCheck(e, checkId) {
+  e.stopPropagation()
+  expandedCheckId.value = expandedCheckId.value === checkId ? null : checkId
 }
 
 // Sort: problems first (any project with a down check)
@@ -74,32 +146,36 @@ function hasDownCheckTarget(target) {
 
 // Uptime bar color helpers
 function uptimeColor(pct) {
-  if (pct < 0) return '#e2e8f0' // no data (gray)
-  if (pct >= 99.9) return '#22c55e' // green
-  if (pct >= 95) return '#eab308'   // yellow
-  if (pct >= 80) return '#f97316'   // orange
-  return '#ef4444'                   // red
+  if (pct < 0) return '#d1d5db'
+  if (pct >= 99.9) return '#48bb78'
+  if (pct >= 95) return '#ecc94b'
+  if (pct >= 80) return '#ed8936'
+  return '#f56565'
 }
 
 function statusColor(status) {
-  return status === 'up' ? '#22c55e' : '#ef4444'
+  if (status === 'none') return '#d1d5db'
+  return status === 'up' ? '#48bb78' : '#f56565'
 }
 
-function formatTime(dateStr) {
-  const d = new Date(dateStr)
-  return d.toLocaleDateString('en-GB') + ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+function formatTooltip90d(day) {
+  if (!day) return ''
+  const d = new Date(day.date)
+  const dateStr = d.toLocaleDateString('en-GB')
+  return `${dateStr}: ${day.uptime_pct.toFixed(1)}% (${day.total_checks} checks)`
 }
 
-function formatDate(dateStr) {
-  return dateStr // already YYYY-MM-DD from API
+function formatTooltip4h(r) {
+  if (!r) return ''
+  const d = new Date(r.checked_at)
+  const timeStr = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+  return `${timeStr}: ${r.status} (${r.response_ms}ms)`
 }
 
 onMounted(() => {
   loadDashboard()
   refreshTimer = setInterval(() => {
     loadDashboard()
-    // Clear cached history so it refreshes on next expand
-    historyData.value = {}
   }, 30000)
 })
 
@@ -133,59 +209,113 @@ onUnmounted(() => {
         <h3 class="project-name">{{ project.name }}</h3>
 
         <div v-for="target in project.targets" :key="target.id" class="target-card card">
-          <div class="target-header" @click="router.push('/targets')">
-            <span class="target-name">
-              {{ target.name }}
-              <span class="target-host text-muted">{{ target.host }}</span>
-            </span>
-            <span v-if="hasDownCheckTarget(target)" class="badge badge-down">DOWN</span>
-            <span v-else class="badge badge-up">UP</span>
-          </div>
-
-          <div v-if="target.checks.length === 0" class="text-muted" style="padding: 0.5rem 0; font-size: 0.85rem;">
-            No checks configured
-          </div>
-
-          <div v-for="check in target.checks" :key="check.id" class="check-row" @click="toggleCheck(check.id)">
-            <div class="check-info">
-              <span :class="['status-dot', check.last_status === 'up' ? 'dot-up' : (check.last_status === 'down' ? 'dot-down' : 'dot-unknown')]"></span>
-              <span class="check-name">{{ check.name }}</span>
-              <span class="badge badge-type">{{ check.type }}</span>
-              <span v-if="check.response_ms > 0" class="check-response text-muted">{{ check.response_ms }}ms</span>
-              <span v-if="check.uptime_90d_pct >= 0" class="check-uptime" :style="{ color: uptimeColor(check.uptime_90d_pct) }">
-                {{ check.uptime_90d_pct.toFixed(1) }}%
+          <!-- Collapsed view: target header + preferred check bars -->
+          <div class="target-header" @click="toggleTarget(target.id)">
+            <div class="target-header-left">
+              <span class="expand-icon">{{ expandedTargetId === target.id ? '&#9660;' : '&#9654;' }}</span>
+              <span v-if="target.checks.length > 0"
+                :class="['status-dot', hasDownCheckTarget(target) ? 'dot-down' : (getPreferredCheck(target)?.last_status === 'up' ? 'dot-up' : 'dot-unknown')]">
               </span>
+              <span class="target-name">{{ target.name }}</span>
+              <span class="target-host text-muted">{{ target.host }}</span>
             </div>
+            <div class="target-header-right">
+              <template v-if="target.checks.length > 0">
+                <span class="badge badge-type">{{ getPreferredCheck(target)?.type }}</span>
+                <span v-if="getPreferredCheck(target)?.response_ms > 0" class="check-response text-muted">
+                  {{ getPreferredCheck(target)?.response_ms }}ms
+                </span>
+                <span v-if="getPreferredCheck(target)?.uptime_90d_pct >= 0" class="check-uptime"
+                  :style="{ color: uptimeColor(getPreferredCheck(target)?.uptime_90d_pct) }">
+                  {{ getPreferredCheck(target)?.uptime_90d_pct.toFixed(1) }}%
+                </span>
+              </template>
+              <span v-if="hasDownCheckTarget(target)" class="badge badge-down">DOWN</span>
+              <span v-else-if="target.checks.length > 0" class="badge badge-up">UP</span>
+            </div>
+          </div>
 
-            <!-- Uptime bars (always show placeholders, fill when data loaded) -->
-            <div class="uptime-bars">
-              <!-- 90-day bar -->
-              <div class="bar-container bar-90d" title="90-day uptime">
-                <template v-if="historyData[check.id]?.bar90d">
-                  <div v-for="(day, i) in historyData[check.id].bar90d" :key="'90d-' + i"
-                    class="bar-segment"
+          <!-- Collapsed: preferred check bars -->
+          <div v-if="expandedTargetId !== target.id && target.checks.length > 0" class="collapsed-bars" @click="toggleTarget(target.id)">
+            <div class="uptime-bars-row">
+              <div class="bar-section bar-90d-section">
+                <div class="bar-track">
+                  <div v-for="(day, i) in (historyData[getPreferredCheck(target)?.id]?.bar90d || empty90d)" :key="'90d-' + i"
+                    class="bar-tick"
                     :style="{ background: uptimeColor(day.uptime_pct) }"
-                    :title="formatDate(day.date) + ': ' + day.uptime_pct.toFixed(1) + '% (' + day.total_checks + ' checks)'">
+                    :title="formatTooltip90d(day)">
                   </div>
-                </template>
-                <div v-else class="bar-placeholder">90d</div>
+                </div>
+                <div class="bar-labels">
+                  <span>90 days ago</span>
+                  <span>Today</span>
+                </div>
               </div>
-              <!-- 4-hour bar -->
-              <div class="bar-container bar-4h" title="Last 4 hours">
-                <template v-if="historyData[check.id]?.bar4h">
-                  <div v-for="(r, i) in historyData[check.id].bar4h" :key="'4h-' + i"
-                    class="bar-segment"
+              <div class="bar-section bar-4h-section">
+                <div class="bar-track">
+                  <div v-for="(r, i) in (historyData[getPreferredCheck(target)?.id]?.bar4h || empty4h)" :key="'4h-' + i"
+                    class="bar-tick"
                     :style="{ background: statusColor(r.status) }"
-                    :title="formatTime(r.checked_at) + ': ' + r.status + ' (' + r.response_ms + 'ms)'">
+                    :title="formatTooltip4h(r)">
                   </div>
-                </template>
-                <div v-else class="bar-placeholder">4h</div>
+                </div>
+                <div class="bar-labels">
+                  <span>4h ago</span>
+                  <span>Now</span>
+                </div>
               </div>
             </div>
+          </div>
 
-            <!-- Expanded detail -->
-            <div v-if="expandedCheckId === check.id && check.last_message" class="check-detail">
-              {{ check.last_message }}
+          <!-- Expanded: all checks with individual bars -->
+          <div v-if="expandedTargetId === target.id" class="expanded-checks">
+            <div v-if="target.checks.length === 0" class="text-muted" style="padding: 0.5rem 0; font-size: 0.85rem;">
+              No checks configured
+            </div>
+
+            <div v-for="check in target.checks" :key="check.id" class="check-row" @click="toggleCheck($event, check.id)">
+              <div class="check-info">
+                <span :class="['status-dot', check.last_status === 'up' ? 'dot-up' : (check.last_status === 'down' ? 'dot-down' : 'dot-unknown')]"></span>
+                <span class="check-name">{{ check.name }}</span>
+                <span class="badge badge-type">{{ check.type }}</span>
+                <span v-if="check.response_ms > 0" class="check-response text-muted">{{ check.response_ms }}ms</span>
+                <span v-if="check.uptime_90d_pct >= 0" class="check-uptime" :style="{ color: uptimeColor(check.uptime_90d_pct) }">
+                  {{ check.uptime_90d_pct.toFixed(1) }}%
+                </span>
+              </div>
+
+              <div class="uptime-bars-row">
+                <div class="bar-section bar-90d-section">
+                  <div class="bar-track">
+                    <div v-for="(day, i) in (historyData[check.id]?.bar90d || empty90d)" :key="'90d-' + i"
+                      class="bar-tick"
+                      :style="{ background: uptimeColor(day.uptime_pct) }"
+                      :title="formatTooltip90d(day)">
+                    </div>
+                  </div>
+                  <div class="bar-labels">
+                    <span>90 days ago</span>
+                    <span>Today</span>
+                  </div>
+                </div>
+                <div class="bar-section bar-4h-section">
+                  <div class="bar-track">
+                    <div v-for="(r, i) in (historyData[check.id]?.bar4h || empty4h)" :key="'4h-' + i"
+                      class="bar-tick"
+                      :style="{ background: statusColor(r.status) }"
+                      :title="formatTooltip4h(r)">
+                    </div>
+                  </div>
+                  <div class="bar-labels">
+                    <span>4h ago</span>
+                    <span>Now</span>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="expandedCheckId === check.id && check.last_message" class="check-detail">
+                {{ check.last_message }}
+              </div>
             </div>
           </div>
         </div>
@@ -199,22 +329,33 @@ onUnmounted(() => {
   margin-bottom: 1.5rem;
 }
 .project-name {
-  font-size: 1rem;
+  font-size: 0.85rem;
   color: #64748b;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 0.5rem;
+  font-weight: 700;
 }
 
 .target-card {
   padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
 }
 .target-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.5rem;
   cursor: pointer;
+}
+.target-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.target-header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 .target-name {
   font-weight: 600;
@@ -222,13 +363,33 @@ onUnmounted(() => {
 .target-host {
   font-weight: 400;
   font-size: 0.85rem;
-  margin-left: 0.5rem;
+}
+
+.expand-icon {
+  display: inline-block;
+  width: 1rem;
+  font-size: 0.7rem;
+  color: #94a3b8;
+}
+
+.collapsed-bars {
+  margin-top: 0.5rem;
+  cursor: pointer;
+}
+
+.expanded-checks {
+  margin-top: 0.5rem;
+  border-top: 1px solid #f1f5f9;
+  padding-top: 0.5rem;
 }
 
 .check-row {
-  padding: 0.5rem 0;
+  padding: 0.6rem 0;
   border-top: 1px solid #f1f5f9;
   cursor: pointer;
+}
+.check-row:first-child {
+  border-top: none;
 }
 .check-row:hover { background: #fafbfc; }
 
@@ -236,7 +397,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.35rem;
 }
 
 .status-dot {
@@ -245,9 +406,9 @@ onUnmounted(() => {
   border-radius: 50%;
   flex-shrink: 0;
 }
-.dot-up { background: #22c55e; }
-.dot-down { background: #ef4444; }
-.dot-unknown { background: #e2e8f0; }
+.dot-up { background: #48bb78; }
+.dot-down { background: #f56565; }
+.dot-unknown { background: #d1d5db; }
 
 .check-name { font-weight: 500; font-size: 0.9rem; }
 .check-response { font-size: 0.8rem; }
@@ -279,45 +440,47 @@ onUnmounted(() => {
   border-radius: 10px;
 }
 
-/* Uptime bars */
-.uptime-bars {
+/* Uptime bars — thin vertical barcode style */
+.uptime-bars-row {
   display: flex;
-  gap: 0.75rem;
+  gap: 1rem;
   margin-top: 0.25rem;
 }
 
-.bar-container {
+.bar-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.bar-90d-section { flex: 6; }
+.bar-4h-section { flex: 4; }
+
+.bar-track {
   display: flex;
   gap: 1px;
-  align-items: flex-end;
-  height: 20px;
-  flex: 1;
-  background: #f8fafc;
-  border-radius: 3px;
-  overflow: hidden;
+  height: 28px;
+  align-items: stretch;
 }
 
-.bar-segment {
+.bar-tick {
   flex: 1;
-  height: 100%;
-  min-width: 1px;
+  min-width: 0;
+  border-radius: 1px;
   transition: opacity 0.15s;
 }
-.bar-segment:hover {
-  opacity: 0.7;
+
+.bar-tick:hover {
+  opacity: 0.65;
 }
 
-.bar-placeholder {
+.bar-labels {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  font-size: 0.65rem;
-  color: #cbd5e1;
+  justify-content: space-between;
+  font-size: 0.6rem;
+  color: #a0aec0;
+  margin-top: 2px;
+  padding: 0 1px;
 }
-
-.bar-90d { max-width: 60%; }
-.bar-4h { max-width: 40%; }
 
 .check-detail {
   font-size: 0.8rem;
