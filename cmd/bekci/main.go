@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/bekci/internal/api"
 	"github.com/bekci/internal/auth"
 	"github.com/bekci/internal/config"
+	"github.com/bekci/internal/scheduler"
 	"github.com/bekci/internal/store"
 )
 
@@ -101,6 +103,9 @@ func main() {
 	// Initialize auth service
 	authSvc := auth.New(db, cfg.Auth.JWTSecret)
 
+	// Initialize scheduler
+	sched := scheduler.New(db)
+
 	// Get embedded frontend (may be empty during dev)
 	var spa fs.FS
 	if sub, err := fs.Sub(frontendFS, "frontend_dist"); err == nil {
@@ -110,7 +115,7 @@ func main() {
 	}
 
 	// Create API server
-	apiServer := api.New(db, authSvc, version, spa)
+	apiServer := api.New(db, authSvc, sched, version, spa)
 
 	// Setup HTTP server
 	httpServer := &http.Server{
@@ -125,7 +130,10 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Hourly session cleanup
+	// Start scheduler
+	go sched.Start(ctx)
+
+	// Hourly cleanup: sessions + old results
 	go func() {
 		ticker := time.NewTicker(1 * time.Hour)
 		defer ticker.Stop()
@@ -138,6 +146,19 @@ func main() {
 					slog.Error("Session cleanup error", "error", err)
 				} else if purged > 0 {
 					slog.Info("Purged expired sessions", "count", purged)
+				}
+
+				// Purge old check results based on history_days setting
+				historyDays := 90
+				if v, err := db.GetSetting("history_days"); err == nil && v != "" {
+					if d, err := strconv.Atoi(v); err == nil && d > 0 {
+						historyDays = d
+					}
+				}
+				if purged, err := db.PurgeOldResults(historyDays); err != nil {
+					slog.Error("Results cleanup error", "error", err)
+				} else if purged > 0 {
+					slog.Info("Purged old check results", "count", purged, "older_than_days", historyDays)
 				}
 			}
 		}
@@ -158,6 +179,7 @@ func main() {
 	<-sigCh
 
 	slog.Warn("Shutting down...")
+	sched.Stop()
 	cancel()
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)

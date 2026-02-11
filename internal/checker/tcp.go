@@ -4,25 +4,31 @@ import (
 	"fmt"
 	"net"
 	"time"
-
-	"github.com/bekci/internal/config"
 )
 
-func (c *Checker) checkTCP(svc *config.Service) *Result {
+func runTCP(host string, config map[string]any) *Result {
+	port := configInt(config, "port", 80)
+	timeoutS := configInt(config, "timeout_s", 5)
+
+	addr := fmt.Sprintf("%s:%d", host, port)
 	start := time.Now()
-
-	addr := svc.URL
-	if addr == "" {
-		return resultDown("url is required for tcp check", 0)
-	}
-
-	conn, err := net.DialTimeout("tcp", addr, svc.Check.Timeout)
-	responseMs := measureTime(start)
+	conn, err := net.DialTimeout("tcp", addr, time.Duration(timeoutS)*time.Second)
+	elapsed := time.Since(start).Milliseconds()
 
 	if err != nil {
-		return resultDown(fmt.Sprintf("tcp connect failed: %v", err), responseMs)
+		return &Result{
+			Status:     "down",
+			ResponseMs: elapsed,
+			Message:    err.Error(),
+			Metrics:    map[string]any{"addr": addr},
+		}
 	}
-	defer conn.Close()
+	conn.Close()
 
-	return resultUp(0, responseMs)
+	return &Result{
+		Status:     "up",
+		ResponseMs: elapsed,
+		Message:    fmt.Sprintf("TCP connect to %s OK", addr),
+		Metrics:    map[string]any{"addr": addr},
+	}
 }

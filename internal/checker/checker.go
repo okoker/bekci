@@ -1,64 +1,87 @@
 package checker
 
 import (
-	"fmt"
+	"encoding/json"
 	"time"
-
-	"github.com/bekci/internal/config"
 )
 
+// Result returned by every check type.
 type Result struct {
-	Status     string // "up" or "down"
-	StatusCode int
-	ResponseMs int64
-	Error      string
+	Status     string         `json:"status"`      // "up" or "down"
+	ResponseMs int64          `json:"response_ms"`
+	Message    string         `json:"message"`
+	Metrics    map[string]any `json:"metrics"`
 }
 
-type Checker struct {
-	sshDefaults config.SSHConfig
-}
+// Run dispatches to the correct check type and returns the result.
+func Run(checkType, host string, configJSON string) *Result {
+	config := make(map[string]any)
+	if configJSON != "" && configJSON != "{}" {
+		_ = json.Unmarshal([]byte(configJSON), &config)
+	}
 
-func New(sshDefaults config.SSHConfig) *Checker {
-	return &Checker{sshDefaults: sshDefaults}
-}
+	start := time.Now()
+	var r *Result
 
-// Check performs a health check based on the service configuration
-func (c *Checker) Check(svc *config.Service) *Result {
-	switch svc.Check.Type {
-	case "https":
-		return c.checkHTTPS(svc)
+	switch checkType {
+	case "http":
+		r = runHTTP(host, config)
 	case "tcp":
-		return c.checkTCP(svc)
-	case "process":
-		return c.checkProcess(svc)
-	case "ssh_process":
-		return c.checkSSHProcess(svc)
-	case "ssh_command":
-		return c.checkSSHCommand(svc)
+		r = runTCP(host, config)
+	case "ping":
+		r = runPing(host, config)
+	case "dns":
+		r = runDNS(host, config)
+	case "page_hash":
+		r = runPageHash(host, config)
+	case "tls_cert":
+		r = runTLSCert(host, config)
 	default:
-		return &Result{
-			Status: "down",
-			Error:  fmt.Sprintf("unknown check type: %s", svc.Check.Type),
+		r = &Result{
+			Status:  "down",
+			Message: "unknown check type: " + checkType,
+			Metrics: map[string]any{},
 		}
 	}
-}
 
-func resultUp(statusCode int, responseMs int64) *Result {
-	return &Result{
-		Status:     "up",
-		StatusCode: statusCode,
-		ResponseMs: responseMs,
+	if r.ResponseMs == 0 {
+		r.ResponseMs = time.Since(start).Milliseconds()
 	}
-}
-
-func resultDown(err string, responseMs int64) *Result {
-	return &Result{
-		Status:     "down",
-		Error:      err,
-		ResponseMs: responseMs,
+	if r.Metrics == nil {
+		r.Metrics = map[string]any{}
 	}
+	return r
 }
 
-func measureTime(start time.Time) int64 {
-	return time.Since(start).Milliseconds()
+// helper to get a string config value with a default.
+func configStr(config map[string]any, key, defaultVal string) string {
+	if v, ok := config[key]; ok {
+		if s, ok := v.(string); ok && s != "" {
+			return s
+		}
+	}
+	return defaultVal
+}
+
+// helper to get an int config value with a default.
+func configInt(config map[string]any, key string, defaultVal int) int {
+	if v, ok := config[key]; ok {
+		switch n := v.(type) {
+		case float64:
+			return int(n)
+		case int:
+			return n
+		}
+	}
+	return defaultVal
+}
+
+// helper to get a bool config value with a default.
+func configBool(config map[string]any, key string, defaultVal bool) bool {
+	if v, ok := config[key]; ok {
+		if b, ok := v.(bool); ok {
+			return b
+		}
+	}
+	return defaultVal
 }

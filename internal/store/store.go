@@ -56,6 +56,7 @@ func (s *Store) migrate() error {
 
 	migrations := []func() error{
 		s.migration001,
+		s.migration002,
 	}
 
 	for i := current; i < len(migrations); i++ {
@@ -104,6 +105,60 @@ func (s *Store) migration001() error {
 	INSERT INTO settings (key, value) VALUES ('session_timeout_hours', '24');
 	INSERT INTO settings (key, value) VALUES ('history_days', '90');
 	INSERT INTO settings (key, value) VALUES ('default_check_interval', '300');
+	`
+	_, err := s.db.Exec(schema)
+	return err
+}
+
+// migration002 creates the monitoring tables: projects, targets, checks, check_results.
+func (s *Store) migration002() error {
+	schema := `
+	CREATE TABLE projects (
+		id          TEXT PRIMARY KEY,
+		name        TEXT UNIQUE NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
+		created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE TABLE targets (
+		id          TEXT PRIMARY KEY,
+		project_id  TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+		name        TEXT NOT NULL,
+		host        TEXT NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
+		enabled     INTEGER NOT NULL DEFAULT 1,
+		created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE(project_id, name)
+	);
+
+	CREATE TABLE checks (
+		id          TEXT PRIMARY KEY,
+		target_id   TEXT NOT NULL REFERENCES targets(id) ON DELETE CASCADE,
+		type        TEXT NOT NULL CHECK(type IN ('http','tcp','ping','dns','page_hash','tls_cert')),
+		name        TEXT NOT NULL,
+		config      TEXT NOT NULL DEFAULT '{}',
+		interval_s  INTEGER NOT NULL DEFAULT 300,
+		enabled     INTEGER NOT NULL DEFAULT 1,
+		created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE TABLE check_results (
+		id          INTEGER PRIMARY KEY AUTOINCREMENT,
+		check_id    TEXT NOT NULL REFERENCES checks(id) ON DELETE CASCADE,
+		status      TEXT NOT NULL CHECK(status IN ('up','down')),
+		response_ms INTEGER NOT NULL DEFAULT 0,
+		message     TEXT NOT NULL DEFAULT '',
+		metrics     TEXT NOT NULL DEFAULT '{}',
+		checked_at  DATETIME NOT NULL
+	);
+
+	CREATE INDEX idx_check_results_check_id ON check_results(check_id);
+	CREATE INDEX idx_check_results_checked_at ON check_results(checked_at);
+	CREATE INDEX idx_targets_project_id ON targets(project_id);
+	CREATE INDEX idx_checks_target_id ON checks(target_id);
 	`
 	_, err := s.db.Exec(schema)
 	return err
