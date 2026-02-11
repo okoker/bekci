@@ -17,6 +17,7 @@ async function handleLogout() {
       <div class="sidebar-brand">Bekci</div>
       <nav class="sidebar-nav">
         <router-link to="/" class="nav-item">Dashboard</router-link>
+        <router-link to="/targets" class="nav-item">Targets</router-link>
         <router-link v-if="auth.isAdmin" to="/users" class="nav-item">Users</router-link>
         <router-link to="/settings" class="nav-item">Settings</router-link>
         <router-link to="/profile" class="nav-item">Profile</router-link>

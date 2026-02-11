@@ -5,23 +5,26 @@ import (
 	"net/http"
 
 	"github.com/bekci/internal/auth"
+	"github.com/bekci/internal/scheduler"
 	"github.com/bekci/internal/store"
 )
 
 type Server struct {
-	store   *store.Store
-	auth    *auth.Service
-	version string
-	spa     fs.FS // embedded frontend/dist
+	store     *store.Store
+	auth      *auth.Service
+	scheduler *scheduler.Scheduler
+	version   string
+	spa       fs.FS // embedded frontend/dist
 }
 
 // New creates a new API server.
-func New(st *store.Store, authSvc *auth.Service, version string, spa fs.FS) *Server {
+func New(st *store.Store, authSvc *auth.Service, sched *scheduler.Scheduler, version string, spa fs.FS) *Server {
 	return &Server{
-		store:   st,
-		auth:    authSvc,
-		version: version,
-		spa:     spa,
+		store:     st,
+		auth:      authSvc,
+		scheduler: sched,
+		version:   version,
+		spa:       spa,
 	}
 }
 
@@ -53,6 +56,39 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("PUT /api/users/{id}", adminAuth(s.handleUpdateUser))
 	mux.Handle("PUT /api/users/{id}/suspend", adminAuth(s.handleSuspendUser))
 	mux.Handle("PUT /api/users/{id}/password", adminAuth(s.handleResetPassword))
+
+	// Auth helpers for monitoring routes
+	anyAuth := func(h http.HandlerFunc) http.Handler {
+		return s.requireAuth(http.HandlerFunc(h))
+	}
+	opAuth := func(h http.HandlerFunc) http.Handler {
+		return s.requireAuth(requireRole("admin", "operator")(http.HandlerFunc(h)))
+	}
+
+	// Projects
+	mux.Handle("GET /api/projects", anyAuth(s.handleListProjects))
+	mux.Handle("POST /api/projects", opAuth(s.handleCreateProject))
+	mux.Handle("PUT /api/projects/{id}", opAuth(s.handleUpdateProject))
+	mux.Handle("DELETE /api/projects/{id}", adminAuth(s.handleDeleteProject))
+
+	// Targets
+	mux.Handle("GET /api/targets", anyAuth(s.handleListTargets))
+	mux.Handle("POST /api/targets", opAuth(s.handleCreateTarget))
+	mux.Handle("GET /api/targets/{id}", anyAuth(s.handleGetTarget))
+	mux.Handle("PUT /api/targets/{id}", opAuth(s.handleUpdateTarget))
+	mux.Handle("DELETE /api/targets/{id}", opAuth(s.handleDeleteTarget))
+
+	// Checks
+	mux.Handle("GET /api/targets/{id}/checks", anyAuth(s.handleListChecks))
+	mux.Handle("POST /api/targets/{id}/checks", opAuth(s.handleCreateCheck))
+	mux.Handle("PUT /api/checks/{id}", opAuth(s.handleUpdateCheck))
+	mux.Handle("DELETE /api/checks/{id}", opAuth(s.handleDeleteCheck))
+	mux.Handle("POST /api/checks/{id}/run", opAuth(s.handleRunCheckNow))
+	mux.Handle("GET /api/checks/{id}/results", anyAuth(s.handleCheckResults))
+
+	// Dashboard
+	mux.Handle("GET /api/dashboard/status", anyAuth(s.handleDashboardStatus))
+	mux.Handle("GET /api/dashboard/history/{checkId}", anyAuth(s.handleCheckHistory))
 
 	// SPA handler — serve frontend for all non-API routes
 	mux.Handle("/", s.spaHandler())
