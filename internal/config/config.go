@@ -4,333 +4,110 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"path/filepath"
+	"strconv"
 	"strings"
-	"time"
 
 	"gopkg.in/yaml.v3"
 )
 
 type Config struct {
-	Global      GlobalConfig   `yaml:"global"`
-	Resend      ResendConfig   `yaml:"resend"`
-	SSHDefaults SSHConfig      `yaml:"ssh_defaults"`
-	Projects    []Project      `yaml:"projects"`
+	Server    ServerConfig    `yaml:"server"`
+	Auth      AuthConfig      `yaml:"auth"`
+	Logging   LoggingConfig   `yaml:"logging"`
+	InitAdmin InitAdminConfig `yaml:"init_admin"`
 }
 
-type GlobalConfig struct {
-	CheckInterval   time.Duration `yaml:"check_interval"`
-	AlertCooldown   time.Duration `yaml:"alert_cooldown"`
-	HistoryDays     int           `yaml:"history_days"`
-	RestartAttempts int           `yaml:"restart_attempts"`
-	RestartDelay    time.Duration `yaml:"restart_delay"`
-	WebPort         int           `yaml:"web_port"`
-	DBPath          string        `yaml:"db_path"`
-	LogLevel        string        `yaml:"log_level"`
-	LogPath         string        `yaml:"log_path"`
+type ServerConfig struct {
+	Port   int    `yaml:"port"`
+	DBPath string `yaml:"db_path"`
 }
 
-type ResendConfig struct {
-	APIKey string   `yaml:"api_key"`
-	From   string   `yaml:"from"`
-	To     []string `yaml:"to"`
+type AuthConfig struct {
+	JWTSecret string `yaml:"jwt_secret"`
 }
 
-type SSHConfig struct {
-	KeyPath            string        `yaml:"key_path"`
-	User               string        `yaml:"user"`
-	Timeout            time.Duration `yaml:"timeout"`
-	KnownHostsPath    string        `yaml:"known_hosts_path"`
-	SkipHostKeyVerify bool          `yaml:"skip_host_key_verify"`
+type LoggingConfig struct {
+	Level string `yaml:"level"`
+	Path  string `yaml:"path"`
 }
 
-type Project struct {
-	Name     string    `yaml:"name"`
-	Services []Service `yaml:"services"`
+type InitAdminConfig struct {
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
 }
 
-type Service struct {
-	Name          string        `yaml:"name"`
-	URL           string        `yaml:"url"`
-	Check         CheckConfig   `yaml:"check"`
-	Restart       RestartConfig `yaml:"restart"`
-	CheckInterval time.Duration `yaml:"check_interval"`
-}
-
-type CheckConfig struct {
-	Type           string `yaml:"type"` // https, process, ssh_process, ssh_command
-	Endpoint       string `yaml:"endpoint"`
-	ExpectStatus   int    `yaml:"expect_status"`
-	Timeout        time.Duration `yaml:"timeout"`
-	FollowRedirect bool   `yaml:"follow_redirect"`
-	SkipTLSVerify  bool   `yaml:"skip_tls_verify"`
-	// For process checks
-	ProcessName string `yaml:"name"`
-	ArgsContain string `yaml:"args_contain"`
-	// For SSH checks
-	Host    string `yaml:"host"`
-	Command string `yaml:"command"`
-	KeyPath string `yaml:"key_path"`
-	User    string `yaml:"user"`
-}
-
-type RestartConfig struct {
-	Type      string `yaml:"type"` // local, ssh, docker, none
-	Enabled   *bool  `yaml:"enabled"`
-	Command   string `yaml:"command"`
-	Container string `yaml:"container"`
-	Host      string `yaml:"host"`
-	KeyPath   string `yaml:"key_path"`
-	User      string `yaml:"user"`
-}
-
-// Load reads and parses the config file
+// Load reads config from YAML file, applies env overrides and defaults, then validates.
 func Load(path string) (*Config, error) {
+	cfg := &Config{}
+
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("reading config file: %w", err)
+		if !os.IsNotExist(err) {
+			return nil, fmt.Errorf("reading config file: %w", err)
+		}
+		// Config file is optional — env vars can provide everything
+	} else {
+		if err := yaml.Unmarshal(data, cfg); err != nil {
+			return nil, fmt.Errorf("parsing config: %w", err)
+		}
 	}
 
-	cfg := &Config{}
-	if err := yaml.Unmarshal(data, cfg); err != nil {
-		return nil, fmt.Errorf("parsing config: %w", err)
-	}
-
+	applyEnvOverrides(cfg)
 	applyDefaults(cfg)
 
 	if err := validate(cfg); err != nil {
-		return nil, fmt.Errorf("validating config: %w", err)
+		return nil, fmt.Errorf("config validation: %w", err)
 	}
 
 	return cfg, nil
 }
 
+func applyEnvOverrides(cfg *Config) {
+	if v := os.Getenv("BEKCI_JWT_SECRET"); v != "" {
+		cfg.Auth.JWTSecret = v
+	}
+	if v := os.Getenv("BEKCI_ADMIN_PASSWORD"); v != "" {
+		cfg.InitAdmin.Password = v
+	}
+	if v := os.Getenv("BEKCI_PORT"); v != "" {
+		if port, err := strconv.Atoi(v); err == nil {
+			cfg.Server.Port = port
+		}
+	}
+	if v := os.Getenv("BEKCI_DB_PATH"); v != "" {
+		cfg.Server.DBPath = v
+	}
+}
+
 func applyDefaults(cfg *Config) {
-	// Global defaults
-	if cfg.Global.CheckInterval == 0 {
-		cfg.Global.CheckInterval = 5 * time.Minute
+	if cfg.Server.Port == 0 {
+		cfg.Server.Port = 65000
 	}
-	if cfg.Global.AlertCooldown == 0 {
-		cfg.Global.AlertCooldown = 30 * time.Minute
+	if cfg.Server.DBPath == "" {
+		cfg.Server.DBPath = "bekci.db"
 	}
-	if cfg.Global.HistoryDays == 0 {
-		cfg.Global.HistoryDays = 90
+	if cfg.Logging.Level == "" {
+		cfg.Logging.Level = "warn"
 	}
-	if cfg.Global.RestartAttempts == 0 {
-		cfg.Global.RestartAttempts = 3
+	if cfg.Logging.Path == "" {
+		cfg.Logging.Path = "bekci.log"
 	}
-	if cfg.Global.RestartDelay == 0 {
-		cfg.Global.RestartDelay = 15 * time.Second
-	}
-	if cfg.Global.WebPort == 0 {
-		cfg.Global.WebPort = 65000
-	}
-	if cfg.Global.DBPath == "" {
-		cfg.Global.DBPath = "bekci.db"
-	}
-	if cfg.Global.LogLevel == "" {
-		cfg.Global.LogLevel = "warn"
-	}
-	if cfg.Global.LogPath == "" {
-		cfg.Global.LogPath = "bekci.log"
-	}
-
-	// SSH defaults
-	if cfg.SSHDefaults.KeyPath == "" {
-		home, _ := os.UserHomeDir()
-		cfg.SSHDefaults.KeyPath = filepath.Join(home, ".ssh", "id_rsa")
-	} else {
-		cfg.SSHDefaults.KeyPath = expandPath(cfg.SSHDefaults.KeyPath)
-	}
-	if cfg.SSHDefaults.User == "" {
-		cfg.SSHDefaults.User = "root"
-	}
-	if cfg.SSHDefaults.Timeout == 0 {
-		cfg.SSHDefaults.Timeout = 10 * time.Second
-	}
-	if cfg.SSHDefaults.KnownHostsPath == "" {
-		home, _ := os.UserHomeDir()
-		if home != "" {
-			cfg.SSHDefaults.KnownHostsPath = filepath.Join(home, ".ssh", "known_hosts")
-		}
-	} else {
-		cfg.SSHDefaults.KnownHostsPath = expandPath(cfg.SSHDefaults.KnownHostsPath)
-	}
-
-	// Service defaults
-	for i := range cfg.Projects {
-		for j := range cfg.Projects[i].Services {
-			svc := &cfg.Projects[i].Services[j]
-
-			if svc.CheckInterval == 0 {
-				svc.CheckInterval = cfg.Global.CheckInterval
-			}
-
-			// Check defaults
-			if svc.Check.ExpectStatus == 0 && svc.Check.Type == "https" {
-				svc.Check.ExpectStatus = 200
-			}
-			if svc.Check.Timeout == 0 {
-				svc.Check.Timeout = 10 * time.Second
-			}
-			if svc.Check.KeyPath != "" {
-				svc.Check.KeyPath = expandPath(svc.Check.KeyPath)
-			}
-
-			// Restart defaults
-			if svc.Restart.Type == "" {
-				svc.Restart.Type = "none"
-			}
-			if svc.Restart.Enabled == nil {
-				enabled := svc.Restart.Type != "none"
-				svc.Restart.Enabled = &enabled
-			}
-			if svc.Restart.KeyPath != "" {
-				svc.Restart.KeyPath = expandPath(svc.Restart.KeyPath)
-			}
-		}
+	if cfg.InitAdmin.Username == "" {
+		cfg.InitAdmin.Username = "admin"
 	}
 }
 
 func validate(cfg *Config) error {
-	if len(cfg.Projects) == 0 {
-		return fmt.Errorf("no projects defined")
+	if cfg.Auth.JWTSecret == "" {
+		return fmt.Errorf("jwt_secret is required (set auth.jwt_secret in config or BEKCI_JWT_SECRET env var)")
 	}
-
-	// Validate global paths
-	if err := validatePath(cfg.Global.DBPath, "db_path"); err != nil {
-		return err
-	}
-	if err := validatePath(cfg.Global.LogPath, "log_path"); err != nil {
-		return err
-	}
-	if err := validatePath(cfg.SSHDefaults.KeyPath, "ssh_defaults.key_path"); err != nil {
-		return err
-	}
-
-	// Minimum check interval to prevent self-DoS
-	if cfg.Global.CheckInterval < 10*time.Second {
-		return fmt.Errorf("check_interval must be at least 10s")
-	}
-
-	for i, proj := range cfg.Projects {
-		if proj.Name == "" {
-			return fmt.Errorf("project %d: name is required", i)
-		}
-		if len(proj.Services) == 0 {
-			return fmt.Errorf("project %q: no services defined", proj.Name)
-		}
-
-		for j, svc := range proj.Services {
-			if svc.Name == "" {
-				return fmt.Errorf("project %q, service %d: name is required", proj.Name, j)
-			}
-
-			// Validate check type
-			switch svc.Check.Type {
-			case "https":
-				if svc.URL == "" {
-					return fmt.Errorf("service %q: url is required for https check", svc.Name)
-				}
-			case "tcp":
-				if svc.URL == "" {
-					return fmt.Errorf("service %q: url (host:port) is required for tcp check", svc.Name)
-				}
-			case "process":
-				if svc.Check.ProcessName == "" {
-					return fmt.Errorf("service %q: process name is required for process check", svc.Name)
-				}
-			case "ssh_process":
-				if svc.Check.Host == "" {
-					return fmt.Errorf("service %q: host is required for ssh_process check", svc.Name)
-				}
-				if svc.Check.ProcessName == "" {
-					return fmt.Errorf("service %q: process name is required for ssh_process check", svc.Name)
-				}
-			case "ssh_command":
-				if svc.Check.Host == "" {
-					return fmt.Errorf("service %q: host is required for ssh_command check", svc.Name)
-				}
-				if svc.Check.Command == "" {
-					return fmt.Errorf("service %q: command is required for ssh_command check", svc.Name)
-				}
-			case "":
-				return fmt.Errorf("service %q: check type is required", svc.Name)
-			default:
-				return fmt.Errorf("service %q: unknown check type %q", svc.Name, svc.Check.Type)
-			}
-
-			// Validate restart type
-			switch svc.Restart.Type {
-			case "local":
-				if svc.Restart.Command == "" {
-					return fmt.Errorf("service %q: command is required for local restart", svc.Name)
-				}
-			case "ssh":
-				if svc.Restart.Host == "" {
-					return fmt.Errorf("service %q: host is required for ssh restart", svc.Name)
-				}
-				if svc.Restart.Command == "" {
-					return fmt.Errorf("service %q: command is required for ssh restart", svc.Name)
-				}
-			case "docker":
-				if svc.Restart.Container == "" && svc.Restart.Command == "" {
-					return fmt.Errorf("service %q: container or command is required for docker restart", svc.Name)
-				}
-			case "none", "":
-				// OK
-			default:
-				return fmt.Errorf("service %q: unknown restart type %q", svc.Name, svc.Restart.Type)
-			}
-
-			// Validate paths against traversal
-			if err := validatePath(svc.Check.KeyPath, fmt.Sprintf("service %q check.key_path", svc.Name)); err != nil {
-				return err
-			}
-			if err := validatePath(svc.Restart.KeyPath, fmt.Sprintf("service %q restart.key_path", svc.Name)); err != nil {
-				return err
-			}
-
-			// Validate minimum check interval
-			if svc.CheckInterval > 0 && svc.CheckInterval < 10*time.Second {
-				return fmt.Errorf("service %q: check_interval must be at least 10s", svc.Name)
-			}
-		}
-	}
-
-	return nil
-}
-
-func expandPath(path string) string {
-	if strings.HasPrefix(path, "~/") {
-		home, err := os.UserHomeDir()
-		if err != nil || home == "" {
-			slog.Warn("Could not resolve home directory for path", "path", path)
-			return path
-		}
-		path = filepath.Join(home, path[2:])
-	}
-	return filepath.Clean(path)
-}
-
-// validatePath checks for path traversal
-func validatePath(path, fieldName string) error {
-	if path == "" {
-		return nil
-	}
-	cleaned := filepath.Clean(path)
-	if strings.Contains(cleaned, "..") {
-		return fmt.Errorf("%s: path traversal not allowed: %q", fieldName, path)
+	if cfg.Server.Port < 1 || cfg.Server.Port > 65535 {
+		return fmt.Errorf("port must be between 1 and 65535")
 	}
 	return nil
 }
 
-// GetServiceKey returns a unique identifier for a service
-func GetServiceKey(projectName, serviceName string) string {
-	return fmt.Sprintf("%s/%s", projectName, serviceName)
-}
-
-// ParseLogLevel converts a log level string to slog.Level
+// ParseLogLevel converts a log level string to slog.Level.
 func ParseLogLevel(level string) slog.Level {
 	switch strings.ToLower(level) {
 	case "debug":
