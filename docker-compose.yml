@@ -1,13 +1,12 @@
 services:
   bekci:
     build: .
+    container_name: bekci
     ports:
       - "65000:65000"
     volumes:
       - bekci-data:/data
     environment:
-      - BEKCI_JWT_SECRET=${BEKCI_JWT_SECRET:-change-me-in-production}
-      - BEKCI_ADMIN_PASSWORD=${BEKCI_ADMIN_PASSWORD:-}
       - BEKCI_DB_PATH=/data/bekci.db
     cap_add:
       - NET_RAW
