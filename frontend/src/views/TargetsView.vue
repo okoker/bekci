@@ -12,16 +12,10 @@ const loading = ref(false)
 const error = ref('')
 const success = ref('')
 
-// Target form
-const showTargetForm = ref(false)
-const editingTarget = ref(null)
-const targetForm = ref({ name: '', host: '', description: '', enabled: true, preferred_check_type: 'ping' })
-
-// Check form
-const showCheckForm = ref(false)
-const editingCheck = ref(null)
-const checkTargetId = ref('')
-const checkForm = ref({ type: 'http', name: '', config: {}, interval_s: 60, enabled: true })
+// Form state
+const showForm = ref(false)
+const editingTarget = ref(null) // null = creating
+const form = ref(getEmptyForm())
 
 const checkTypes = [
   { value: 'http', label: 'HTTP/HTTPS' },
@@ -32,7 +26,42 @@ const checkTypes = [
   { value: 'tls_cert', label: 'TLS Certificate' },
 ]
 
-// Load data
+function getEmptyForm() {
+  return {
+    name: '', host: '', description: '', enabled: true,
+    operator: 'AND', severity: 'critical',
+    conditions: []
+  }
+}
+
+function getDefaultConfig(type_) {
+  switch (type_) {
+    case 'http': return { scheme: 'https', port: 0, endpoint: '/', expect_status: 200, skip_tls_verify: false, timeout_s: 10 }
+    case 'tcp': return { port: 80, timeout_s: 5 }
+    case 'ping': return { count: 3, timeout_s: 5 }
+    case 'dns': return { query: '', record_type: 'A', expect_value: '', nameserver: '' }
+    case 'page_hash': return { scheme: 'https', endpoint: '/', baseline_hash: '', timeout_s: 10 }
+    case 'tls_cert': return { port: 443, warn_days: 30, timeout_s: 10 }
+    default: return {}
+  }
+}
+
+function getDefaultCondition() {
+  return {
+    check_id: '',
+    check_type: 'ping',
+    check_name: '',
+    config: getDefaultConfig('ping'),
+    interval_s: 60,
+    field: 'status',
+    comparator: 'eq',
+    value: 'down',
+    fail_count: 1,
+    fail_window: 0,
+  }
+}
+
+// Load
 async function loadTargets() {
   loading.value = true
   try {
@@ -45,25 +74,83 @@ async function loadTargets() {
   }
 }
 
-// Target CRUD
-function openTargetForm(target = null) {
+// Open form
+function openForm(target = null) {
   editingTarget.value = target
-  targetForm.value = target
-    ? { name: target.name, host: target.host, description: target.description, enabled: target.enabled, preferred_check_type: target.preferred_check_type || 'ping' }
-    : { name: '', host: '', description: '', enabled: true, preferred_check_type: 'ping' }
-  showTargetForm.value = true
+  if (target) {
+    // Load full detail for editing
+    loadTargetDetail(target.id)
+  } else {
+    form.value = getEmptyForm()
+    showForm.value = true
+  }
   error.value = ''
 }
 
+async function loadTargetDetail(id) {
+  try {
+    const { data } = await api.get(`/targets/${id}`)
+    form.value = {
+      name: data.name,
+      host: data.host,
+      description: data.description,
+      enabled: data.enabled,
+      operator: data.operator || 'AND',
+      severity: data.severity || 'critical',
+      conditions: (data.conditions || []).map(c => {
+        let cfg = {}
+        try { cfg = JSON.parse(c.config) } catch { cfg = {} }
+        return {
+          check_id: c.check_id || '',
+          check_type: c.check_type,
+          check_name: c.check_name,
+          config: cfg,
+          interval_s: c.interval_s,
+          field: c.field || 'status',
+          comparator: c.comparator || 'eq',
+          value: c.value || 'down',
+          fail_count: c.fail_count || 1,
+          fail_window: c.fail_window || 0,
+        }
+      })
+    }
+    showForm.value = true
+  } catch (e) {
+    error.value = 'Failed to load target details'
+  }
+}
+
+// Save
 async function saveTarget() {
   error.value = ''
   try {
-    if (editingTarget.value) {
-      await api.put(`/targets/${editingTarget.value.id}`, targetForm.value)
-    } else {
-      await api.post('/targets', targetForm.value)
+    const payload = {
+      name: form.value.name,
+      host: form.value.host,
+      description: form.value.description,
+      enabled: form.value.enabled,
+      operator: form.value.operator,
+      severity: form.value.severity,
+      conditions: form.value.conditions.map(c => ({
+        check_id: c.check_id || undefined,
+        check_type: c.check_type,
+        check_name: c.check_name,
+        config: JSON.stringify(c.config),
+        interval_s: Number(c.interval_s) || 60,
+        field: c.field || 'status',
+        comparator: c.comparator || 'eq',
+        value: c.value || 'down',
+        fail_count: Number(c.fail_count) || 1,
+        fail_window: Number(c.fail_window) || 0,
+      }))
     }
-    showTargetForm.value = false
+
+    if (editingTarget.value) {
+      await api.put(`/targets/${editingTarget.value.id}`, payload)
+    } else {
+      await api.post('/targets', payload)
+    }
+    showForm.value = false
     await loadTargets()
     success.value = editingTarget.value ? 'Target updated' : 'Target created'
   } catch (e) {
@@ -82,8 +169,25 @@ async function deleteTarget(id) {
   }
 }
 
-// Expand target to see checks
-const targetChecks = ref({}) // targetId -> checks[]
+// Conditions management
+function addCondition() {
+  form.value.conditions.push(getDefaultCondition())
+}
+
+function removeCondition(index) {
+  form.value.conditions.splice(index, 1)
+}
+
+function onConditionTypeChange(index) {
+  const cond = form.value.conditions[index]
+  // Only reset config if it's a new condition (no check_id)
+  if (!cond.check_id) {
+    cond.config = getDefaultConfig(cond.check_type)
+  }
+}
+
+// Expand for check details
+const targetChecks = ref({})
 
 async function toggleTarget(targetId) {
   if (expandedTargetId.value === targetId) {
@@ -91,80 +195,15 @@ async function toggleTarget(targetId) {
     return
   }
   expandedTargetId.value = targetId
+  await reloadChecks(targetId)
+}
+
+async function reloadChecks(targetId) {
   try {
-    const { data } = await api.get(`/targets/${targetId}`)
-    targetChecks.value[targetId] = data.checks || []
+    const { data } = await api.get(`/targets/${targetId}/checks`)
+    targetChecks.value[targetId] = data || []
   } catch (e) {
     error.value = 'Failed to load checks'
-  }
-}
-
-// Check CRUD
-function getDefaultConfig(type_) {
-  switch (type_) {
-    case 'http': return { scheme: 'https', port: 0, endpoint: '/', expect_status: 200, skip_tls_verify: false, timeout_s: 10 }
-    case 'tcp': return { port: 80, timeout_s: 5 }
-    case 'ping': return { count: 3, timeout_s: 5 }
-    case 'dns': return { query: '', record_type: 'A', expect_value: '', nameserver: '' }
-    case 'page_hash': return { scheme: 'https', endpoint: '/', baseline_hash: '', timeout_s: 10 }
-    case 'tls_cert': return { port: 443, warn_days: 30, timeout_s: 10 }
-    default: return {}
-  }
-}
-
-function openCheckForm(targetId, check = null) {
-  checkTargetId.value = targetId
-  editingCheck.value = check
-  if (check) {
-    let cfg = {}
-    try { cfg = JSON.parse(check.config) } catch {}
-    checkForm.value = { type: check.type, name: check.name, config: cfg, interval_s: check.interval_s, enabled: check.enabled }
-  } else {
-    checkForm.value = { type: 'http', name: '', config: getDefaultConfig('http'), interval_s: 60, enabled: true }
-  }
-  showCheckForm.value = true
-  error.value = ''
-}
-
-function onCheckTypeChange() {
-  if (!editingCheck.value) {
-    checkForm.value.config = getDefaultConfig(checkForm.value.type)
-  }
-}
-
-async function saveCheck() {
-  error.value = ''
-  try {
-    const payload = {
-      type: checkForm.value.type,
-      name: checkForm.value.name,
-      config: JSON.stringify(checkForm.value.config),
-      interval_s: Number(checkForm.value.interval_s),
-      enabled: checkForm.value.enabled,
-    }
-    if (editingCheck.value) {
-      await api.put(`/checks/${editingCheck.value.id}`, payload)
-    } else {
-      await api.post(`/targets/${checkTargetId.value}/checks`, payload)
-    }
-    showCheckForm.value = false
-    await toggleTarget(checkTargetId.value) // reload
-    expandedTargetId.value = checkTargetId.value
-    success.value = editingCheck.value ? 'Check updated' : 'Check created'
-  } catch (e) {
-    error.value = e.response?.data?.error || 'Failed to save check'
-  }
-}
-
-async function deleteCheck(checkId, targetId) {
-  if (!confirm('Delete this check?')) return
-  try {
-    await api.delete(`/checks/${checkId}`)
-    await toggleTarget(targetId)
-    expandedTargetId.value = targetId
-    success.value = 'Check deleted'
-  } catch (e) {
-    error.value = e.response?.data?.error || 'Failed to delete check'
   }
 }
 
@@ -183,7 +222,18 @@ function formatInterval(s) {
   return `${s}s`
 }
 
-// Init
+function stateClass(state) {
+  if (state === 'healthy') return 'badge-active'
+  if (state === 'unhealthy') return 'badge-suspended'
+  return 'badge-unknown'
+}
+
+function severityClass(sev) {
+  if (sev === 'critical') return 'badge-sev-critical'
+  if (sev === 'warning') return 'badge-sev-warning'
+  return 'badge-sev-info'
+}
+
 onMounted(() => loadTargets())
 </script>
 
@@ -191,7 +241,7 @@ onMounted(() => loadTargets())
   <div class="page">
     <div class="page-header">
       <h2>Targets</h2>
-      <button v-if="auth.isOperator" class="btn btn-primary" @click="openTargetForm()">+ Target</button>
+      <button v-if="auth.isOperator" class="btn btn-primary" @click="openForm()">+ Target</button>
     </div>
 
     <div v-if="error" class="error-msg">{{ error }}</div>
@@ -207,7 +257,10 @@ onMounted(() => loadTargets())
           <tr>
             <th>Name</th>
             <th>Host</th>
-            <th>Description</th>
+            <th>State</th>
+            <th>Severity</th>
+            <th>Conditions</th>
+            <th>Enabled</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -217,21 +270,27 @@ onMounted(() => loadTargets())
               <td>
                 <span class="expand-icon">{{ expandedTargetId === t.id ? '&#9660;' : '&#9654;' }}</span>
                 {{ t.name }}
-                <span v-if="!t.enabled" class="badge badge-suspended">disabled</span>
               </td>
               <td>{{ t.host }}</td>
-              <td>{{ t.description || '—' }}</td>
+              <td>
+                <span v-if="t.state" :class="['badge', stateClass(t.state?.current_state)]">
+                  {{ t.state?.current_state || '—' }}
+                </span>
+                <span v-else class="text-muted">—</span>
+              </td>
+              <td><span :class="['badge', severityClass(t.severity)]">{{ t.severity }}</span></td>
+              <td>{{ t.condition_count || 0 }}</td>
+              <td><span :class="['badge', t.enabled ? 'badge-active' : 'badge-suspended']">{{ t.enabled ? 'yes' : 'no' }}</span></td>
               <td class="actions" @click.stop>
-                <button v-if="auth.isOperator" class="btn btn-sm" @click="openTargetForm(t)">Edit</button>
+                <button v-if="auth.isOperator" class="btn btn-sm" @click="openForm(t)">Edit</button>
                 <button v-if="auth.isOperator" class="btn btn-sm btn-danger" @click="deleteTarget(t.id)">Delete</button>
               </td>
             </tr>
             <!-- Expanded: checks list -->
             <tr v-if="expandedTargetId === t.id">
-              <td colspan="4" class="checks-panel">
+              <td colspan="7" class="checks-panel">
                 <div class="checks-header">
                   <strong>Checks</strong>
-                  <button v-if="auth.isOperator" class="btn btn-sm btn-primary" @click="openCheckForm(t.id)">+ Check</button>
                 </div>
                 <div v-if="!targetChecks[t.id] || targetChecks[t.id].length === 0" class="text-muted" style="padding: 0.5rem 0;">
                   No checks configured.
@@ -254,8 +313,6 @@ onMounted(() => loadTargets())
                       <td><span :class="['badge', c.enabled ? 'badge-active' : 'badge-suspended']">{{ c.enabled ? 'yes' : 'no' }}</span></td>
                       <td class="actions">
                         <button v-if="auth.isOperator" class="btn btn-sm" @click="runCheckNow(c.id)">Run now</button>
-                        <button v-if="auth.isOperator" class="btn btn-sm" @click="openCheckForm(t.id, c)">Edit</button>
-                        <button v-if="auth.isOperator" class="btn btn-sm btn-danger" @click="deleteCheck(c.id, t.id)">Delete</button>
                       </td>
                     </tr>
                   </tbody>
@@ -267,199 +324,239 @@ onMounted(() => loadTargets())
       </table>
     </div>
 
-    <!-- Target form modal -->
-    <div v-if="showTargetForm" class="modal-overlay" @click.self="showTargetForm = false">
-      <div class="modal-card">
+    <!-- Unified target + conditions form modal -->
+    <div v-if="showForm" class="modal-overlay" @click.self="showForm = false">
+      <div class="modal-card modal-wide">
         <h3>{{ editingTarget ? 'Edit Target' : 'New Target' }}</h3>
         <form @submit.prevent="saveTarget">
-          <div class="form-group">
-            <label>Name</label>
-            <input v-model="targetForm.name" required placeholder="e.g. Web Server" />
-          </div>
-          <div class="form-group">
-            <label>Host</label>
-            <input v-model="targetForm.host" required placeholder="e.g. google.com or 192.168.1.1" />
-          </div>
-          <div class="form-group">
-            <label>Description</label>
-            <input v-model="targetForm.description" placeholder="Optional description" />
-          </div>
-          <div class="form-group">
-            <label>Preferred Check Type</label>
-            <select v-model="targetForm.preferred_check_type">
-              <option v-for="t in checkTypes" :key="t.value" :value="t.value">{{ t.label }}</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label><input type="checkbox" v-model="targetForm.enabled" /> Enabled</label>
-          </div>
-          <div class="form-actions">
-            <button type="submit" class="btn btn-primary">Save</button>
-            <button type="button" class="btn" @click="showTargetForm = false">Cancel</button>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <!-- Check form modal -->
-    <div v-if="showCheckForm" class="modal-overlay" @click.self="showCheckForm = false">
-      <div class="modal-card modal-wide">
-        <h3>{{ editingCheck ? 'Edit Check' : 'New Check' }}</h3>
-        <form @submit.prevent="saveCheck">
+          <!-- Target fields -->
           <div class="form-row">
             <div class="form-group">
               <label>Name</label>
-              <input v-model="checkForm.name" required placeholder="e.g. HTTPS Check" />
+              <input v-model="form.name" required placeholder="e.g. Web Server" />
             </div>
             <div class="form-group">
-              <label>Type</label>
-              <select v-model="checkForm.type" @change="onCheckTypeChange" :disabled="!!editingCheck">
-                <option v-for="t in checkTypes" :key="t.value" :value="t.value">{{ t.label }}</option>
+              <label>Host</label>
+              <input v-model="form.host" required placeholder="e.g. google.com" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Description</label>
+            <input v-model="form.description" placeholder="Optional description" />
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Operator</label>
+              <select v-model="form.operator">
+                <option value="AND">AND (all conditions must fail)</option>
+                <option value="OR">OR (any condition fails)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Severity</label>
+              <select v-model="form.severity">
+                <option value="critical">Critical</option>
+                <option value="warning">Warning</option>
+                <option value="info">Info</option>
               </select>
             </div>
           </div>
+          <div class="form-group checkbox-group">
+            <label class="checkbox-label"><input type="checkbox" v-model="form.enabled" /> Enabled</label>
+          </div>
 
-          <div class="form-row">
-            <div class="form-group">
-              <label>Interval (seconds)</label>
-              <input type="number" v-model.number="checkForm.interval_s" min="10" />
+          <!-- Conditions section -->
+          <div class="conditions-section">
+            <div class="conditions-header">
+              <strong>Conditions</strong>
+              <button type="button" class="btn btn-sm btn-primary" @click="addCondition">+ Add Condition</button>
             </div>
-            <div class="form-group">
-              <label><input type="checkbox" v-model="checkForm.enabled" /> Enabled</label>
+
+            <div v-if="form.conditions.length === 0" class="text-muted" style="padding: 0.5rem 0; font-size: 0.85rem;">
+              No conditions yet. Add one to enable monitoring.
+            </div>
+
+            <div v-for="(cond, idx) in form.conditions" :key="idx" class="condition-card">
+              <div class="condition-card-header">
+                <span class="condition-num">#{{ idx + 1 }}</span>
+                <button type="button" class="btn btn-sm btn-danger" @click="removeCondition(idx)">Remove</button>
+              </div>
+
+              <!-- Check fields -->
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Check Type</label>
+                  <select v-model="cond.check_type" @change="onConditionTypeChange(idx)" :disabled="!!cond.check_id">
+                    <option v-for="t in checkTypes" :key="t.value" :value="t.value">{{ t.label }}</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Check Name</label>
+                  <input v-model="cond.check_name" required placeholder="e.g. HTTPS Check" />
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Interval (seconds)</label>
+                <input type="number" v-model.number="cond.interval_s" min="10" style="max-width: 120px;" />
+              </div>
+
+              <!-- Type-specific config -->
+              <template v-if="cond.check_type === 'http'">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Scheme</label>
+                    <select v-model="cond.config.scheme">
+                      <option value="http">HTTP</option>
+                      <option value="https">HTTPS</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Port (0 = default)</label>
+                    <input type="number" v-model.number="cond.config.port" min="0" max="65535" />
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Endpoint</label>
+                    <input v-model="cond.config.endpoint" placeholder="/" />
+                  </div>
+                  <div class="form-group">
+                    <label>Expected Status</label>
+                    <input type="number" v-model.number="cond.config.expect_status" />
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Timeout (s)</label>
+                    <input type="number" v-model.number="cond.config.timeout_s" min="1" max="60" />
+                  </div>
+                  <div class="form-group checkbox-group">
+                    <label class="checkbox-label"><input type="checkbox" v-model="cond.config.skip_tls_verify" /> Skip TLS Verify</label>
+                  </div>
+                </div>
+              </template>
+
+              <template v-if="cond.check_type === 'tcp'">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Port</label>
+                    <input type="number" v-model.number="cond.config.port" min="1" max="65535" required />
+                  </div>
+                  <div class="form-group">
+                    <label>Timeout (s)</label>
+                    <input type="number" v-model.number="cond.config.timeout_s" min="1" max="60" />
+                  </div>
+                </div>
+              </template>
+
+              <template v-if="cond.check_type === 'ping'">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Ping Count</label>
+                    <input type="number" v-model.number="cond.config.count" min="1" max="10" />
+                  </div>
+                  <div class="form-group">
+                    <label>Timeout (s)</label>
+                    <input type="number" v-model.number="cond.config.timeout_s" min="1" max="30" />
+                  </div>
+                </div>
+              </template>
+
+              <template v-if="cond.check_type === 'dns'">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Query (empty = target host)</label>
+                    <input v-model="cond.config.query" placeholder="Leave empty for target host" />
+                  </div>
+                  <div class="form-group">
+                    <label>Record Type</label>
+                    <select v-model="cond.config.record_type">
+                      <option value="A">A</option>
+                      <option value="AAAA">AAAA</option>
+                      <option value="MX">MX</option>
+                      <option value="CNAME">CNAME</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Expected Value (optional)</label>
+                    <input v-model="cond.config.expect_value" placeholder="e.g. 1.2.3.4" />
+                  </div>
+                  <div class="form-group">
+                    <label>Nameserver (optional)</label>
+                    <input v-model="cond.config.nameserver" placeholder="e.g. 8.8.8.8" />
+                  </div>
+                </div>
+              </template>
+
+              <template v-if="cond.check_type === 'page_hash'">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Scheme</label>
+                    <select v-model="cond.config.scheme">
+                      <option value="http">HTTP</option>
+                      <option value="https">HTTPS</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Endpoint</label>
+                    <input v-model="cond.config.endpoint" placeholder="/" />
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label>Baseline Hash (empty = auto-capture)</label>
+                  <input v-model="cond.config.baseline_hash" placeholder="Leave empty to auto-capture" />
+                </div>
+              </template>
+
+              <template v-if="cond.check_type === 'tls_cert'">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Port</label>
+                    <input type="number" v-model.number="cond.config.port" min="1" max="65535" />
+                  </div>
+                  <div class="form-group">
+                    <label>Warning Days</label>
+                    <input type="number" v-model.number="cond.config.warn_days" min="1" />
+                  </div>
+                </div>
+              </template>
+
+              <!-- Alert criteria divider -->
+              <div class="alert-divider">Alert when...</div>
+              <div class="form-row form-row-4">
+                <div class="form-group">
+                  <label>Field</label>
+                  <select v-model="cond.field">
+                    <option value="status">Status</option>
+                    <option value="response_ms">Response (ms)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Comparator</label>
+                  <select v-model="cond.comparator">
+                    <option value="eq">equals</option>
+                    <option value="neq">not equals</option>
+                    <option value="gt">greater than</option>
+                    <option value="lt">less than</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Value</label>
+                  <input v-model="cond.value" placeholder="down" />
+                </div>
+                <div class="form-group">
+                  <label>Fail Count</label>
+                  <input type="number" v-model.number="cond.fail_count" min="1" />
+                </div>
+              </div>
             </div>
           </div>
 
-          <!-- HTTP config -->
-          <template v-if="checkForm.type === 'http'">
-            <div class="form-row">
-              <div class="form-group">
-                <label>Scheme</label>
-                <select v-model="checkForm.config.scheme">
-                  <option value="http">HTTP</option>
-                  <option value="https">HTTPS</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label>Port (0 = default)</label>
-                <input type="number" v-model.number="checkForm.config.port" min="0" max="65535" />
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label>Endpoint</label>
-                <input v-model="checkForm.config.endpoint" placeholder="/" />
-              </div>
-              <div class="form-group">
-                <label>Expected Status</label>
-                <input type="number" v-model.number="checkForm.config.expect_status" />
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label>Timeout (s)</label>
-                <input type="number" v-model.number="checkForm.config.timeout_s" min="1" max="60" />
-              </div>
-              <div class="form-group">
-                <label><input type="checkbox" v-model="checkForm.config.skip_tls_verify" /> Skip TLS Verify</label>
-              </div>
-            </div>
-          </template>
-
-          <!-- TCP config -->
-          <template v-if="checkForm.type === 'tcp'">
-            <div class="form-row">
-              <div class="form-group">
-                <label>Port</label>
-                <input type="number" v-model.number="checkForm.config.port" min="1" max="65535" required />
-              </div>
-              <div class="form-group">
-                <label>Timeout (s)</label>
-                <input type="number" v-model.number="checkForm.config.timeout_s" min="1" max="60" />
-              </div>
-            </div>
-          </template>
-
-          <!-- Ping config -->
-          <template v-if="checkForm.type === 'ping'">
-            <div class="form-row">
-              <div class="form-group">
-                <label>Ping Count</label>
-                <input type="number" v-model.number="checkForm.config.count" min="1" max="10" />
-              </div>
-              <div class="form-group">
-                <label>Timeout (s)</label>
-                <input type="number" v-model.number="checkForm.config.timeout_s" min="1" max="30" />
-              </div>
-            </div>
-          </template>
-
-          <!-- DNS config -->
-          <template v-if="checkForm.type === 'dns'">
-            <div class="form-row">
-              <div class="form-group">
-                <label>Query (empty = target host)</label>
-                <input v-model="checkForm.config.query" placeholder="Leave empty for target host" />
-              </div>
-              <div class="form-group">
-                <label>Record Type</label>
-                <select v-model="checkForm.config.record_type">
-                  <option value="A">A</option>
-                  <option value="AAAA">AAAA</option>
-                  <option value="MX">MX</option>
-                  <option value="CNAME">CNAME</option>
-                </select>
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label>Expected Value (optional)</label>
-                <input v-model="checkForm.config.expect_value" placeholder="e.g. 1.2.3.4" />
-              </div>
-              <div class="form-group">
-                <label>Nameserver (optional)</label>
-                <input v-model="checkForm.config.nameserver" placeholder="e.g. 8.8.8.8" />
-              </div>
-            </div>
-          </template>
-
-          <!-- Page Hash config -->
-          <template v-if="checkForm.type === 'page_hash'">
-            <div class="form-row">
-              <div class="form-group">
-                <label>Scheme</label>
-                <select v-model="checkForm.config.scheme">
-                  <option value="http">HTTP</option>
-                  <option value="https">HTTPS</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label>Endpoint</label>
-                <input v-model="checkForm.config.endpoint" placeholder="/" />
-              </div>
-            </div>
-            <div class="form-group">
-              <label>Baseline Hash (empty = auto-capture on first run)</label>
-              <input v-model="checkForm.config.baseline_hash" placeholder="Leave empty to auto-capture" />
-            </div>
-          </template>
-
-          <!-- TLS Cert config -->
-          <template v-if="checkForm.type === 'tls_cert'">
-            <div class="form-row">
-              <div class="form-group">
-                <label>Port</label>
-                <input type="number" v-model.number="checkForm.config.port" min="1" max="65535" />
-              </div>
-              <div class="form-group">
-                <label>Warning Days</label>
-                <input type="number" v-model.number="checkForm.config.warn_days" min="1" />
-              </div>
-            </div>
-          </template>
-
           <div class="form-actions">
             <button type="submit" class="btn btn-primary">Save</button>
-            <button type="button" class="btn" @click="showCheckForm = false">Cancel</button>
+            <button type="button" class="btn" @click="showForm = false">Cancel</button>
           </div>
         </form>
       </div>
@@ -468,14 +565,6 @@ onMounted(() => loadTargets())
 </template>
 
 <style scoped>
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.75rem;
-}
-.card-header h3 { margin: 0; }
-
 .row-expanded > td { background: #f8fafc; }
 
 .expand-icon {
@@ -507,15 +596,35 @@ onMounted(() => loadTargets())
   text-transform: uppercase;
 }
 
+.badge-unknown {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.badge-sev-critical {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.badge-sev-warning {
+  background: #fef3c7;
+  color: #92400e;
+}
+.badge-sev-info {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
 /* Modal */
 .modal-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.3);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   z-index: 100;
+  overflow-y: auto;
+  padding: 2rem 1rem;
 }
 .modal-card {
   background: #fff;
@@ -526,7 +635,7 @@ onMounted(() => loadTargets())
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
 }
 .modal-card h3 { margin-bottom: 1rem; }
-.modal-wide { max-width: 560px; }
+.modal-wide { max-width: 640px; }
 
 .form-actions {
   display: flex;
@@ -539,4 +648,65 @@ onMounted(() => loadTargets())
   border-color: #fca5a5;
 }
 .btn-danger:hover { background: #fee2e2; }
+
+/* Checkbox alignment */
+.checkbox-group {
+  display: flex;
+  align-items: center;
+}
+.checkbox-label {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 0.375rem;
+  cursor: pointer;
+}
+.checkbox-label input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+}
+
+/* Conditions */
+.conditions-section {
+  margin-top: 1rem;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 0.75rem;
+}
+.conditions-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.condition-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+.condition-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+.condition-num {
+  font-weight: 600;
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.alert-divider {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #64748b;
+  margin: 0.5rem 0;
+  padding-top: 0.5rem;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.form-row-4 {
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+}
 </style>

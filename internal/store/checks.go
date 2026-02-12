@@ -113,6 +113,45 @@ func (s *Store) DeleteCheck(id string) error {
 	return nil
 }
 
+// CheckWithTarget is a check with its parent target name and host.
+type CheckWithTarget struct {
+	Check
+	TargetName string `json:"target_name"`
+	TargetHost string `json:"target_host"`
+}
+
+// ListAllChecksWithTarget returns all enabled checks with target info, for rule builder dropdowns.
+func (s *Store) ListAllChecksWithTarget() ([]CheckWithTarget, error) {
+	rows, err := s.db.Query(`
+		SELECT c.id, c.target_id, c.type, c.name, c.config, c.interval_s, c.enabled,
+		       c.created_at, c.updated_at, t.name, t.host
+		FROM checks c
+		JOIN targets t ON c.target_id = t.id
+		WHERE c.enabled = 1
+		ORDER BY t.name, c.name
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var checks []CheckWithTarget
+	for rows.Next() {
+		var ct CheckWithTarget
+		var enabled int
+		if err := rows.Scan(&ct.ID, &ct.TargetID, &ct.Type, &ct.Name, &ct.Config, &ct.IntervalS, &enabled,
+			&ct.CreatedAt, &ct.UpdatedAt, &ct.TargetName, &ct.TargetHost); err != nil {
+			return nil, err
+		}
+		ct.Enabled = enabled == 1
+		checks = append(checks, ct)
+	}
+	if checks == nil {
+		checks = []CheckWithTarget{}
+	}
+	return checks, rows.Err()
+}
+
 // ListAllEnabledChecks returns all enabled checks with target host, for the scheduler.
 func (s *Store) ListAllEnabledChecks() ([]EnabledCheck, error) {
 	rows, err := s.db.Query(`

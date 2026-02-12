@@ -119,19 +119,35 @@ function toggleCheck(e, checkId) {
   expandedCheckId.value = expandedCheckId.value === checkId ? null : checkId
 }
 
-// Sort: problems first (any target with a down check)
+// Sort: problems first (unhealthy state or any down check)
 function sortedTargets() {
   return [...dashboardData.value].sort((a, b) => {
-    const aDown = hasDownCheckTarget(a)
-    const bDown = hasDownCheckTarget(b)
+    const aDown = isTargetDown(a)
+    const bDown = isTargetDown(b)
     if (aDown && !bDown) return -1
     if (!aDown && bDown) return 1
     return a.name.localeCompare(b.name)
   })
 }
 
-function hasDownCheckTarget(target) {
+function isTargetDown(target) {
+  if (target.state === 'unhealthy') return true
   return target.checks?.some(c => c.last_status === 'down')
+}
+
+function targetStateLabel(target) {
+  if (target.state === 'unhealthy') return 'UNHEALTHY'
+  if (target.state === 'healthy') return 'HEALTHY'
+  if (target.checks?.some(c => c.last_status === 'down')) return 'DOWN'
+  if (target.checks?.some(c => c.last_status === 'up')) return 'UP'
+  return ''
+}
+
+function targetStateClass(target) {
+  const label = targetStateLabel(target)
+  if (label === 'UNHEALTHY' || label === 'DOWN') return 'badge-down'
+  if (label === 'HEALTHY' || label === 'UP') return 'badge-up'
+  return ''
 }
 
 // Uptime bar color helpers
@@ -201,7 +217,7 @@ onUnmounted(() => {
           <div class="target-header-left">
             <span class="expand-icon">{{ expandedTargetId === target.id ? '&#9660;' : '&#9654;' }}</span>
             <span v-if="target.checks.length > 0"
-              :class="['status-dot', hasDownCheckTarget(target) ? 'dot-down' : (getPreferredCheck(target)?.last_status === 'up' ? 'dot-up' : 'dot-unknown')]">
+              :class="['status-dot', isTargetDown(target) ? 'dot-down' : (getPreferredCheck(target)?.last_status === 'up' ? 'dot-up' : 'dot-unknown')]">
             </span>
             <span class="target-name">{{ target.name }}</span>
             <span class="target-host text-muted">{{ target.host }}</span>
@@ -217,8 +233,10 @@ onUnmounted(() => {
                 {{ getPreferredCheck(target)?.uptime_90d_pct.toFixed(1) }}%
               </span>
             </template>
-            <span v-if="hasDownCheckTarget(target)" class="badge badge-down">DOWN</span>
-            <span v-else-if="target.checks.length > 0" class="badge badge-up">UP</span>
+            <span v-if="target.severity && target.severity !== 'info'" :class="['badge', target.severity === 'critical' ? 'badge-sev-critical' : 'badge-sev-warning']" style="font-size: 0.6rem;">
+              {{ target.severity }}
+            </span>
+            <span v-if="targetStateLabel(target)" :class="['badge', targetStateClass(target)]">{{ targetStateLabel(target) }}</span>
           </div>
         </div>
 
@@ -412,6 +430,15 @@ onUnmounted(() => {
   font-weight: 600;
   padding: 0.1rem 0.5rem;
   border-radius: 10px;
+}
+
+.badge-sev-critical {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.badge-sev-warning {
+  background: #fef3c7;
+  color: #92400e;
 }
 
 /* Uptime bars — thin vertical barcode style */

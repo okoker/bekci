@@ -11,14 +11,25 @@ import (
 	"github.com/bekci/internal/store"
 )
 
+// RuleEvaluator evaluates rules after a check result is saved.
+type RuleEvaluator interface {
+	Evaluate(checkID string)
+}
+
 type Scheduler struct {
 	store   *store.Store
+	engine  RuleEvaluator
 	timers  map[string]*time.Timer // check_id → timer
 	checkMu map[string]*sync.Mutex // per-check mutex to prevent concurrent runs
 	mu      sync.Mutex
 	eventCh chan string // check_id for immediate run
 	ctx     context.Context
 	cancel  context.CancelFunc
+}
+
+// SetEngine sets the rule evaluator called after each check result.
+func (s *Scheduler) SetEngine(e RuleEvaluator) {
+	s.engine = e
 }
 
 func New(st *store.Store) *Scheduler {
@@ -208,6 +219,8 @@ func (s *Scheduler) runCheck(checkID string) {
 	}
 	if err := s.store.SaveResult(cr); err != nil {
 		slog.Error("Scheduler: failed to save result", "check_id", checkID, "error", err)
+	} else if s.engine != nil {
+		go s.engine.Evaluate(checkID)
 	}
 
 	slog.Debug("Check completed", "check_id", checkID, "type", check.Type, "status", result.Status,

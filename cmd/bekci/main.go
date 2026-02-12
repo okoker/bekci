@@ -21,6 +21,7 @@ import (
 	"github.com/bekci/internal/api"
 	"github.com/bekci/internal/auth"
 	"github.com/bekci/internal/config"
+	"github.com/bekci/internal/engine"
 	"github.com/bekci/internal/scheduler"
 	"github.com/bekci/internal/store"
 )
@@ -103,8 +104,10 @@ func main() {
 	// Initialize auth service
 	authSvc := auth.New(db, cfg.Auth.JWTSecret)
 
-	// Initialize scheduler
+	// Initialize scheduler + rules engine
 	sched := scheduler.New(db)
+	eng := engine.New(db)
+	sched.SetEngine(eng)
 
 	// Get embedded frontend (may be empty during dev)
 	var spa fs.FS

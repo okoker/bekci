@@ -72,11 +72,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("PUT /api/targets/{id}", opAuth(s.handleUpdateTarget))
 	mux.Handle("DELETE /api/targets/{id}", opAuth(s.handleDeleteTarget))
 
-	// Checks
+	// Checks (read-only + run)
 	mux.Handle("GET /api/targets/{id}/checks", anyAuth(s.handleListChecks))
-	mux.Handle("POST /api/targets/{id}/checks", opAuth(s.handleCreateCheck))
-	mux.Handle("PUT /api/checks/{id}", opAuth(s.handleUpdateCheck))
-	mux.Handle("DELETE /api/checks/{id}", opAuth(s.handleDeleteCheck))
 	mux.Handle("POST /api/checks/{id}/run", opAuth(s.handleRunCheckNow))
 	mux.Handle("GET /api/checks/{id}/results", anyAuth(s.handleCheckResults))
 
