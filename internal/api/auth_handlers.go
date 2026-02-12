@@ -130,5 +130,7 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "password update failed")
 		return
 	}
+	// Invalidate all other sessions
+	s.store.DeleteUserSessionsExcept(user.ID, claims.SessionID)
 	writeJSON(w, http.StatusOK, map[string]string{"message": "password changed"})
 }

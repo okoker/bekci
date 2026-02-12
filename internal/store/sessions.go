@@ -43,6 +43,11 @@ func (s *Store) DeleteUserSessions(userID string) error {
 	return err
 }
 
+func (s *Store) DeleteUserSessionsExcept(userID, keepSessionID string) error {
+	_, err := s.db.Exec(`DELETE FROM sessions WHERE user_id = ? AND id != ?`, userID, keepSessionID)
+	return err
+}
+
 func (s *Store) PurgeExpiredSessions() (int64, error) {
 	res, err := s.db.Exec(`DELETE FROM sessions WHERE expires_at < ?`, time.Now())
 	if err != nil {

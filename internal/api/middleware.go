@@ -40,12 +40,13 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 			return
 		}
 
-		// Check user is still active
+		// Check user is still active and revalidate role from DB
 		user, err := s.store.GetUserByID(claims.Subject)
 		if err != nil || user == nil || user.Status != "active" {
 			writeError(w, http.StatusUnauthorized, "account not active")
 			return
 		}
+		claims.Role = user.Role
 
 		ctx := context.WithValue(r.Context(), ctxClaims, claims)
 		next.ServeHTTP(w, r.WithContext(ctx))
@@ -111,17 +112,23 @@ func (w *statusWriter) WriteHeader(status int) {
 	w.ResponseWriter.WriteHeader(status)
 }
 
-// corsMiddleware adds CORS headers for API routes.
-func corsMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
+// corsMiddleware adds CORS headers only when a specific origin is configured.
+// When origin is empty (production with embedded SPA), no CORS headers are sent.
+func corsMiddleware(origin string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		if origin == "" {
+			return next
 		}
-		next.ServeHTTP(w, r)
-	})
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }

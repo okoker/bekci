@@ -22,11 +22,6 @@ type Target struct {
 	UpdatedAt          time.Time `json:"updated_at"`
 }
 
-type TargetWithChecks struct {
-	Target
-	Checks []Check `json:"checks"`
-}
-
 // TargetCondition is the unified check+condition for the target API.
 type TargetCondition struct {
 	CheckID    string `json:"check_id,omitempty"`
@@ -67,31 +62,6 @@ func scanTarget(row interface{ Scan(...any) error }) (*Target, error) {
 
 const targetCols = `id, name, host, description, enabled, preferred_check_type, operator, severity, rule_id, created_at, updated_at`
 
-func (s *Store) CreateTarget(t *Target) error {
-	t.ID = uuid.New().String()
-	now := time.Now()
-	t.CreatedAt = now
-	t.UpdatedAt = now
-	enabled := 0
-	if t.Enabled {
-		enabled = 1
-	}
-	if t.PreferredCheckType == "" {
-		t.PreferredCheckType = "ping"
-	}
-	if t.Operator == "" {
-		t.Operator = "AND"
-	}
-	if t.Severity == "" {
-		t.Severity = "critical"
-	}
-	_, err := s.db.Exec(`
-		INSERT INTO targets (id, name, host, description, enabled, preferred_check_type, operator, severity, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, t.ID, t.Name, t.Host, t.Description, enabled, t.PreferredCheckType, t.Operator, t.Severity, t.CreatedAt, t.UpdatedAt)
-	return err
-}
-
 func (s *Store) GetTarget(id string) (*Target, error) {
 	row := s.db.QueryRow(`SELECT `+targetCols+` FROM targets WHERE id = ?`, id)
 	t, err := scanTarget(row)
@@ -122,35 +92,6 @@ func (s *Store) ListTargets() ([]Target, error) {
 	return targets, rows.Err()
 }
 
-func (s *Store) UpdateTarget(id, name, host, description string, enabled bool, preferredCheckType, operator, severity string) error {
-	en := 0
-	if enabled {
-		en = 1
-	}
-	if preferredCheckType == "" {
-		preferredCheckType = "ping"
-	}
-	if operator == "" {
-		operator = "AND"
-	}
-	if severity == "" {
-		severity = "critical"
-	}
-	res, err := s.db.Exec(`
-		UPDATE targets SET name = ?, host = ?, description = ?, enabled = ?,
-			preferred_check_type = ?, operator = ?, severity = ?, updated_at = CURRENT_TIMESTAMP
-		WHERE id = ?
-	`, name, host, description, en, preferredCheckType, operator, severity, id)
-	if err != nil {
-		return err
-	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		return fmt.Errorf("target not found")
-	}
-	return nil
-}
-
 func (s *Store) DeleteTarget(id string) error {
 	// Delete linked rule first to prevent orphans
 	var ruleID sql.NullString
@@ -168,18 +109,6 @@ func (s *Store) DeleteTarget(id string) error {
 		return fmt.Errorf("target not found")
 	}
 	return nil
-}
-
-func (s *Store) GetTargetWithChecks(id string) (*TargetWithChecks, error) {
-	t, err := s.GetTarget(id)
-	if err != nil || t == nil {
-		return nil, err
-	}
-	checks, err := s.ListChecksByTarget(id)
-	if err != nil {
-		return nil, err
-	}
-	return &TargetWithChecks{Target: *t, Checks: checks}, nil
 }
 
 // --- Unified target + conditions methods ---
@@ -397,10 +326,10 @@ func (s *Store) UpdateTargetWithConditions(id, name, host, description string, e
 	for i, c := range conds {
 		checkID := c.CheckID
 		if checkID != "" {
-			// Update existing check
+			// Update existing check — enforce target ownership
 			_, err = tx.Exec(`
-				UPDATE checks SET name = ?, config = ?, interval_s = ?, enabled = 1, updated_at = ? WHERE id = ?
-			`, c.CheckName, c.Config, c.IntervalS, now, checkID)
+				UPDATE checks SET name = ?, config = ?, interval_s = ?, enabled = 1, updated_at = ? WHERE id = ? AND target_id = ?
+			`, c.CheckName, c.Config, c.IntervalS, now, checkID, id)
 			if err != nil {
 				return err
 			}
@@ -451,10 +380,12 @@ func listCheckIDsByTargetTx(tx *sql.Tx, targetID string) ([]string, error) {
 	var ids []string
 	for rows.Next() {
 		var id string
-		rows.Scan(&id)
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
 		ids = append(ids, id)
 	}
-	return ids, nil
+	return ids, rows.Err()
 }
 
 // GetTargetDetail returns a target with its conditions (check+rule_condition joined) and state.
@@ -480,8 +411,10 @@ func (s *Store) GetTargetDetail(id string) (*TargetDetail, error) {
 			defer rows.Close()
 			for rows.Next() {
 				var tc TargetCondition
-				rows.Scan(&tc.CheckID, &tc.CheckType, &tc.CheckName, &tc.Config, &tc.IntervalS,
-					&tc.Field, &tc.Comparator, &tc.Value, &tc.FailCount, &tc.FailWindow)
+				if err := rows.Scan(&tc.CheckID, &tc.CheckType, &tc.CheckName, &tc.Config, &tc.IntervalS,
+					&tc.Field, &tc.Comparator, &tc.Value, &tc.FailCount, &tc.FailWindow); err != nil {
+					return nil, fmt.Errorf("scanning target condition: %w", err)
+				}
 				td.Conditions = append(td.Conditions, tc)
 			}
 		}
