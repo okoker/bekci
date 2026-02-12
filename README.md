@@ -1,29 +1,53 @@
 # Bekci
 
-Web-managed monitoring platform written in Go + Vue 3. Multi-check monitoring with composite rules engine, RBAC, email alerts, and Docker-first deployment.
+<p align="center">
+  <img src="frontend/public/bekci-icon.png" alt="Bekci" width="120" />
+</p>
 
-Evolved from a lightweight YAML-configured watchdog into a full web UI for managing targets, checks, rules, and alerts — all from a single binary.
-
-![Dashboard](https://img.shields.io/badge/dashboard-65000-blue)
-![API](https://img.shields.io/badge/api-65000-purple)
+Web-managed monitoring platform written in Go + Vue 3. Multi-check monitoring with composite rules engine, RBAC, and Docker-first deployment.
 
 ## Features
 
-- **Web UI** — Vue 3 SPA with login, dashboard, user management, settings, profile
-- **Auth & RBAC** — JWT + server-side sessions, bcrypt passwords, three roles (admin / operator / viewer)
-- **User management** — Create, suspend, reset passwords, last-admin protection
+- **6 Check Types** — Ping (ICMP), HTTP/HTTPS, TCP, DNS, Page Hash, TLS Certificate
+- **Unified Targets** — Create a target with conditions (check + alert criteria) in one step
+- **Rules Engine** — AND/OR conditions with fail count thresholds, auto-evaluated after each check
+- **Dashboard** — 90-day + 4-hour uptime bars, per-target health state, problems sorted to top, 30s auto-refresh
+- **SOC View** — Flat dashboard for security operations center displays
+- **Auth & RBAC** — JWT + server-side sessions, bcrypt, three roles (admin / operator / viewer)
+- **User Management** — Create, suspend, reset passwords, last-admin protection
 - **Settings** — Runtime-configurable session timeout, history retention, check interval
-- **Single binary** — Frontend embedded in Go binary via `go:embed`
-- **Docker ready** — Multi-stage Dockerfile, docker-compose included
+- **Single Binary** — Vue 3 frontend embedded in Go binary via `go:embed`
+- **Docker Ready** — Multi-stage Dockerfile, single container, single port
 
-### Planned (Phase 2+)
+## Quick Start — Docker
 
-- Health checks: Ping (ICMP), HTTP/HTTPS, TCP, DNS, SNMP, Page Hash, TLS Certificate
-- Composite rules engine (AND/OR conditions with thresholds)
-- Email alerts via Resend API (with cooldown + recovery)
-- Dashboard with 90-day + 4-hour uptime bars
+```bash
+git clone https://github.com/okoker/bekci.git
+cd bekci
+docker compose up -d
+```
 
-## Quick Start
+Open `http://localhost:65000` — login with `admin` / `admin1234`.
+
+### Docker Environment Variables (optional)
+
+Add to the `environment:` section in `docker-compose.yml`:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `BEKCI_JWT_SECRET` | auto-generated | JWT signing key |
+| `BEKCI_ADMIN_PASSWORD` | `admin1234` | Initial admin password (first boot only) |
+| `BEKCI_PORT` | `65000` | HTTP port inside container |
+| `BEKCI_DB_PATH` | `/data/bekci.db` | SQLite database path |
+
+### Updating
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+## Quick Start — Native
 
 ### Prerequisites
 
@@ -34,40 +58,29 @@ Evolved from a lightweight YAML-configured watchdog into a full web UI for manag
 ### Build & Run
 
 ```bash
-cp config.example.yaml config.yaml
-# Edit config.yaml — set auth.jwt_secret and init_admin.password
-
 make build
-./bin/bekci
+BEKCI_JWT_SECRET=your-secret BEKCI_ADMIN_PASSWORD=changeme123 ./bin/bekci
 ```
 
-Or with environment variables only (no config file needed):
+Or with config file:
 
 ```bash
-BEKCI_JWT_SECRET=your-secret-here BEKCI_ADMIN_PASSWORD=changeme123 make run
+cp config.example.yaml config.yaml
+# Edit config.yaml — set auth.jwt_secret and init_admin.password
+make build && ./bin/bekci
 ```
-
-Open `http://localhost:65000` — login with the initial admin credentials.
 
 ### Development Mode
 
-Run the Go backend and Vite dev server separately for hot-reload:
-
 ```bash
-# Terminal 1 — backend (no embedded frontend)
+# Terminal 1 — backend
 BEKCI_JWT_SECRET=dev-secret BEKCI_ADMIN_PASSWORD=admin1234 make dev
 
-# Terminal 2 — frontend with API proxy
+# Terminal 2 — frontend with hot-reload
 cd frontend && npm run dev
 ```
 
-Frontend dev server at `http://localhost:5173` proxies `/api/*` to the backend.
-
-### Docker
-
-```bash
-BEKCI_JWT_SECRET=your-secret BEKCI_ADMIN_PASSWORD=changeme123 docker-compose up -d
-```
+Frontend dev server at `http://localhost:5173` proxies `/api/*` to the backend on port 65000.
 
 ## Configuration
 
@@ -90,15 +103,6 @@ init_admin:
   password: "changeme123"          # Only used on first boot
 ```
 
-### Environment Overrides
-
-| Variable | Config Key | Description |
-|----------|-----------|-------------|
-| `BEKCI_JWT_SECRET` | `auth.jwt_secret` | JWT signing secret (required) |
-| `BEKCI_ADMIN_PASSWORD` | `init_admin.password` | Initial admin password (first boot) |
-| `BEKCI_PORT` | `server.port` | HTTP port (default: 65000) |
-| `BEKCI_DB_PATH` | `server.db_path` | SQLite database path (default: bekci.db) |
-
 ## API
 
 ### Public
@@ -106,38 +110,54 @@ init_admin:
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/api/login` | Authenticate, returns JWT |
-| GET | `/api/health` | Health check (`{status, version}`) |
+| GET | `/api/health` | Health check |
 
-### Authenticated
-
-| Method | Endpoint | Role | Description |
-|--------|----------|------|-------------|
-| POST | `/api/logout` | any | End session |
-| GET | `/api/me` | any | Current user profile |
-| PUT | `/api/me` | any | Update own email |
-| PUT | `/api/me/password` | any | Change own password |
-| GET | `/api/settings` | any | View settings |
-| PUT | `/api/settings` | admin | Update settings |
-
-### Admin Only
+### Auth (any role)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/users` | List all users |
+| POST | `/api/logout` | End session |
+| GET | `/api/me` | Current user profile |
+| PUT | `/api/me` | Update own email |
+| PUT | `/api/me/password` | Change own password |
+
+### Targets (unified with conditions)
+
+| Method | Endpoint | Role | Description |
+|--------|----------|------|-------------|
+| GET | `/api/targets` | any | List with condition_count + state |
+| POST | `/api/targets` | operator+ | Create with conditions |
+| GET | `/api/targets/:id` | any | Detail + conditions + state |
+| PUT | `/api/targets/:id` | operator+ | Update + smart-diff conditions |
+| DELETE | `/api/targets/:id` | operator+ | Delete (cascades checks + rule) |
+
+### Checks
+
+| Method | Endpoint | Role | Description |
+|--------|----------|------|-------------|
+| GET | `/api/targets/:id/checks` | any | List checks for target |
+| POST | `/api/checks/:id/run` | operator+ | Trigger immediate check |
+| GET | `/api/checks/:id/results` | any | Query results |
+
+### Dashboard
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/dashboard/status` | Per-target health + checks |
+| GET | `/api/dashboard/history/:check_id` | Uptime history (`?range=90d` or `?range=4h`) |
+| GET | `/api/soc/status` | SOC flat view |
+| GET | `/api/soc/history/:check_id` | SOC history |
+
+### Admin
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/users` | List users |
 | POST | `/api/users` | Create user |
-| GET | `/api/users/:id` | Get user |
-| PUT | `/api/users/:id` | Update user (email, role) |
-| PUT | `/api/users/:id/suspend` | Suspend / activate user |
-| PUT | `/api/users/:id/password` | Reset user password |
-
-## RBAC
-
-| Capability | Admin | Operator | Viewer |
-|-----------|-------|----------|--------|
-| Dashboard | view | view | view |
-| Users | CRUD | - | - |
-| Settings | read/write | read | read |
-| Own profile | edit | edit | edit |
+| PUT | `/api/users/:id` | Update user |
+| PUT | `/api/users/:id/suspend` | Suspend / activate |
+| PUT | `/api/users/:id/password` | Reset password |
+| GET/PUT | `/api/settings` | Read / update settings |
 
 ## Project Structure
 
@@ -145,12 +165,12 @@ init_admin:
 cmd/bekci/main.go          Entry point, wiring, embed
 internal/
   config/                   YAML + env config loader
-  store/                    SQLite: users, sessions, settings
+  store/                    SQLite: users, sessions, settings, targets, checks, rules, results
   auth/                     JWT, bcrypt, login/logout
   api/                      HTTP router, middleware, handlers
-  checker/                  (v1, pending Phase 2 rework)
-  scheduler/                (v1, pending Phase 2 rework)
-  alerter/                  (v1, pending Phase 2 rework)
+  checker/                  6 check types (http, tcp, ping, dns, page_hash, tls_cert)
+  scheduler/                DB-driven, per-check timers, event channel
+  engine/                   Rules evaluator (AND/OR conditions, fail thresholds)
 frontend/                   Vue 3 + Vite SPA
 Makefile                    Build targets
 Dockerfile                  3-stage production build
