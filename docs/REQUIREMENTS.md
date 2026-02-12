@@ -41,13 +41,14 @@ Initial admin seeded from config.yaml / env vars on first boot.
 | **Page Hash** | SHA256 of response body | endpoint, auto-capture baseline on first run |
 | **TLS Certificate** | Cert expiry check | port, warn_days |
 
-## Rules Engine
+## Rules Engine (Unified Target Model)
 
-- **Rule** = 1+ conditions combined with AND/OR
-- **Condition** = check X's field comparator value, optionally N times in M seconds
-- **Field** = `status`, `response_ms`, or `metrics.<key>` (e.g., `metrics.packet_loss`)
-- Evaluated after each check result. State changes trigger alerts.
-- Severity levels: critical, warning, info
+- Rules are hidden — auto-managed per target. No standalone rules API.
+- Each target has `operator` (AND/OR), `severity` (critical/warning/info), and a linked `rule_id`.
+- **Conditions** are defined inline when creating/editing a target.
+- Each condition = check definition + alert criteria (field, comparator, value, fail_count, fail_window).
+- Engine evaluates after each check result. State changes trigger alerts.
+- DB tables (rules, rule_conditions, rule_states) unchanged — engine/scheduler zero changes.
 
 ## Alerting
 
@@ -63,10 +64,8 @@ Initial admin seeded from config.yaml / env vars on first boot.
 |-------|------|--------|
 | `/login` | Login | public |
 | `/` | Dashboard — status bars, problems first | all |
-| `/targets` | Target list + CRUD | all (CRUD: operator+) |
+| `/targets` | Target list + CRUD (unified with conditions) | all (CRUD: operator+) |
 | `/targets/:id` | Target detail, checks, results | all |
-| `/rules` | Rule list + CRUD | all (CRUD: operator+) |
-| `/rules/new`, `/rules/:id/edit` | Rule builder | operator+ |
 | `/alerts` | Alert history + acknowledge | all (ack: operator+) |
 | `/users` | User management | admin |
 | `/settings` | System settings | admin (edit), operator (view) |
@@ -101,41 +100,39 @@ Initial admin seeded from config.yaml / env vars on first boot.
 | DELETE | `/api/users/:id` | Suspend user |
 | PUT | `/api/users/:id/password` | Reset password |
 
-### Projects
+### Targets (Unified — includes conditions)
 | Method | Path | Roles | Description |
 |--------|------|-------|-------------|
-| GET | `/api/projects` | any | List |
-| POST | `/api/projects` | operator+ | Create |
-| PUT | `/api/projects/:id` | operator+ | Update |
-| DELETE | `/api/projects/:id` | admin | Delete |
+| GET | `/api/targets` | any | List with condition_count + state |
+| POST | `/api/targets` | operator+ | Create with conditions (auto-manages rule) |
+| GET | `/api/targets/:id` | any | Detail + conditions + state |
+| PUT | `/api/targets/:id` | operator+ | Update + smart-diff conditions |
+| DELETE | `/api/targets/:id` | operator+ | Delete (cascades checks + rule) |
 
-### Targets
-| Method | Path | Roles | Description |
-|--------|------|-------|-------------|
-| GET | `/api/targets` | any | List (filterable by project) |
-| POST | `/api/targets` | operator+ | Create |
-| GET | `/api/targets/:id` | any | Detail + checks |
-| PUT | `/api/targets/:id` | operator+ | Update |
-| DELETE | `/api/targets/:id` | operator+ | Delete (cascades checks) |
+**Target create/update body**:
+```json
+{
+  "name": "Web Server", "host": "example.com", "description": "...",
+  "enabled": true, "operator": "OR", "severity": "critical",
+  "conditions": [
+    {
+      "check_id": "",
+      "check_type": "ping", "check_name": "Ping", "config": "{\"count\":3}",
+      "interval_s": 60, "field": "status", "comparator": "eq", "value": "down",
+      "fail_count": 1, "fail_window": 0
+    }
+  ]
+}
+```
 
-### Checks
+**Target detail response** includes `conditions[]` and `state: { rule_id, current_state, last_change, last_evaluated }`.
+
+### Checks (read-only + run)
 | Method | Path | Roles | Description |
 |--------|------|-------|-------------|
 | GET | `/api/targets/:id/checks` | any | List checks for target |
-| POST | `/api/targets/:id/checks` | operator+ | Add check |
-| PUT | `/api/checks/:id` | operator+ | Update check |
-| DELETE | `/api/checks/:id` | operator+ | Delete check |
 | POST | `/api/checks/:id/run` | operator+ | Trigger immediate check |
 | GET | `/api/checks/:id/results` | any | Query results (time range) |
-
-### Rules
-| Method | Path | Roles | Description |
-|--------|------|-------|-------------|
-| GET | `/api/rules` | any | List |
-| POST | `/api/rules` | operator+ | Create + conditions |
-| GET | `/api/rules/:id` | any | Detail + conditions + state |
-| PUT | `/api/rules/:id` | operator+ | Update |
-| DELETE | `/api/rules/:id` | operator+ | Delete |
 
 ### Alerts
 | Method | Path | Roles | Description |
@@ -150,8 +147,10 @@ Initial admin seeded from config.yaml / env vars on first boot.
 ### Dashboard
 | Method | Path | Roles | Description |
 |--------|------|-------|-------------|
-| GET | `/api/dashboard/status` | any | Full status |
+| GET | `/api/dashboard/status` | any | `{targets: [...], rules_summary: {total, healthy, unhealthy}}` |
 | GET | `/api/dashboard/history/:check_id` | any | `?range=90d` or `?range=4h` |
+| GET | `/api/soc/status` | configurable | Flat `[]dashboardTarget` (no rules_summary) |
+| GET | `/api/soc/history/:check_id` | configurable | Same as dashboard history |
 
 ### Settings
 | Method | Path | Roles | Description |
@@ -208,6 +207,9 @@ Single image, single container, single port.
 | 10 | Check config stored as JSON blob in TEXT column — flexible per check type |
 | 11 | Checker package: complete rewrite (v1 coupled to old config types) |
 | 12 | Scheduler: complete rewrite (v1 reads YAML, v2 reads DB) |
+| 13 | All 6 Phase 3+4 tables created in migration005 (alert tables empty until Phase 4) |
+| 14 | Dashboard API wrapped: `{targets, rules_summary}`. SOC returns flat array. |
+| 15 | Engine evaluates rules async (goroutine) after each check result save |
 
 ## v2 Scope (deferred)
 

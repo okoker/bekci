@@ -1,7 +1,15 @@
 # Bekci v2 — Progress
 
+## Session Handover — 12/02/2026
+
+1. **What was done** — Unified target model: merged rules into targets. Single form to create target + conditions. No changes to engine/scheduler/main.go.
+2. **Decisions made** — Hidden auto-managed rules behind the scenes. `TargetListItem` struct for list view (avoids loading full conditions). Dashboard now returns flat `[]dashboardTarget` with per-target `state` and `severity`.
+3. **Gotchas discovered** — `make([]T, 0, count)` has `len()=0` not `count`. SPA catch-all means deleted API routes still return 200 (index.html) — that's expected.
+4. **Server state** — Running on port 65000, binary at `./bin/bekci`.
+5. **What's next** — Commit these changes, then Phase 4 (Alerting).
+
 ## Current Status
-**Phase**: Phase 2 — Monitoring Core. **Complete.**
+**Phase**: Phase 3.5 — Unified Target Model. **Complete.**
 
 ## Design Documents
 - `docs/DESIGN.md` — Full architecture, schema, API, phases
@@ -45,13 +53,33 @@
 | Frontend: router + nav updated (Targets link in sidebar) | done |
 | Full build: `make clean && make build` passes | done |
 
-### Phase 3 — Rules Engine
+### Phase 3 — Rules Engine (DONE)
 | Task | Status |
 |------|--------|
-| Rule + condition CRUD (API + Vue) | pending |
-| Rule builder UI | pending |
-| Evaluation engine | pending |
-| Rule state tracking | pending |
+| migration005: 6 tables (rules, rule_conditions, rule_states, alert_channels, rule_alerts, alert_history) | done |
+| Store: rules.go — Rule/RuleCondition/RuleState structs + CRUD + engine queries | done |
+| Store: GetRecentResultsByWindow, ListAllChecksWithTarget | done |
+| Engine: internal/engine/engine.go — Evaluate, extractField, compare | done |
+| Scheduler integration: RuleEvaluator interface, call after SaveResult | done |
+| main.go wiring: engine → scheduler | done |
+
+### Phase 3.5 — Unified Target Model (DONE)
+| Task | Status |
+|------|--------|
+| migration006: operator, severity, rule_id columns on targets | done |
+| Store: TargetCondition, TargetDetail, TargetListItem structs | done |
+| Store: CreateTargetWithConditions, UpdateTargetWithConditions (transactional) | done |
+| Store: GetTargetDetail, ListTargetSummaries | done |
+| Store: DeleteTarget now cleans up linked rule | done |
+| API: Unified target_handlers.go — create/update with conditions array | done |
+| API: Dashboard returns flat `[]dashboardTarget` with per-target state+severity | done |
+| API: Removed rule_handlers.go, standalone check CUD routes | done |
+| Router: removed 5 rule routes, check CUD, GET /api/checks | done |
+| Frontend: TargetsView.vue rewrite — unified form with conditions | done |
+| Frontend: DashboardView.vue — flat response, per-target health badges | done |
+| Frontend: Removed RulesView.vue, /rules route, Rules nav link | done |
+| CSS: checkbox alignment fix, page max-width 1100px | done |
+| Visual test: all pages screenshot-verified | done |
 
 ### Phase 4 — Alerting
 | Task | Status |
@@ -73,27 +101,11 @@
 - All v1 code deleted: checker (process.go, ssh.go, https.go), restarter/, alerter/, sshutil/, old scheduler
 - Only v2 code remains in internal/
 
-## Phase 2 Architecture Notes
+## Architecture Notes
 - **Check types**: http, tcp, ping, dns, page_hash, tls_cert (SNMP deferred)
 - **Config storage**: JSON blob in `config` TEXT column — flexible per-type
 - **Scheduler**: per-check goroutine timers, eventCh for RunNow, 60s safety-net poll
-- **Dashboard API**: grouped by project→target→check, 90d daily uptime + 4h raw results
+- **Dashboard API**: flat `[]dashboardTarget` with per-target state/severity
 - **RBAC**: viewer=read all, operator=CRUD targets/checks, admin=delete projects
 - **Results purge**: hourly, reads `history_days` setting (default 90)
-
-## Test Results — Phase 1
-All verified manually via curl:
-- Health: GET /api/health -> 200, version correct
-- Login: POST /api/login -> JWT + user returned
-- Auth guard: Unauthenticated requests -> 401
-- RBAC: Operator can't access /api/users -> 403
-- User CRUD: Create, list, get, update, suspend, reset password
-- Last admin protection: Can't suspend/demote only admin
-- Suspended user can't login
-- Settings: Get all, update (admin only)
-- Self-service: /me, update email, change password
-- SPA: Frontend serves on /, fallback to index.html for Vue routes
-
-## Test Results — Phase 2
-Pending runtime verification (requires Docker or server deployment).
-Build verification: `make clean && make build` passes cleanly.
+- **Unified target model**: each target auto-manages a hidden rule. Engine/scheduler untouched.

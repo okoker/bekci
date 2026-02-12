@@ -59,6 +59,8 @@ func (s *Store) migrate() error {
 		s.migration002,
 		s.migration003,
 		s.migration004,
+		s.migration005,
+		s.migration006,
 	}
 
 	for i := current; i < len(migrations); i++ {
@@ -173,6 +175,122 @@ func (s *Store) migration003() error {
 		INSERT OR IGNORE INTO settings (key, value) VALUES ('soc_public', 'false');
 	`)
 	return err
+}
+
+// migration005 creates rules engine + alerting tables.
+func (s *Store) migration005() error {
+	_, err := s.db.Exec(`
+		CREATE TABLE rules (
+			id          TEXT PRIMARY KEY,
+			name        TEXT NOT NULL,
+			description TEXT NOT NULL DEFAULT '',
+			operator    TEXT NOT NULL DEFAULT 'AND' CHECK(operator IN ('AND','OR')),
+			severity    TEXT NOT NULL DEFAULT 'critical' CHECK(severity IN ('critical','warning','info')),
+			enabled     INTEGER NOT NULL DEFAULT 1,
+			created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+		);
+
+		CREATE TABLE rule_conditions (
+			id          TEXT PRIMARY KEY,
+			rule_id     TEXT NOT NULL REFERENCES rules(id) ON DELETE CASCADE,
+			check_id    TEXT NOT NULL REFERENCES checks(id) ON DELETE CASCADE,
+			field       TEXT NOT NULL DEFAULT 'status',
+			comparator  TEXT NOT NULL DEFAULT 'eq',
+			value       TEXT NOT NULL,
+			fail_count  INTEGER NOT NULL DEFAULT 1,
+			fail_window INTEGER NOT NULL DEFAULT 0,
+			sort_order  INTEGER NOT NULL DEFAULT 0
+		);
+
+		CREATE TABLE rule_states (
+			rule_id        TEXT PRIMARY KEY REFERENCES rules(id) ON DELETE CASCADE,
+			current_state  TEXT NOT NULL DEFAULT 'healthy',
+			last_change    DATETIME,
+			last_evaluated DATETIME
+		);
+
+		CREATE TABLE alert_channels (
+			id         TEXT PRIMARY KEY,
+			name       TEXT NOT NULL,
+			type       TEXT NOT NULL,
+			config     TEXT NOT NULL DEFAULT '{}',
+			enabled    INTEGER NOT NULL DEFAULT 1,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		);
+
+		CREATE TABLE rule_alerts (
+			id         TEXT PRIMARY KEY,
+			rule_id    TEXT NOT NULL REFERENCES rules(id) ON DELETE CASCADE,
+			channel_id TEXT NOT NULL REFERENCES alert_channels(id) ON DELETE CASCADE,
+			cooldown_s INTEGER NOT NULL DEFAULT 1800,
+			enabled    INTEGER NOT NULL DEFAULT 1
+		);
+
+		CREATE TABLE alert_history (
+			id              INTEGER PRIMARY KEY AUTOINCREMENT,
+			rule_id         TEXT NOT NULL,
+			channel_id      TEXT,
+			alert_type      TEXT NOT NULL,
+			message         TEXT,
+			sent_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+			acknowledged    INTEGER NOT NULL DEFAULT 0,
+			acknowledged_by TEXT REFERENCES users(id),
+			acknowledged_at DATETIME
+		);
+
+		CREATE INDEX idx_ah_rule ON alert_history(rule_id, sent_at);
+	`)
+	return err
+}
+
+// migration006 adds operator, severity, rule_id to targets for unified target model.
+func (s *Store) migration006() error {
+	_, err := s.db.Exec(`
+		ALTER TABLE targets ADD COLUMN operator TEXT NOT NULL DEFAULT 'AND';
+		ALTER TABLE targets ADD COLUMN severity TEXT NOT NULL DEFAULT 'critical';
+		ALTER TABLE targets ADD COLUMN rule_id TEXT DEFAULT NULL;
+	`)
+	if err != nil {
+		return err
+	}
+
+	// Auto-link existing rules that map to a single target's checks
+	rows, err := s.db.Query(`
+		SELECT r.id, r.operator, r.severity, t.id as target_id
+		FROM rules r
+		JOIN rule_conditions rc ON rc.rule_id = r.id
+		JOIN checks c ON c.id = rc.check_id
+		JOIN targets t ON t.id = c.target_id
+		GROUP BY r.id
+		HAVING COUNT(DISTINCT t.id) = 1
+	`)
+	if err != nil {
+		return nil // non-fatal — dev data only
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var ruleID, op, sev, targetID string
+		if err := rows.Scan(&ruleID, &op, &sev, &targetID); err != nil {
+			continue
+		}
+		s.db.Exec(`UPDATE targets SET rule_id = ?, operator = ?, severity = ? WHERE id = ?`,
+			ruleID, op, sev, targetID)
+	}
+
+	// Delete orphaned rules that span multiple targets
+	s.db.Exec(`
+		DELETE FROM rules WHERE id IN (
+			SELECT r.id FROM rules r
+			JOIN rule_conditions rc ON rc.rule_id = r.id
+			JOIN checks c ON c.id = rc.check_id
+			GROUP BY r.id
+			HAVING COUNT(DISTINCT c.target_id) > 1
+		)
+	`)
+
+	return nil
 }
 
 // migration004 removes projects — targets become standalone.

@@ -48,6 +48,13 @@ a:hover { text-decoration: underline; }
   padding: 0.25rem 0;
 }
 .navbar-brand:hover { text-decoration: none; color: #fff; }
+.navbar-icon {
+  height: 28px;
+  width: 28px;
+  object-fit: contain;
+  margin-right: 0.4rem;
+  vertical-align: middle;
+}
 
 .nav-link {
   padding: 0.375rem 0.625rem;
@@ -77,6 +84,10 @@ a:hover { text-decoration: underline; }
 }
 
 /* ─── Page ───────────────────────────────────────────────── */
+.page {
+  max-width: 1100px;
+  margin: 0 auto;
+}
 .page h2 { margin-bottom: 1rem; }
 
 .page-header {
@@ -165,6 +176,14 @@ a:hover { text-decoration: underline; }
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.75rem;
+}
+
+/* Checkbox alignment — inline labels with checkboxes */
+.form-group label input[type="checkbox"] {
+  width: auto;
+  display: inline;
+  vertical-align: middle;
+  margin-right: 0.375rem;
 }
 
 /* ─── Tables ─────────────────────────────────────────────── */
@@ -256,6 +275,13 @@ th {
   border: 1px solid #e2e8f0;
   width: 100%;
   max-width: 380px;
+}
+.login-icon {
+  display: block;
+  width: 120px;
+  height: 120px;
+  object-fit: contain;
+  margin: 0 auto 0.75rem;
 }
 .login-card h1 {
   text-align: center;

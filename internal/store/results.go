@@ -86,6 +86,33 @@ func (s *Store) GetDailyUptime(checkID string, days int) ([]DailyUptime, error) 
 	return uptimes, rows.Err()
 }
 
+// GetRecentResultsByWindow returns results for a check within the last N seconds.
+func (s *Store) GetRecentResultsByWindow(checkID string, windowSeconds int) ([]CheckResult, error) {
+	rows, err := s.db.Query(`
+		SELECT id, check_id, status, response_ms, message, metrics, checked_at
+		FROM check_results
+		WHERE check_id = ? AND checked_at >= datetime('now', ?)
+		ORDER BY checked_at DESC
+	`, checkID, fmt.Sprintf("-%d seconds", windowSeconds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []CheckResult
+	for rows.Next() {
+		var r CheckResult
+		if err := rows.Scan(&r.ID, &r.CheckID, &r.Status, &r.ResponseMs, &r.Message, &r.Metrics, &r.CheckedAt); err != nil {
+			return nil, err
+		}
+		results = append(results, r)
+	}
+	if results == nil {
+		results = []CheckResult{}
+	}
+	return results, rows.Err()
+}
+
 // GetLastResult returns the most recent result for a check.
 func (s *Store) GetLastResult(checkID string) (*CheckResult, error) {
 	r := &CheckResult{}

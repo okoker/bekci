@@ -21,14 +21,15 @@ type dashboardTarget struct {
 	Name               string           `json:"name"`
 	Host               string           `json:"host"`
 	PreferredCheckType string           `json:"preferred_check_type"`
+	State              string           `json:"state"`
+	Severity           string           `json:"severity"`
 	Checks             []dashboardCheck `json:"checks"`
 }
 
-func (s *Server) handleDashboardStatus(w http.ResponseWriter, r *http.Request) {
+func (s *Server) buildDashboardTargets() ([]dashboardTarget, error) {
 	targets, err := s.store.ListTargets()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to list targets")
-		return
+		return nil, err
 	}
 
 	var result []dashboardTarget
@@ -38,6 +39,15 @@ func (s *Server) handleDashboardStatus(w http.ResponseWriter, r *http.Request) {
 			Name:               t.Name,
 			Host:               t.Host,
 			PreferredCheckType: t.PreferredCheckType,
+			Severity:           t.Severity,
+		}
+
+		// Per-target health from rule_states
+		if t.RuleID != nil {
+			rs, err := s.store.GetRuleState(*t.RuleID)
+			if err == nil && rs != nil {
+				dt.State = rs.CurrentState
+			}
 		}
 
 		checks, err := s.store.ListChecksByTarget(t.ID)
@@ -54,7 +64,6 @@ func (s *Server) handleDashboardStatus(w http.ResponseWriter, r *http.Request) {
 				IntervalS: c.IntervalS,
 			}
 
-			// Get last result
 			last, err := s.store.GetLastResult(c.ID)
 			if err == nil && last != nil {
 				dc.LastStatus = last.Status
@@ -62,7 +71,6 @@ func (s *Server) handleDashboardStatus(w http.ResponseWriter, r *http.Request) {
 				dc.ResponseMs = last.ResponseMs
 			}
 
-			// Get 90-day uptime
 			pct, err := s.store.GetUptimePercent(c.ID, 90)
 			if err == nil {
 				dc.Uptime90d = pct
@@ -80,13 +88,26 @@ func (s *Server) handleDashboardStatus(w http.ResponseWriter, r *http.Request) {
 	if result == nil {
 		result = []dashboardTarget{}
 	}
-
-	writeJSON(w, http.StatusOK, result)
+	return result, nil
 }
 
-// SOC handlers — delegate to same logic as dashboard, with conditional auth.
+func (s *Server) handleDashboardStatus(w http.ResponseWriter, r *http.Request) {
+	targets, err := s.buildDashboardTargets()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list targets")
+		return
+	}
+	writeJSON(w, http.StatusOK, targets)
+}
+
+// SOC handlers — returns same flat []dashboardTarget.
 func (s *Server) handleSocStatus(w http.ResponseWriter, r *http.Request) {
-	s.handleDashboardStatus(w, r)
+	targets, err := s.buildDashboardTargets()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list targets")
+		return
+	}
+	writeJSON(w, http.StatusOK, targets)
 }
 
 func (s *Server) handleSocHistory(w http.ResponseWriter, r *http.Request) {

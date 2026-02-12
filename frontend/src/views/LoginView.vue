@@ -28,6 +28,7 @@ async function handleLogin() {
 <template>
   <div class="login-page">
     <div class="login-card">
+      <img src="/bekci-icon.png" alt="Bekci" class="login-icon" />
       <h1>Bekci</h1>
       <form @submit.prevent="handleLogin">
         <div class="form-group">
