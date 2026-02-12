@@ -28,17 +28,11 @@ async function loadDashboard() {
     error.value = ''
 
     // Auto-load history for all checks
-    const allCheckIds = []
-    for (const proj of data) {
-      for (const t of proj.targets || []) {
-        for (const c of t.checks || []) {
-          allCheckIds.push(c.id)
+    for (const t of data) {
+      for (const c of t.checks || []) {
+        if (!historyData.value[c.id]) {
+          loadHistory(c.id)
         }
-      }
-    }
-    for (const cid of allCheckIds) {
-      if (!historyData.value[cid]) {
-        loadHistory(cid)
       }
     }
   } catch (e) {
@@ -125,19 +119,15 @@ function toggleCheck(e, checkId) {
   expandedCheckId.value = expandedCheckId.value === checkId ? null : checkId
 }
 
-// Sort: problems first (any project with a down check)
-function sortedProjects() {
+// Sort: problems first (any target with a down check)
+function sortedTargets() {
   return [...dashboardData.value].sort((a, b) => {
-    const aDown = hasDownCheck(a)
-    const bDown = hasDownCheck(b)
+    const aDown = hasDownCheckTarget(a)
+    const bDown = hasDownCheckTarget(b)
     if (aDown && !bDown) return -1
     if (!aDown && bDown) return 1
     return a.name.localeCompare(b.name)
   })
-}
-
-function hasDownCheck(project) {
-  return project.targets?.some(t => t.checks?.some(c => c.last_status === 'down'))
 }
 
 function hasDownCheckTarget(target) {
@@ -205,42 +195,86 @@ onUnmounted(() => {
     </div>
 
     <template v-else>
-      <div v-for="project in sortedProjects()" :key="project.id" class="project-section">
-        <h3 class="project-name">{{ project.name }}</h3>
-
-        <div v-for="target in project.targets" :key="target.id" class="target-card card">
-          <!-- Collapsed view: target header + preferred check bars -->
-          <div class="target-header" @click="toggleTarget(target.id)">
-            <div class="target-header-left">
-              <span class="expand-icon">{{ expandedTargetId === target.id ? '&#9660;' : '&#9654;' }}</span>
-              <span v-if="target.checks.length > 0"
-                :class="['status-dot', hasDownCheckTarget(target) ? 'dot-down' : (getPreferredCheck(target)?.last_status === 'up' ? 'dot-up' : 'dot-unknown')]">
+      <div v-for="target in sortedTargets()" :key="target.id" class="target-card card">
+        <!-- Collapsed view: target header + preferred check bars -->
+        <div class="target-header" @click="toggleTarget(target.id)">
+          <div class="target-header-left">
+            <span class="expand-icon">{{ expandedTargetId === target.id ? '&#9660;' : '&#9654;' }}</span>
+            <span v-if="target.checks.length > 0"
+              :class="['status-dot', hasDownCheckTarget(target) ? 'dot-down' : (getPreferredCheck(target)?.last_status === 'up' ? 'dot-up' : 'dot-unknown')]">
+            </span>
+            <span class="target-name">{{ target.name }}</span>
+            <span class="target-host text-muted">{{ target.host }}</span>
+          </div>
+          <div class="target-header-right">
+            <template v-if="target.checks.length > 0">
+              <span class="badge badge-type">{{ getPreferredCheck(target)?.type }}</span>
+              <span v-if="getPreferredCheck(target)?.response_ms > 0" class="check-response text-muted">
+                {{ getPreferredCheck(target)?.response_ms }}ms
               </span>
-              <span class="target-name">{{ target.name }}</span>
-              <span class="target-host text-muted">{{ target.host }}</span>
+              <span v-if="getPreferredCheck(target)?.uptime_90d_pct >= 0" class="check-uptime"
+                :style="{ color: uptimeColor(getPreferredCheck(target)?.uptime_90d_pct) }">
+                {{ getPreferredCheck(target)?.uptime_90d_pct.toFixed(1) }}%
+              </span>
+            </template>
+            <span v-if="hasDownCheckTarget(target)" class="badge badge-down">DOWN</span>
+            <span v-else-if="target.checks.length > 0" class="badge badge-up">UP</span>
+          </div>
+        </div>
+
+        <!-- Collapsed: preferred check bars -->
+        <div v-if="expandedTargetId !== target.id && target.checks.length > 0" class="collapsed-bars" @click="toggleTarget(target.id)">
+          <div class="uptime-bars-row">
+            <div class="bar-section bar-90d-section">
+              <div class="bar-track">
+                <div v-for="(day, i) in (historyData[getPreferredCheck(target)?.id]?.bar90d || empty90d)" :key="'90d-' + i"
+                  class="bar-tick"
+                  :style="{ background: uptimeColor(day.uptime_pct) }"
+                  :title="formatTooltip90d(day)">
+                </div>
+              </div>
+              <div class="bar-labels">
+                <span>90 days ago</span>
+                <span>Today</span>
+              </div>
             </div>
-            <div class="target-header-right">
-              <template v-if="target.checks.length > 0">
-                <span class="badge badge-type">{{ getPreferredCheck(target)?.type }}</span>
-                <span v-if="getPreferredCheck(target)?.response_ms > 0" class="check-response text-muted">
-                  {{ getPreferredCheck(target)?.response_ms }}ms
-                </span>
-                <span v-if="getPreferredCheck(target)?.uptime_90d_pct >= 0" class="check-uptime"
-                  :style="{ color: uptimeColor(getPreferredCheck(target)?.uptime_90d_pct) }">
-                  {{ getPreferredCheck(target)?.uptime_90d_pct.toFixed(1) }}%
-                </span>
-              </template>
-              <span v-if="hasDownCheckTarget(target)" class="badge badge-down">DOWN</span>
-              <span v-else-if="target.checks.length > 0" class="badge badge-up">UP</span>
+            <div class="bar-section bar-4h-section">
+              <div class="bar-track">
+                <div v-for="(r, i) in (historyData[getPreferredCheck(target)?.id]?.bar4h || empty4h)" :key="'4h-' + i"
+                  class="bar-tick"
+                  :style="{ background: statusColor(r.status) }"
+                  :title="formatTooltip4h(r)">
+                </div>
+              </div>
+              <div class="bar-labels">
+                <span>4h ago</span>
+                <span>Now</span>
+              </div>
             </div>
           </div>
+        </div>
 
-          <!-- Collapsed: preferred check bars -->
-          <div v-if="expandedTargetId !== target.id && target.checks.length > 0" class="collapsed-bars" @click="toggleTarget(target.id)">
+        <!-- Expanded: all checks with individual bars -->
+        <div v-if="expandedTargetId === target.id" class="expanded-checks">
+          <div v-if="target.checks.length === 0" class="text-muted" style="padding: 0.5rem 0; font-size: 0.85rem;">
+            No checks configured
+          </div>
+
+          <div v-for="check in target.checks" :key="check.id" class="check-row" @click="toggleCheck($event, check.id)">
+            <div class="check-info">
+              <span :class="['status-dot', check.last_status === 'up' ? 'dot-up' : (check.last_status === 'down' ? 'dot-down' : 'dot-unknown')]"></span>
+              <span class="check-name">{{ check.name }}</span>
+              <span class="badge badge-type">{{ check.type }}</span>
+              <span v-if="check.response_ms > 0" class="check-response text-muted">{{ check.response_ms }}ms</span>
+              <span v-if="check.uptime_90d_pct >= 0" class="check-uptime" :style="{ color: uptimeColor(check.uptime_90d_pct) }">
+                {{ check.uptime_90d_pct.toFixed(1) }}%
+              </span>
+            </div>
+
             <div class="uptime-bars-row">
               <div class="bar-section bar-90d-section">
                 <div class="bar-track">
-                  <div v-for="(day, i) in (historyData[getPreferredCheck(target)?.id]?.bar90d || empty90d)" :key="'90d-' + i"
+                  <div v-for="(day, i) in (historyData[check.id]?.bar90d || empty90d)" :key="'90d-' + i"
                     class="bar-tick"
                     :style="{ background: uptimeColor(day.uptime_pct) }"
                     :title="formatTooltip90d(day)">
@@ -253,7 +287,7 @@ onUnmounted(() => {
               </div>
               <div class="bar-section bar-4h-section">
                 <div class="bar-track">
-                  <div v-for="(r, i) in (historyData[getPreferredCheck(target)?.id]?.bar4h || empty4h)" :key="'4h-' + i"
+                  <div v-for="(r, i) in (historyData[check.id]?.bar4h || empty4h)" :key="'4h-' + i"
                     class="bar-tick"
                     :style="{ background: statusColor(r.status) }"
                     :title="formatTooltip4h(r)">
@@ -265,57 +299,9 @@ onUnmounted(() => {
                 </div>
               </div>
             </div>
-          </div>
 
-          <!-- Expanded: all checks with individual bars -->
-          <div v-if="expandedTargetId === target.id" class="expanded-checks">
-            <div v-if="target.checks.length === 0" class="text-muted" style="padding: 0.5rem 0; font-size: 0.85rem;">
-              No checks configured
-            </div>
-
-            <div v-for="check in target.checks" :key="check.id" class="check-row" @click="toggleCheck($event, check.id)">
-              <div class="check-info">
-                <span :class="['status-dot', check.last_status === 'up' ? 'dot-up' : (check.last_status === 'down' ? 'dot-down' : 'dot-unknown')]"></span>
-                <span class="check-name">{{ check.name }}</span>
-                <span class="badge badge-type">{{ check.type }}</span>
-                <span v-if="check.response_ms > 0" class="check-response text-muted">{{ check.response_ms }}ms</span>
-                <span v-if="check.uptime_90d_pct >= 0" class="check-uptime" :style="{ color: uptimeColor(check.uptime_90d_pct) }">
-                  {{ check.uptime_90d_pct.toFixed(1) }}%
-                </span>
-              </div>
-
-              <div class="uptime-bars-row">
-                <div class="bar-section bar-90d-section">
-                  <div class="bar-track">
-                    <div v-for="(day, i) in (historyData[check.id]?.bar90d || empty90d)" :key="'90d-' + i"
-                      class="bar-tick"
-                      :style="{ background: uptimeColor(day.uptime_pct) }"
-                      :title="formatTooltip90d(day)">
-                    </div>
-                  </div>
-                  <div class="bar-labels">
-                    <span>90 days ago</span>
-                    <span>Today</span>
-                  </div>
-                </div>
-                <div class="bar-section bar-4h-section">
-                  <div class="bar-track">
-                    <div v-for="(r, i) in (historyData[check.id]?.bar4h || empty4h)" :key="'4h-' + i"
-                      class="bar-tick"
-                      :style="{ background: statusColor(r.status) }"
-                      :title="formatTooltip4h(r)">
-                    </div>
-                  </div>
-                  <div class="bar-labels">
-                    <span>4h ago</span>
-                    <span>Now</span>
-                  </div>
-                </div>
-              </div>
-
-              <div v-if="expandedCheckId === check.id && check.last_message" class="check-detail">
-                {{ check.last_message }}
-              </div>
+            <div v-if="expandedCheckId === check.id && check.last_message" class="check-detail">
+              {{ check.last_message }}
             </div>
           </div>
         </div>
@@ -325,18 +311,6 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.project-section {
-  margin-bottom: 1.5rem;
-}
-.project-name {
-  font-size: 0.85rem;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 0.5rem;
-  font-weight: 700;
-}
-
 .target-card {
   padding: 0.75rem 1rem;
   margin-bottom: 1rem;

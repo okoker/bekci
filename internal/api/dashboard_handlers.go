@@ -20,87 +20,65 @@ type dashboardTarget struct {
 	ID                 string           `json:"id"`
 	Name               string           `json:"name"`
 	Host               string           `json:"host"`
-	ProjectID          string           `json:"project_id"`
 	PreferredCheckType string           `json:"preferred_check_type"`
 	Checks             []dashboardCheck `json:"checks"`
 }
 
-type dashboardProject struct {
-	ID      string            `json:"id"`
-	Name    string            `json:"name"`
-	Targets []dashboardTarget `json:"targets"`
-}
-
 func (s *Server) handleDashboardStatus(w http.ResponseWriter, r *http.Request) {
-	projects, err := s.store.ListProjects()
+	targets, err := s.store.ListTargets()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to list projects")
+		writeError(w, http.StatusInternalServerError, "failed to list targets")
 		return
 	}
 
-	var result []dashboardProject
-	for _, p := range projects {
-		dp := dashboardProject{ID: p.ID, Name: p.Name}
+	var result []dashboardTarget
+	for _, t := range targets {
+		dt := dashboardTarget{
+			ID:                 t.ID,
+			Name:               t.Name,
+			Host:               t.Host,
+			PreferredCheckType: t.PreferredCheckType,
+		}
 
-		targets, err := s.store.ListTargets(p.ID)
+		checks, err := s.store.ListChecksByTarget(t.ID)
 		if err != nil {
 			continue
 		}
 
-		for _, t := range targets {
-			dt := dashboardTarget{
-				ID:                 t.ID,
-				Name:               t.Name,
-				Host:               t.Host,
-				ProjectID:          t.ProjectID,
-				PreferredCheckType: t.PreferredCheckType,
+		for _, c := range checks {
+			dc := dashboardCheck{
+				ID:        c.ID,
+				Name:      c.Name,
+				Type:      c.Type,
+				Enabled:   c.Enabled,
+				IntervalS: c.IntervalS,
 			}
 
-			checks, err := s.store.ListChecksByTarget(t.ID)
-			if err != nil {
-				continue
+			// Get last result
+			last, err := s.store.GetLastResult(c.ID)
+			if err == nil && last != nil {
+				dc.LastStatus = last.Status
+				dc.LastMessage = last.Message
+				dc.ResponseMs = last.ResponseMs
 			}
 
-			for _, c := range checks {
-				dc := dashboardCheck{
-					ID:        c.ID,
-					Name:      c.Name,
-					Type:      c.Type,
-					Enabled:   c.Enabled,
-					IntervalS: c.IntervalS,
-				}
-
-				// Get last result
-				last, err := s.store.GetLastResult(c.ID)
-				if err == nil && last != nil {
-					dc.LastStatus = last.Status
-					dc.LastMessage = last.Message
-					dc.ResponseMs = last.ResponseMs
-				}
-
-				// Get 90-day uptime
-				pct, err := s.store.GetUptimePercent(c.ID, 90)
-				if err == nil {
-					dc.Uptime90d = pct
-				}
-
-				dt.Checks = append(dt.Checks, dc)
-			}
-			if dt.Checks == nil {
-				dt.Checks = []dashboardCheck{}
+			// Get 90-day uptime
+			pct, err := s.store.GetUptimePercent(c.ID, 90)
+			if err == nil {
+				dc.Uptime90d = pct
 			}
 
-			dp.Targets = append(dp.Targets, dt)
+			dt.Checks = append(dt.Checks, dc)
 		}
-		if dp.Targets == nil {
-			dp.Targets = []dashboardTarget{}
+		if dt.Checks == nil {
+			dt.Checks = []dashboardCheck{}
 		}
 
-		result = append(result, dp)
+		result = append(result, dt)
 	}
 
 	if result == nil {
-		result = []dashboardProject{}
+		result = []dashboardTarget{}
 	}
 
 	writeJSON(w, http.StatusOK, result)
