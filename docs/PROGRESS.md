@@ -2,14 +2,14 @@
 
 ## Session Handover — 12/02/2026
 
-1. **What was done** — Unified target model: merged rules into targets. Single form to create target + conditions. No changes to engine/scheduler/main.go.
-2. **Decisions made** — Hidden auto-managed rules behind the scenes. `TargetListItem` struct for list view (avoids loading full conditions). Dashboard now returns flat `[]dashboardTarget` with per-target `state` and `severity`.
-3. **Gotchas discovered** — `make([]T, 0, count)` has `len()=0` not `count`. SPA catch-all means deleted API routes still return 200 (index.html) — that's expected.
-4. **Server state** — Running on port 65000, binary at `./bin/bekci`.
-5. **What's next** — Commit these changes, then Phase 4 (Alerting).
+1. **What was done** — Unified target model + rules engine + owl icon branding. Committed `6eafff5`, pushed to `main`.
+2. **Decisions made** — Hidden auto-managed rules. `TargetListItem` for list view. Dashboard flat `[]dashboardTarget`. Icon: 28px navbar, 120px login, favicons 32/180/192px.
+3. **Gotchas discovered** — `make([]T, 0, count)` has `len()=0` not `count`. SPA catch-all = deleted API routes return 200 (index.html). Claude Code sandbox can't access Docker socket.
+4. **Server state** — Running on port 65000 (native binary). Docker image also available.
+5. **What's next** — Phase 4 (Alerting).
 
 ## Current Status
-**Phase**: Phase 3.5 — Unified Target Model. **Complete.**
+**Phase**: Phase 3.5 — Unified Target Model + Branding. **Complete. Committed & pushed.**
 
 ## Design Documents
 - `docs/DESIGN.md` — Full architecture, schema, API, phases
@@ -79,7 +79,9 @@
 | Frontend: DashboardView.vue — flat response, per-target health badges | done |
 | Frontend: Removed RulesView.vue, /rules route, Rules nav link | done |
 | CSS: checkbox alignment fix, page max-width 1100px | done |
-| Visual test: all pages screenshot-verified | done |
+| Branding: owl icon in navbar (28px), login (120px), favicons (32/180/192px) | done |
+| Visual test: all pages screenshot-verified, 25/25 E2E tests passed | done |
+| Committed `6eafff5` and pushed to main | done |
 
 ### Phase 4 — Alerting
 | Task | Status |

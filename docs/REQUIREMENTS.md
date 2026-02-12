@@ -147,7 +147,7 @@ Initial admin seeded from config.yaml / env vars on first boot.
 ### Dashboard
 | Method | Path | Roles | Description |
 |--------|------|-------|-------------|
-| GET | `/api/dashboard/status` | any | `{targets: [...], rules_summary: {total, healthy, unhealthy}}` |
+| GET | `/api/dashboard/status` | any | Flat `[]dashboardTarget` with per-target state+severity |
 | GET | `/api/dashboard/history/:check_id` | any | `?range=90d` or `?range=4h` |
 | GET | `/api/soc/status` | configurable | Flat `[]dashboardTarget` (no rules_summary) |
 | GET | `/api/soc/history/:check_id` | configurable | Same as dashboard history |
@@ -208,8 +208,15 @@ Single image, single container, single port.
 | 11 | Checker package: complete rewrite (v1 coupled to old config types) |
 | 12 | Scheduler: complete rewrite (v1 reads YAML, v2 reads DB) |
 | 13 | All 6 Phase 3+4 tables created in migration005 (alert tables empty until Phase 4) |
-| 14 | Dashboard API wrapped: `{targets, rules_summary}`. SOC returns flat array. |
+| 14 | Dashboard API: flat `[]dashboardTarget` array. SOC same shape. |
 | 15 | Engine evaluates rules async (goroutine) after each check result save |
+
+## Branding
+
+- Owl icon (`frontend/public/bekci-icon.png`) — project mascot
+- Navbar: 28px icon next to "Bekci" text
+- Login page: 120px centered above title
+- Favicons: 32px (browser tab), 180px (apple-touch-icon), 192px (Android)
 
 ## v2 Scope (deferred)
 
