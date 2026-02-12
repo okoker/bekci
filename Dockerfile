@@ -7,7 +7,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # Stage 2: Build Go backend
-FROM golang:1.22-alpine AS backend
+FROM golang:1.25-alpine AS backend
 RUN apk add --no-cache gcc musl-dev libcap
 WORKDIR /app
 COPY go.mod go.sum ./
@@ -19,7 +19,7 @@ RUN CGO_ENABLED=1 go build -ldflags "-X main.version=2.0.0" -o /bekci ./cmd/bekc
 RUN setcap cap_net_raw+ep /bekci
 
 # Stage 3: Runtime
-FROM alpine:3.20
+FROM alpine:3.21
 RUN apk add --no-cache ca-certificates libcap
 COPY --from=backend /bekci /usr/local/bin/bekci
 RUN mkdir -p /data
