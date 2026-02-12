@@ -1,6 +1,7 @@
 package store
 
 import (
+	"database/sql"
 	"fmt"
 	"time"
 )
@@ -124,7 +125,7 @@ func (s *Store) GetLastResult(checkID string) (*CheckResult, error) {
 		LIMIT 1
 	`, checkID).Scan(&r.ID, &r.CheckID, &r.Status, &r.ResponseMs, &r.Message, &r.Metrics, &r.CheckedAt)
 	if err != nil {
-		if err.Error() == "sql: no rows in result set" {
+		if err == sql.ErrNoRows {
 			return nil, nil
 		}
 		return nil, err

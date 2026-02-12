@@ -1,6 +1,6 @@
 # Binary
 bin/
-bekci
+/bekci
 
 # Runtime data
 *.db

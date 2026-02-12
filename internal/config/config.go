@@ -21,8 +21,9 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	Port   int    `yaml:"port"`
-	DBPath string `yaml:"db_path"`
+	Port       int    `yaml:"port"`
+	DBPath     string `yaml:"db_path"`
+	CORSOrigin string `yaml:"cors_origin"`
 }
 
 type AuthConfig struct {
@@ -79,6 +80,9 @@ func applyEnvOverrides(cfg *Config) {
 	}
 	if v := os.Getenv("BEKCI_DB_PATH"); v != "" {
 		cfg.Server.DBPath = v
+	}
+	if v := os.Getenv("BEKCI_CORS_ORIGIN"); v != "" {
+		cfg.Server.CORSOrigin = v
 	}
 }
 

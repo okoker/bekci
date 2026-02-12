@@ -20,7 +20,7 @@ func runTLSCert(host string, config map[string]any) *Result {
 		&net.Dialer{Timeout: time.Duration(timeoutS) * time.Second},
 		"tcp",
 		addr,
-		&tls.Config{InsecureSkipVerify: true}, // we want to read the cert even if untrusted
+		&tls.Config{InsecureSkipVerify: true, ServerName: host}, // SNI + read cert even if untrusted
 	)
 	elapsed := time.Since(start).Milliseconds()
 

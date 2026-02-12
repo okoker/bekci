@@ -2,10 +2,7 @@ package store
 
 import (
 	"database/sql"
-	"fmt"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 type Check struct {
@@ -24,22 +21,6 @@ type Check struct {
 type EnabledCheck struct {
 	Check
 	Host string `json:"host"`
-}
-
-func (s *Store) CreateCheck(c *Check) error {
-	c.ID = uuid.New().String()
-	now := time.Now()
-	c.CreatedAt = now
-	c.UpdatedAt = now
-	enabled := 0
-	if c.Enabled {
-		enabled = 1
-	}
-	_, err := s.db.Exec(`
-		INSERT INTO checks (id, target_id, type, name, config, interval_s, enabled, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, c.ID, c.TargetID, c.Type, c.Name, c.Config, c.IntervalS, enabled, c.CreatedAt, c.UpdatedAt)
-	return err
 }
 
 func (s *Store) GetCheck(id string) (*Check, error) {
@@ -78,76 +59,6 @@ func (s *Store) ListChecksByTarget(targetID string) ([]Check, error) {
 	}
 	if checks == nil {
 		checks = []Check{}
-	}
-	return checks, rows.Err()
-}
-
-func (s *Store) UpdateCheck(id, name, config string, intervalS int, enabled bool) error {
-	en := 0
-	if enabled {
-		en = 1
-	}
-	res, err := s.db.Exec(`
-		UPDATE checks SET name = ?, config = ?, interval_s = ?, enabled = ?, updated_at = CURRENT_TIMESTAMP
-		WHERE id = ?
-	`, name, config, intervalS, en, id)
-	if err != nil {
-		return err
-	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		return fmt.Errorf("check not found")
-	}
-	return nil
-}
-
-func (s *Store) DeleteCheck(id string) error {
-	res, err := s.db.Exec(`DELETE FROM checks WHERE id = ?`, id)
-	if err != nil {
-		return err
-	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		return fmt.Errorf("check not found")
-	}
-	return nil
-}
-
-// CheckWithTarget is a check with its parent target name and host.
-type CheckWithTarget struct {
-	Check
-	TargetName string `json:"target_name"`
-	TargetHost string `json:"target_host"`
-}
-
-// ListAllChecksWithTarget returns all enabled checks with target info, for rule builder dropdowns.
-func (s *Store) ListAllChecksWithTarget() ([]CheckWithTarget, error) {
-	rows, err := s.db.Query(`
-		SELECT c.id, c.target_id, c.type, c.name, c.config, c.interval_s, c.enabled,
-		       c.created_at, c.updated_at, t.name, t.host
-		FROM checks c
-		JOIN targets t ON c.target_id = t.id
-		WHERE c.enabled = 1
-		ORDER BY t.name, c.name
-	`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var checks []CheckWithTarget
-	for rows.Next() {
-		var ct CheckWithTarget
-		var enabled int
-		if err := rows.Scan(&ct.ID, &ct.TargetID, &ct.Type, &ct.Name, &ct.Config, &ct.IntervalS, &enabled,
-			&ct.CreatedAt, &ct.UpdatedAt, &ct.TargetName, &ct.TargetHost); err != nil {
-			return nil, err
-		}
-		ct.Enabled = enabled == 1
-		checks = append(checks, ct)
-	}
-	if checks == nil {
-		checks = []CheckWithTarget{}
 	}
 	return checks, rows.Err()
 }

@@ -10,21 +10,23 @@ import (
 )
 
 type Server struct {
-	store     *store.Store
-	auth      *auth.Service
-	scheduler *scheduler.Scheduler
-	version   string
-	spa       fs.FS // embedded frontend/dist
+	store      *store.Store
+	auth       *auth.Service
+	scheduler  *scheduler.Scheduler
+	version    string
+	spa        fs.FS // embedded frontend/dist
+	corsOrigin string
 }
 
 // New creates a new API server.
-func New(st *store.Store, authSvc *auth.Service, sched *scheduler.Scheduler, version string, spa fs.FS) *Server {
+func New(st *store.Store, authSvc *auth.Service, sched *scheduler.Scheduler, version string, spa fs.FS, corsOrigin string) *Server {
 	return &Server{
-		store:     st,
-		auth:      authSvc,
-		scheduler: sched,
-		version:   version,
-		spa:       spa,
+		store:      st,
+		auth:       authSvc,
+		scheduler:  sched,
+		version:    version,
+		spa:        spa,
+		corsOrigin: corsOrigin,
 	}
 }
 
@@ -89,7 +91,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("/", s.spaHandler())
 
 	// Wrap everything with CORS + logging
-	return loggingMiddleware(corsMiddleware(mux))
+	return loggingMiddleware(corsMiddleware(s.corsOrigin)(mux))
 }
 
 // spaHandler serves the embedded Vue SPA with index.html fallback.
