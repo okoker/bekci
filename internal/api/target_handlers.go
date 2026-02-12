@@ -8,8 +8,7 @@ import (
 )
 
 func (s *Server) handleListTargets(w http.ResponseWriter, r *http.Request) {
-	projectID := r.URL.Query().Get("project_id")
-	targets, err := s.store.ListTargets(projectID)
+	targets, err := s.store.ListTargets()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list targets")
 		return
@@ -19,7 +18,6 @@ func (s *Server) handleListTargets(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleCreateTarget(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		ProjectID          string `json:"project_id"`
 		Name               string `json:"name"`
 		Host               string `json:"host"`
 		Description        string `json:"description"`
@@ -32,15 +30,8 @@ func (s *Server) handleCreateTarget(w http.ResponseWriter, r *http.Request) {
 	}
 	req.Name = strings.TrimSpace(req.Name)
 	req.Host = strings.TrimSpace(req.Host)
-	if req.Name == "" || req.Host == "" || req.ProjectID == "" {
-		writeError(w, http.StatusBadRequest, "project_id, name, and host are required")
-		return
-	}
-
-	// Verify project exists
-	proj, err := s.store.GetProject(req.ProjectID)
-	if err != nil || proj == nil {
-		writeError(w, http.StatusBadRequest, "project not found")
+	if req.Name == "" || req.Host == "" {
+		writeError(w, http.StatusBadRequest, "name and host are required")
 		return
 	}
 
@@ -55,7 +46,6 @@ func (s *Server) handleCreateTarget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	t := &store.Target{
-		ProjectID:          req.ProjectID,
 		Name:               req.Name,
 		Host:               req.Host,
 		Description:        req.Description,
@@ -64,7 +54,7 @@ func (s *Server) handleCreateTarget(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := s.store.CreateTarget(t); err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
-			writeError(w, http.StatusConflict, "target name already exists in this project")
+			writeError(w, http.StatusConflict, "target name already exists")
 			return
 		}
 		writeError(w, http.StatusInternalServerError, "failed to create target")

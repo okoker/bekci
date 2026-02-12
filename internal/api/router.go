@@ -65,12 +65,6 @@ func (s *Server) Handler() http.Handler {
 		return s.requireAuth(requireRole("admin", "operator")(http.HandlerFunc(h)))
 	}
 
-	// Projects
-	mux.Handle("GET /api/projects", anyAuth(s.handleListProjects))
-	mux.Handle("POST /api/projects", opAuth(s.handleCreateProject))
-	mux.Handle("PUT /api/projects/{id}", opAuth(s.handleUpdateProject))
-	mux.Handle("DELETE /api/projects/{id}", adminAuth(s.handleDeleteProject))
-
 	// Targets
 	mux.Handle("GET /api/targets", anyAuth(s.handleListTargets))
 	mux.Handle("POST /api/targets", opAuth(s.handleCreateTarget))

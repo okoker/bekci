@@ -1,23 +1,16 @@
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import api from '../api'
 
 const auth = useAuthStore()
 
 // State
-const projects = ref([])
-const selectedProjectId = ref('')
 const targets = ref([])
 const expandedTargetId = ref(null)
 const loading = ref(false)
 const error = ref('')
 const success = ref('')
-
-// Project form
-const showProjectForm = ref(false)
-const editingProject = ref(null)
-const projectForm = ref({ name: '', description: '' })
 
 // Target form
 const showTargetForm = ref(false)
@@ -39,76 +32,16 @@ const checkTypes = [
   { value: 'tls_cert', label: 'TLS Certificate' },
 ]
 
-const selectedProject = computed(() => projects.value.find(p => p.id === selectedProjectId.value))
-
 // Load data
-async function loadProjects() {
-  try {
-    const { data } = await api.get('/projects')
-    projects.value = data
-    if (data.length > 0 && !selectedProjectId.value) {
-      selectedProjectId.value = data[0].id
-    }
-  } catch (e) {
-    error.value = 'Failed to load projects'
-  }
-}
-
 async function loadTargets() {
-  if (!selectedProjectId.value) {
-    targets.value = []
-    return
-  }
   loading.value = true
   try {
-    const { data } = await api.get('/targets', { params: { project_id: selectedProjectId.value } })
+    const { data } = await api.get('/targets')
     targets.value = data
   } catch (e) {
     error.value = 'Failed to load targets'
   } finally {
     loading.value = false
-  }
-}
-
-watch(selectedProjectId, () => {
-  expandedTargetId.value = null
-  loadTargets()
-})
-
-// Project CRUD
-function openProjectForm(project = null) {
-  editingProject.value = project
-  projectForm.value = project ? { name: project.name, description: project.description } : { name: '', description: '' }
-  showProjectForm.value = true
-  error.value = ''
-}
-
-async function saveProject() {
-  error.value = ''
-  try {
-    if (editingProject.value) {
-      await api.put(`/projects/${editingProject.value.id}`, projectForm.value)
-    } else {
-      const { data } = await api.post('/projects', projectForm.value)
-      selectedProjectId.value = data.id
-    }
-    showProjectForm.value = false
-    await loadProjects()
-    success.value = editingProject.value ? 'Project updated' : 'Project created'
-  } catch (e) {
-    error.value = e.response?.data?.error || 'Failed to save project'
-  }
-}
-
-async function deleteProject(id) {
-  if (!confirm('Delete this project and all its targets/checks?')) return
-  try {
-    await api.delete(`/projects/${id}`)
-    if (selectedProjectId.value === id) selectedProjectId.value = ''
-    await loadProjects()
-    success.value = 'Project deleted'
-  } catch (e) {
-    error.value = e.response?.data?.error || 'Failed to delete project'
   }
 }
 
@@ -128,7 +61,7 @@ async function saveTarget() {
     if (editingTarget.value) {
       await api.put(`/targets/${editingTarget.value.id}`, targetForm.value)
     } else {
-      await api.post('/targets', { ...targetForm.value, project_id: selectedProjectId.value })
+      await api.post('/targets', targetForm.value)
     }
     showTargetForm.value = false
     await loadTargets()
@@ -251,73 +184,30 @@ function formatInterval(s) {
 }
 
 // Init
-loadProjects()
+onMounted(() => loadTargets())
 </script>
 
 <template>
   <div class="page">
     <div class="page-header">
       <h2>Targets</h2>
+      <button v-if="auth.isOperator" class="btn btn-primary" @click="openTargetForm()">+ Target</button>
     </div>
 
     <div v-if="error" class="error-msg">{{ error }}</div>
     <div v-if="success" class="success-msg" @click="success = ''">{{ success }}</div>
 
-    <!-- Projects bar -->
-    <div class="card">
-      <div class="projects-bar">
-        <div class="projects-tabs">
-          <button v-for="p in projects" :key="p.id"
-            :class="['project-tab', { active: p.id === selectedProjectId }]"
-            @click="selectedProjectId = p.id">
-            {{ p.name }}
-          </button>
-        </div>
-        <div class="projects-actions" v-if="auth.isOperator">
-          <button class="btn btn-sm" @click="openProjectForm()">+ Project</button>
-          <button v-if="selectedProject" class="btn btn-sm" @click="openProjectForm(selectedProject)">Edit</button>
-          <button v-if="selectedProject && auth.isAdmin" class="btn btn-sm btn-danger" @click="deleteProject(selectedProjectId)">Delete</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Project form modal -->
-    <div v-if="showProjectForm" class="modal-overlay" @click.self="showProjectForm = false">
-      <div class="modal-card">
-        <h3>{{ editingProject ? 'Edit Project' : 'New Project' }}</h3>
-        <form @submit.prevent="saveProject">
-          <div class="form-group">
-            <label>Name</label>
-            <input v-model="projectForm.name" required />
-          </div>
-          <div class="form-group">
-            <label>Description</label>
-            <input v-model="projectForm.description" />
-          </div>
-          <div class="form-actions">
-            <button type="submit" class="btn btn-primary">Save</button>
-            <button type="button" class="btn" @click="showProjectForm = false">Cancel</button>
-          </div>
-        </form>
-      </div>
-    </div>
-
     <!-- Targets table -->
-    <div v-if="selectedProjectId" class="card">
-      <div class="card-header">
-        <h3>Targets</h3>
-        <button v-if="auth.isOperator" class="btn btn-sm btn-primary" @click="openTargetForm()">+ Target</button>
-      </div>
-
+    <div class="card">
       <div v-if="loading" class="text-muted" style="padding: 1rem;">Loading...</div>
-      <div v-else-if="targets.length === 0" class="text-muted" style="padding: 1rem;">No targets in this project yet.</div>
+      <div v-else-if="targets.length === 0" class="text-muted" style="padding: 1rem;">No targets yet. Create one to get started.</div>
 
       <table v-else>
         <thead>
           <tr>
             <th>Name</th>
             <th>Host</th>
-            <th>Status</th>
+            <th>Description</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -375,10 +265,6 @@ loadProjects()
           </template>
         </tbody>
       </table>
-    </div>
-
-    <div v-else class="card placeholder-card">
-      <p>No project selected. Create a project to get started.</p>
     </div>
 
     <!-- Target form modal -->
@@ -582,35 +468,6 @@ loadProjects()
 </template>
 
 <style scoped>
-.projects-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-}
-.projects-tabs {
-  display: flex;
-  gap: 0.25rem;
-  flex-wrap: wrap;
-}
-.project-tab {
-  padding: 0.375rem 0.75rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  background: #f8fafc;
-  color: #475569;
-  cursor: pointer;
-  font-size: 0.85rem;
-  transition: all 0.15s;
-}
-.project-tab:hover { background: #e2e8f0; }
-.project-tab.active { background: #2563eb; color: #fff; border-color: #2563eb; }
-
-.projects-actions {
-  display: flex;
-  gap: 0.25rem;
-}
-
 .card-header {
   display: flex;
   justify-content: space-between;

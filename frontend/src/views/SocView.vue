@@ -36,12 +36,10 @@ async function loadDashboard() {
     error.value = ''
 
     // Load history for preferred checks
-    for (const proj of data) {
-      for (const t of proj.targets || []) {
-        const pref = getPreferredCheck(t)
-        if (pref && !historyData.value[pref.id]) {
-          loadHistory(pref.id)
-        }
+    for (const t of data) {
+      const pref = getPreferredCheck(t)
+      if (pref && !historyData.value[pref.id]) {
+        loadHistory(pref.id)
       }
     }
   } catch (e) {
@@ -114,15 +112,8 @@ function hasDownCheckTarget(target) {
   return target.checks?.some(c => c.last_status === 'down')
 }
 
-function allTargets() {
-  const targets = []
-  for (const proj of dashboardData.value) {
-    for (const t of proj.targets || []) {
-      targets.push(t)
-    }
-  }
-  // Down targets first
-  return targets.sort((a, b) => {
+function sortedTargets() {
+  return [...dashboardData.value].sort((a, b) => {
     const aDown = hasDownCheckTarget(a)
     const bDown = hasDownCheckTarget(b)
     if (aDown && !bDown) return -1
@@ -180,7 +171,7 @@ onUnmounted(() => {
     <div v-if="loading" class="soc-loading">Loading...</div>
 
     <div v-else class="soc-grid">
-      <div v-for="target in allTargets()" :key="target.id" class="soc-card" :class="{ 'soc-card-down': hasDownCheckTarget(target) }">
+      <div v-for="target in sortedTargets()" :key="target.id" class="soc-card" :class="{ 'soc-card-down': hasDownCheckTarget(target) }">
         <div class="soc-card-header">
           <span class="soc-target-name">{{ target.name }}</span>
           <span :class="['soc-status-badge', hasDownCheckTarget(target) ? 'soc-badge-down' : 'soc-badge-up']">

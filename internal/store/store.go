@@ -58,6 +58,7 @@ func (s *Store) migrate() error {
 		s.migration001,
 		s.migration002,
 		s.migration003,
+		s.migration004,
 	}
 
 	for i := current; i < len(migrations); i++ {
@@ -170,6 +171,36 @@ func (s *Store) migration003() error {
 	_, err := s.db.Exec(`
 		ALTER TABLE targets ADD COLUMN preferred_check_type TEXT NOT NULL DEFAULT 'ping';
 		INSERT OR IGNORE INTO settings (key, value) VALUES ('soc_public', 'false');
+	`)
+	return err
+}
+
+// migration004 removes projects — targets become standalone.
+func (s *Store) migration004() error {
+	// Disable FK checks for table rebuild
+	if _, err := s.db.Exec(`PRAGMA foreign_keys = OFF`); err != nil {
+		return err
+	}
+	defer s.db.Exec(`PRAGMA foreign_keys = ON`)
+
+	_, err := s.db.Exec(`
+		CREATE TABLE targets_new (
+			id                   TEXT PRIMARY KEY,
+			name                 TEXT UNIQUE NOT NULL,
+			host                 TEXT NOT NULL,
+			description          TEXT NOT NULL DEFAULT '',
+			enabled              INTEGER NOT NULL DEFAULT 1,
+			preferred_check_type TEXT NOT NULL DEFAULT 'ping',
+			created_at           DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at           DATETIME DEFAULT CURRENT_TIMESTAMP
+		);
+
+		INSERT INTO targets_new (id, name, host, description, enabled, preferred_check_type, created_at, updated_at)
+			SELECT id, name, host, description, enabled, preferred_check_type, created_at, updated_at FROM targets;
+
+		DROP TABLE targets;
+		ALTER TABLE targets_new RENAME TO targets;
+		DROP TABLE IF EXISTS projects;
 	`)
 	return err
 }
