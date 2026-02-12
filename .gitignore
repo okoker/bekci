@@ -1,17 +1,24 @@
 # Binary
 bin/
+bekci
 
 # Runtime data
 *.db
 *.db-shm
 *.db-wal
 *.log
+.jwt_secret
 
-# Real config (contains hosts, SSH keys, credentials)
+# Config (contains credentials)
 config.yaml
+config.example.yaml
 
 # Internal docs
 docs/
+
+# Claude Code
+CLAUDE.md
+.claude/
 
 # Frontend
 frontend/node_modules/
