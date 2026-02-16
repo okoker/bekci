@@ -62,6 +62,7 @@ func (s *Store) migrate() error {
 		s.migration005,
 		s.migration006,
 		s.migration007,
+		s.migration008,
 	}
 
 	for i := current; i < len(migrations); i++ {
@@ -320,6 +321,26 @@ func (s *Store) migration004() error {
 		DROP TABLE targets;
 		ALTER TABLE targets_new RENAME TO targets;
 		DROP TABLE IF EXISTS projects;
+	`)
+	return err
+}
+
+// migration008 creates the audit_logs table.
+func (s *Store) migration008() error {
+	_, err := s.db.Exec(`
+		CREATE TABLE audit_logs (
+			id            INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id       TEXT NOT NULL,
+			username      TEXT NOT NULL,
+			action        TEXT NOT NULL,
+			resource_type TEXT NOT NULL DEFAULT '',
+			resource_id   TEXT NOT NULL DEFAULT '',
+			detail        TEXT NOT NULL DEFAULT '',
+			ip_address    TEXT NOT NULL DEFAULT '',
+			status        TEXT NOT NULL DEFAULT 'success',
+			created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
+		);
+		CREATE INDEX idx_audit_created ON audit_logs(created_at DESC);
 	`)
 	return err
 }

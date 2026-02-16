@@ -40,8 +40,8 @@ func (s *Server) handleRestore(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, fmt.Sprintf("unsupported backup version: %d", data.Version))
 		return
 	}
-	if data.SchemaVersion > 7 {
-		writeError(w, http.StatusBadRequest, fmt.Sprintf("backup schema version %d is newer than this server supports (7)", data.SchemaVersion))
+	if data.SchemaVersion > 8 {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("backup schema version %d is newer than this server supports (8)", data.SchemaVersion))
 		return
 	}
 
@@ -68,6 +68,7 @@ func (s *Server) handleRestore(w http.ResponseWriter, r *http.Request) {
 	// Reload scheduler to pick up new targets/checks
 	s.scheduler.Reload()
 
+	s.audit(r, "restore_backup", "backup", "", "from="+data.AppVersion, "success")
 	slog.Warn("Database restored from backup", "backup_created", data.CreatedAt, "app_version", data.AppVersion)
 	writeJSON(w, http.StatusOK, map[string]string{"message": "restore successful"})
 }

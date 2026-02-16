@@ -241,6 +241,7 @@ func (s *Store) RestoreBackup(data *BackupData) error {
 
 	// Delete order: leaf to root
 	deleteTables := []string{
+		"audit_logs",
 		"rule_conditions",
 		"rule_states",
 		"alert_history",

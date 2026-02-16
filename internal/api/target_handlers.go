@@ -138,6 +138,8 @@ func (s *Server) handleCreateTarget(w http.ResponseWriter, r *http.Request) {
 		s.scheduler.Reload()
 	}
 
+	s.audit(r, "create_target", "target", t.ID, "name="+t.Name, "success")
+
 	// Return full detail
 	detail, err := s.store.GetTargetDetail(t.ID)
 	if err != nil || detail == nil {
@@ -245,6 +247,8 @@ func (s *Server) handleUpdateTarget(w http.ResponseWriter, r *http.Request) {
 		s.scheduler.Reload()
 	}
 
+	s.audit(r, "update_target", "target", id, "name="+req.Name, "success")
+
 	// Return full detail
 	detail, err := s.store.GetTargetDetail(id)
 	if err != nil || detail == nil {
@@ -267,5 +271,6 @@ func (s *Server) handleDeleteTarget(w http.ResponseWriter, r *http.Request) {
 	if s.scheduler != nil {
 		s.scheduler.Reload()
 	}
+	s.audit(r, "delete_target", "target", id, "", "success")
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }

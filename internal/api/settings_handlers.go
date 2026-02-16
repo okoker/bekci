@@ -58,5 +58,6 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to update settings")
 		return
 	}
+	s.audit(r, "update_settings", "settings", "", "", "success")
 	writeJSON(w, http.StatusOK, map[string]string{"message": "settings updated"})
 }

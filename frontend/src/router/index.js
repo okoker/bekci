@@ -8,12 +8,14 @@ import UsersView from '../views/UsersView.vue'
 import SettingsView from '../views/SettingsView.vue'
 import ProfileView from '../views/ProfileView.vue'
 import SocView from '../views/SocView.vue'
+import AuditLogView from '../views/AuditLogView.vue'
 
 const routes = [
   { path: '/login', name: 'Login', component: LoginView, meta: { public: true } },
   { path: '/', name: 'Dashboard', component: DashboardView, meta: { requiresAuth: true } },
   { path: '/targets', name: 'Targets', component: TargetsView, meta: { requiresAuth: true } },
   { path: '/users', name: 'Users', component: UsersView, meta: { requiresAuth: true, requiresAdmin: true } },
+  { path: '/audit-log', name: 'AuditLog', component: AuditLogView, meta: { requiresAuth: true, requiresOperator: true } },
   { path: '/settings', name: 'Settings', component: SettingsView, meta: { requiresAuth: true } },
   { path: '/profile', name: 'Profile', component: ProfileView, meta: { requiresAuth: true } },
   { path: '/soc', name: 'SOC', component: SocView, meta: { public: true } },
@@ -36,6 +38,9 @@ router.beforeEach(async (to) => {
     return '/login'
   }
   if (to.meta.requiresAdmin && !auth.isAdmin) {
+    return '/'
+  }
+  if (to.meta.requiresOperator && !auth.isOperator) {
     return '/'
   }
   if (to.path === '/login' && auth.isLoggedIn) {
