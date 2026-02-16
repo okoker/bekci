@@ -135,5 +135,95 @@ onMounted(loadUsers)
         </tbody>
       </table>
     </div>
+
+    <div class="card privileges-card">
+      <h3>Role Privileges</h3>
+      <table class="privileges-table">
+        <thead>
+          <tr>
+            <th>Action</th>
+            <th>Viewer</th>
+            <th>Operator</th>
+            <th>Admin</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>View dashboard &amp; SOC</td>
+            <td class="perm-yes">Yes</td>
+            <td class="perm-yes">Yes</td>
+            <td class="perm-yes">Yes</td>
+          </tr>
+          <tr>
+            <td>View targets, checks &amp; results</td>
+            <td class="perm-yes">Yes</td>
+            <td class="perm-yes">Yes</td>
+            <td class="perm-yes">Yes</td>
+          </tr>
+          <tr>
+            <td>View settings</td>
+            <td class="perm-yes">Yes</td>
+            <td class="perm-yes">Yes</td>
+            <td class="perm-yes">Yes</td>
+          </tr>
+          <tr>
+            <td>Edit own profile &amp; password</td>
+            <td class="perm-yes">Yes</td>
+            <td class="perm-yes">Yes</td>
+            <td class="perm-yes">Yes</td>
+          </tr>
+          <tr>
+            <td>Create, edit &amp; delete targets</td>
+            <td class="perm-no">No</td>
+            <td class="perm-yes">Yes</td>
+            <td class="perm-yes">Yes</td>
+          </tr>
+          <tr>
+            <td>Run checks manually</td>
+            <td class="perm-no">No</td>
+            <td class="perm-yes">Yes</td>
+            <td class="perm-yes">Yes</td>
+          </tr>
+          <tr>
+            <td>Modify settings</td>
+            <td class="perm-no">No</td>
+            <td class="perm-no">No</td>
+            <td class="perm-yes">Yes</td>
+          </tr>
+          <tr>
+            <td>Manage users</td>
+            <td class="perm-no">No</td>
+            <td class="perm-no">No</td>
+            <td class="perm-yes">Yes</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 </template>
+
+<style scoped>
+.privileges-card {
+  margin-top: 1.5rem;
+  opacity: 0.85;
+}
+.privileges-card h3 {
+  margin-bottom: 0.75rem;
+  font-size: 0.95rem;
+}
+.privileges-table {
+  font-size: 0.85rem;
+}
+.privileges-table th:not(:first-child),
+.privileges-table td:not(:first-child) {
+  text-align: center;
+  width: 100px;
+}
+.perm-yes {
+  color: #16a34a;
+  font-weight: 600;
+}
+.perm-no {
+  color: #9ca3af;
+}
+</style>
