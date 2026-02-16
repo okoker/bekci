@@ -59,6 +59,10 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("PUT /api/users/{id}/suspend", adminAuth(s.handleSuspendUser))
 	mux.Handle("PUT /api/users/{id}/password", adminAuth(s.handleResetPassword))
 
+	// Backup & Restore — admin only
+	mux.Handle("GET /api/backup", adminAuth(s.handleBackup))
+	mux.Handle("POST /api/backup/restore", adminAuth(s.handleRestore))
+
 	// Auth helpers for monitoring routes
 	anyAuth := func(h http.HandlerFunc) http.Handler {
 		return s.requireAuth(http.HandlerFunc(h))
