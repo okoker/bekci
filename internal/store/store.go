@@ -61,6 +61,7 @@ func (s *Store) migrate() error {
 		s.migration004,
 		s.migration005,
 		s.migration006,
+		s.migration007,
 	}
 
 	for i := current; i < len(migrations); i++ {
@@ -320,5 +321,16 @@ func (s *Store) migration004() error {
 		ALTER TABLE targets_new RENAME TO targets;
 		DROP TABLE IF EXISTS projects;
 	`)
+	return err
+}
+
+// migration007 renames severity to category on targets.
+func (s *Store) migration007() error {
+	_, err := s.db.Exec(`ALTER TABLE targets RENAME COLUMN severity TO category`)
+	if err != nil {
+		return err
+	}
+	// Map old severity values to default category
+	_, err = s.db.Exec(`UPDATE targets SET category = 'Other' WHERE category IN ('critical', 'warning', 'info')`)
 	return err
 }

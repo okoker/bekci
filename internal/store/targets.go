@@ -16,7 +16,7 @@ type Target struct {
 	Enabled            bool      `json:"enabled"`
 	PreferredCheckType string    `json:"preferred_check_type"`
 	Operator           string    `json:"operator"`
-	Severity           string    `json:"severity"`
+	Category           string    `json:"category"`
 	RuleID             *string   `json:"rule_id"`
 	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at"`
@@ -48,7 +48,7 @@ func scanTarget(row interface{ Scan(...any) error }) (*Target, error) {
 	var enabled int
 	var ruleID sql.NullString
 	err := row.Scan(&t.ID, &t.Name, &t.Host, &t.Description, &enabled,
-		&t.PreferredCheckType, &t.Operator, &t.Severity, &ruleID,
+		&t.PreferredCheckType, &t.Operator, &t.Category, &ruleID,
 		&t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
 		return nil, err
@@ -60,7 +60,7 @@ func scanTarget(row interface{ Scan(...any) error }) (*Target, error) {
 	return t, nil
 }
 
-const targetCols = `id, name, host, description, enabled, preferred_check_type, operator, severity, rule_id, created_at, updated_at`
+const targetCols = `id, name, host, description, enabled, preferred_check_type, operator, category, rule_id, created_at, updated_at`
 
 func (s *Store) GetTarget(id string) (*Target, error) {
 	row := s.db.QueryRow(`SELECT `+targetCols+` FROM targets WHERE id = ?`, id)
@@ -136,14 +136,14 @@ func (s *Store) CreateTargetWithConditions(t *Target, conds []TargetCondition) e
 	if t.Operator == "" {
 		t.Operator = "AND"
 	}
-	if t.Severity == "" {
-		t.Severity = "critical"
+	if t.Category == "" {
+		t.Category = "Other"
 	}
 
 	_, err = tx.Exec(`
-		INSERT INTO targets (id, name, host, description, enabled, preferred_check_type, operator, severity, created_at, updated_at)
+		INSERT INTO targets (id, name, host, description, enabled, preferred_check_type, operator, category, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, t.ID, t.Name, t.Host, t.Description, enabled, t.PreferredCheckType, t.Operator, t.Severity, t.CreatedAt, t.UpdatedAt)
+	`, t.ID, t.Name, t.Host, t.Description, enabled, t.PreferredCheckType, t.Operator, t.Category, t.CreatedAt, t.UpdatedAt)
 	if err != nil {
 		return err
 	}
@@ -156,8 +156,8 @@ func (s *Store) CreateTargetWithConditions(t *Target, conds []TargetCondition) e
 	ruleID := uuid.New().String()
 	_, err = tx.Exec(`
 		INSERT INTO rules (id, name, description, operator, severity, enabled, created_at, updated_at)
-		VALUES (?, ?, '', ?, ?, 1, ?, ?)
-	`, ruleID, t.Name+" rule", t.Operator, t.Severity, now, now)
+		VALUES (?, ?, '', ?, 'critical', 1, ?, ?)
+	`, ruleID, t.Name+" rule", t.Operator, now, now)
 	if err != nil {
 		return err
 	}
@@ -216,7 +216,7 @@ func (s *Store) CreateTargetWithConditions(t *Target, conds []TargetCondition) e
 }
 
 // UpdateTargetWithConditions updates a target and smart-diffs its checks/conditions.
-func (s *Store) UpdateTargetWithConditions(id, name, host, description string, enabled bool, operator, severity string, conds []TargetCondition) error {
+func (s *Store) UpdateTargetWithConditions(id, name, host, description string, enabled bool, operator, category string, conds []TargetCondition) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -230,8 +230,8 @@ func (s *Store) UpdateTargetWithConditions(id, name, host, description string, e
 	if operator == "" {
 		operator = "AND"
 	}
-	if severity == "" {
-		severity = "critical"
+	if category == "" {
+		category = "Other"
 	}
 
 	// Get current target for rule_id
@@ -251,9 +251,9 @@ func (s *Store) UpdateTargetWithConditions(id, name, host, description string, e
 	// Update target fields
 	_, err = tx.Exec(`
 		UPDATE targets SET name = ?, host = ?, description = ?, enabled = ?,
-			preferred_check_type = ?, operator = ?, severity = ?, updated_at = ?
+			preferred_check_type = ?, operator = ?, category = ?, updated_at = ?
 		WHERE id = ?
-	`, name, host, description, en, preferredType, operator, severity, now, id)
+	`, name, host, description, en, preferredType, operator, category, now, id)
 	if err != nil {
 		return err
 	}
@@ -275,8 +275,8 @@ func (s *Store) UpdateTargetWithConditions(id, name, host, description string, e
 	if ruleID.Valid {
 		rid = ruleID.String
 		// Update rule fields
-		_, err = tx.Exec(`UPDATE rules SET name = ?, operator = ?, severity = ?, enabled = 1, updated_at = ? WHERE id = ?`,
-			name+" rule", operator, severity, now, rid)
+		_, err = tx.Exec(`UPDATE rules SET name = ?, operator = ?, severity = 'critical', enabled = 1, updated_at = ? WHERE id = ?`,
+			name+" rule", operator, now, rid)
 		if err != nil {
 			return err
 		}
@@ -285,8 +285,8 @@ func (s *Store) UpdateTargetWithConditions(id, name, host, description string, e
 		rid = uuid.New().String()
 		_, err = tx.Exec(`
 			INSERT INTO rules (id, name, description, operator, severity, enabled, created_at, updated_at)
-			VALUES (?, ?, '', ?, ?, 1, ?, ?)
-		`, rid, name+" rule", operator, severity, now, now)
+			VALUES (?, ?, '', ?, 'critical', 1, ?, ?)
+		`, rid, name+" rule", operator, now, now)
 		if err != nil {
 			return err
 		}

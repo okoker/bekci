@@ -22,7 +22,7 @@ type dashboardTarget struct {
 	Host               string           `json:"host"`
 	PreferredCheckType string           `json:"preferred_check_type"`
 	State              string           `json:"state"`
-	Severity           string           `json:"severity"`
+	Category           string           `json:"category"`
 	Checks             []dashboardCheck `json:"checks"`
 }
 
@@ -39,7 +39,7 @@ func (s *Server) buildDashboardTargets() ([]dashboardTarget, error) {
 			Name:               t.Name,
 			Host:               t.Host,
 			PreferredCheckType: t.PreferredCheckType,
-			Severity:           t.Severity,
+			Category:           t.Category,
 		}
 
 		// Per-target health from rule_states
