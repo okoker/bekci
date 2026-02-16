@@ -71,6 +71,9 @@ func (s *Server) Handler() http.Handler {
 		return s.requireAuth(requireRole("admin", "operator")(http.HandlerFunc(h)))
 	}
 
+	// Audit log
+	mux.Handle("GET /api/audit-log", opAuth(s.handleListAuditLogs))
+
 	// Targets
 	mux.Handle("GET /api/targets", anyAuth(s.handleListTargets))
 	mux.Handle("POST /api/targets", opAuth(s.handleCreateTarget))

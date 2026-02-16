@@ -29,10 +29,12 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	token, user, err := s.auth.Login(req.Username, req.Password, ip)
 	if err != nil {
+		s.auditLogin(r, "", req.Username, "login_failed", err.Error(), "failure")
 		writeError(w, http.StatusUnauthorized, err.Error())
 		return
 	}
 
+	s.auditLogin(r, user.ID, user.Username, "login", "", "success")
 	writeJSON(w, http.StatusOK, map[string]any{
 		"token": token,
 		"user": map[string]any{
@@ -54,6 +56,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "logout failed")
 		return
 	}
+	s.audit(r, "logout", "session", "", "", "success")
 	writeJSON(w, http.StatusOK, map[string]string{"message": "logged out"})
 }
 
@@ -93,6 +96,7 @@ func (s *Server) handleUpdateMe(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "update failed")
 		return
 	}
+	s.audit(r, "update_profile", "user", user.ID, "email="+req.Email, "success")
 	writeJSON(w, http.StatusOK, map[string]string{"message": "profile updated"})
 }
 
@@ -117,6 +121,7 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !authpkg.CheckPassword(user.PasswordHash, req.Current) {
+		s.audit(r, "change_password_failed", "user", user.ID, "incorrect current password", "failure")
 		writeError(w, http.StatusUnauthorized, "current password is incorrect")
 		return
 	}
@@ -132,5 +137,6 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 	// Invalidate all other sessions
 	s.store.DeleteUserSessionsExcept(user.ID, claims.SessionID)
+	s.audit(r, "change_password", "user", user.ID, "", "success")
 	writeJSON(w, http.StatusOK, map[string]string{"message": "password changed"})
 }

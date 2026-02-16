@@ -28,8 +28,10 @@ async function handleLogin() {
 <template>
   <div class="login-page">
     <div class="login-card">
-      <img src="/bekci-icon.png" alt="Bekci" class="login-icon" />
-      <h1>Bekci</h1>
+      <div class="login-hero">
+        <img src="/bekci-icon.png" alt="Bekci" class="login-icon" />
+        <h1>Bekci</h1>
+      </div>
       <form @submit.prevent="handleLogin">
         <div class="form-group">
           <label for="username">Username</label>

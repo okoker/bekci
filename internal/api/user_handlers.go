@@ -81,6 +81,7 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.audit(r, "create_user", "user", user.ID, "username="+user.Username+" role="+user.Role, "success")
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"id":       user.ID,
 		"username": user.Username,
@@ -160,6 +161,7 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "update failed")
 		return
 	}
+	s.audit(r, "update_user", "user", id, "role="+role, "success")
 	writeJSON(w, http.StatusOK, map[string]string{"message": "user updated"})
 }
 
@@ -202,6 +204,11 @@ func (s *Server) handleSuspendUser(w http.ResponseWriter, r *http.Request) {
 		s.store.DeleteUserSessions(id)
 	}
 
+	action := "activate_user"
+	if req.Suspended {
+		action = "suspend_user"
+	}
+	s.audit(r, action, "user", id, "username="+user.Username, "success")
 	writeJSON(w, http.StatusOK, map[string]string{"message": "user status updated"})
 }
 
@@ -238,5 +245,6 @@ func (s *Server) handleResetPassword(w http.ResponseWriter, r *http.Request) {
 	// Kill all sessions so user must re-login
 	s.store.DeleteUserSessions(id)
 
+	s.audit(r, "reset_password", "user", id, "username="+user.Username, "success")
 	writeJSON(w, http.StatusOK, map[string]string{"message": "password reset"})
 }

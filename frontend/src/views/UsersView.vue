@@ -185,6 +185,12 @@ onMounted(loadUsers)
             <td class="perm-yes">Yes</td>
           </tr>
           <tr>
+            <td>View audit log</td>
+            <td class="perm-no">No</td>
+            <td class="perm-yes">Yes</td>
+            <td class="perm-yes">Yes</td>
+          </tr>
+          <tr>
             <td>Modify settings</td>
             <td class="perm-no">No</td>
             <td class="perm-no">No</td>
@@ -192,6 +198,12 @@ onMounted(loadUsers)
           </tr>
           <tr>
             <td>Manage users</td>
+            <td class="perm-no">No</td>
+            <td class="perm-no">No</td>
+            <td class="perm-yes">Yes</td>
+          </tr>
+          <tr>
+            <td>Backup &amp; restore</td>
             <td class="perm-no">No</td>
             <td class="perm-no">No</td>
             <td class="perm-yes">Yes</td>
