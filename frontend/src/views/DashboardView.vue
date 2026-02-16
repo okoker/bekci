@@ -178,6 +178,13 @@ function formatTooltip4h(r) {
   return `${timeStr}: ${r.status} (${r.response_ms}ms)`
 }
 
+function categoryClass(cat) {
+  if (['FW/WAF', 'VPN', 'SIEM/Logging', 'PAM/DAM', 'Security Other'].includes(cat)) return 'badge-cat-security'
+  if (['ISP', 'Router/Switch'].includes(cat)) return 'badge-cat-network'
+  if (cat === 'IT Server') return 'badge-cat-server'
+  return 'badge-cat-other'
+}
+
 onMounted(() => {
   loadDashboard()
   refreshTimer = setInterval(() => {
@@ -233,8 +240,8 @@ onUnmounted(() => {
                 {{ getPreferredCheck(target)?.uptime_90d_pct.toFixed(1) }}%
               </span>
             </template>
-            <span v-if="target.severity && target.severity !== 'info'" :class="['badge', target.severity === 'critical' ? 'badge-sev-critical' : 'badge-sev-warning']" style="font-size: 0.6rem;">
-              {{ target.severity }}
+            <span v-if="target.category && target.category !== 'Other'" :class="['badge', categoryClass(target.category)]" style="font-size: 0.6rem;">
+              {{ target.category }}
             </span>
             <span v-if="targetStateLabel(target)" :class="['badge', targetStateClass(target)]">{{ targetStateLabel(target) }}</span>
           </div>
@@ -432,13 +439,21 @@ onUnmounted(() => {
   border-radius: 10px;
 }
 
-.badge-sev-critical {
-  background: #fee2e2;
-  color: #991b1b;
+.badge-cat-security {
+  background: #ede9fe;
+  color: #6d28d9;
 }
-.badge-sev-warning {
-  background: #fef3c7;
-  color: #92400e;
+.badge-cat-network {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+.badge-cat-server {
+  background: #dcfce7;
+  color: #166534;
+}
+.badge-cat-other {
+  background: #e5e7eb;
+  color: #374151;
 }
 
 /* Uptime bars — thin vertical barcode style */

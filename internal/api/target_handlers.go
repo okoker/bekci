@@ -8,7 +8,11 @@ import (
 )
 
 var validOperators = map[string]bool{"AND": true, "OR": true}
-var validSeverities = map[string]bool{"critical": true, "warning": true, "info": true}
+var validCategories = map[string]bool{
+	"ISP": true, "Router/Switch": true, "FW/WAF": true, "VPN": true,
+	"SIEM/Logging": true, "PAM/DAM": true, "Security Other": true,
+	"IT Server": true, "Other": true,
+}
 var validCheckTypes = map[string]bool{
 	"http": true, "tcp": true, "ping": true,
 	"dns": true, "page_hash": true, "tls_cert": true,
@@ -20,7 +24,7 @@ type targetRequest struct {
 	Description string                   `json:"description"`
 	Enabled     *bool                    `json:"enabled"`
 	Operator    string                   `json:"operator"`
-	Severity    string                   `json:"severity"`
+	Category    string                   `json:"category"`
 	Conditions  []targetConditionRequest `json:"conditions"`
 }
 
@@ -65,11 +69,11 @@ func (s *Server) handleCreateTarget(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "operator must be AND or OR")
 		return
 	}
-	if req.Severity == "" {
-		req.Severity = "critical"
+	if req.Category == "" {
+		req.Category = "Other"
 	}
-	if !validSeverities[req.Severity] {
-		writeError(w, http.StatusBadRequest, "severity must be critical, warning, or info")
+	if !validCategories[req.Category] {
+		writeError(w, http.StatusBadRequest, "invalid category")
 		return
 	}
 
@@ -118,7 +122,7 @@ func (s *Server) handleCreateTarget(w http.ResponseWriter, r *http.Request) {
 		Description: req.Description,
 		Enabled:  enabled,
 		Operator: req.Operator,
-		Severity: req.Severity,
+		Category: req.Category,
 	}
 
 	if err := s.store.CreateTargetWithConditions(t, conds); err != nil {
@@ -177,11 +181,11 @@ func (s *Server) handleUpdateTarget(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "operator must be AND or OR")
 		return
 	}
-	if req.Severity == "" {
-		req.Severity = "critical"
+	if req.Category == "" {
+		req.Category = "Other"
 	}
-	if !validSeverities[req.Severity] {
-		writeError(w, http.StatusBadRequest, "severity must be critical, warning, or info")
+	if !validCategories[req.Category] {
+		writeError(w, http.StatusBadRequest, "invalid category")
 		return
 	}
 
@@ -224,7 +228,7 @@ func (s *Server) handleUpdateTarget(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	if err := s.store.UpdateTargetWithConditions(id, req.Name, req.Host, req.Description, enabled, req.Operator, req.Severity, conds); err != nil {
+	if err := s.store.UpdateTargetWithConditions(id, req.Name, req.Host, req.Description, enabled, req.Operator, req.Category, conds); err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			writeError(w, http.StatusNotFound, "target not found")
 			return

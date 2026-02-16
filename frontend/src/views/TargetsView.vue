@@ -29,7 +29,7 @@ const checkTypes = [
 function getEmptyForm() {
   return {
     name: '', host: '', description: '', enabled: true,
-    operator: 'AND', severity: 'critical',
+    operator: 'AND', category: 'Other',
     conditions: []
   }
 }
@@ -96,7 +96,7 @@ async function loadTargetDetail(id) {
       description: data.description,
       enabled: data.enabled,
       operator: data.operator || 'AND',
-      severity: data.severity || 'critical',
+      category: data.category || 'Other',
       conditions: (data.conditions || []).map(c => {
         let cfg = {}
         try { cfg = JSON.parse(c.config) } catch { cfg = {} }
@@ -130,7 +130,7 @@ async function saveTarget() {
       description: form.value.description,
       enabled: form.value.enabled,
       operator: form.value.operator,
-      severity: form.value.severity,
+      category: form.value.category,
       conditions: form.value.conditions.map(c => ({
         check_id: c.check_id || undefined,
         check_type: c.check_type,
@@ -228,10 +228,15 @@ function stateClass(state) {
   return 'badge-unknown'
 }
 
-function severityClass(sev) {
-  if (sev === 'critical') return 'badge-sev-critical'
-  if (sev === 'warning') return 'badge-sev-warning'
-  return 'badge-sev-info'
+function categoryClass(cat) {
+  // Security-related: purple
+  if (['FW/WAF', 'VPN', 'SIEM/Logging', 'PAM/DAM', 'Security Other'].includes(cat)) return 'badge-cat-security'
+  // Network: blue
+  if (['ISP', 'Router/Switch'].includes(cat)) return 'badge-cat-network'
+  // IT Server: green
+  if (cat === 'IT Server') return 'badge-cat-server'
+  // Other: grey
+  return 'badge-cat-other'
 }
 
 onMounted(() => loadTargets())
@@ -258,7 +263,7 @@ onMounted(() => loadTargets())
             <th>Name</th>
             <th>Host</th>
             <th>State</th>
-            <th>Severity</th>
+            <th>Category</th>
             <th>Conditions</th>
             <th>Enabled</th>
             <th>Actions</th>
@@ -278,7 +283,7 @@ onMounted(() => loadTargets())
                 </span>
                 <span v-else class="text-muted">—</span>
               </td>
-              <td><span :class="['badge', severityClass(t.severity)]">{{ t.severity }}</span></td>
+              <td><span :class="['badge', categoryClass(t.category)]">{{ t.category }}</span></td>
               <td>{{ t.condition_count || 0 }}</td>
               <td><span :class="['badge', t.enabled ? 'badge-active' : 'badge-suspended']">{{ t.enabled ? 'yes' : 'no' }}</span></td>
               <td class="actions" @click.stop>
@@ -353,11 +358,17 @@ onMounted(() => loadTargets())
               </select>
             </div>
             <div class="form-group">
-              <label>Severity</label>
-              <select v-model="form.severity">
-                <option value="critical">Critical</option>
-                <option value="warning">Warning</option>
-                <option value="info">Info</option>
+              <label>Category</label>
+              <select v-model="form.category">
+                <option value="ISP">ISP</option>
+                <option value="Router/Switch">Router/Switch</option>
+                <option value="FW/WAF">FW/WAF</option>
+                <option value="VPN">VPN</option>
+                <option value="SIEM/Logging">SIEM/Logging</option>
+                <option value="PAM/DAM">PAM/DAM</option>
+                <option value="Security Other">Security Other</option>
+                <option value="IT Server">IT Server</option>
+                <option value="Other">Other</option>
               </select>
             </div>
           </div>
@@ -601,17 +612,21 @@ onMounted(() => loadTargets())
   color: #64748b;
 }
 
-.badge-sev-critical {
-  background: #fee2e2;
-  color: #991b1b;
+.badge-cat-security {
+  background: #ede9fe;
+  color: #6d28d9;
 }
-.badge-sev-warning {
-  background: #fef3c7;
-  color: #92400e;
-}
-.badge-sev-info {
+.badge-cat-network {
   background: #dbeafe;
   color: #1d4ed8;
+}
+.badge-cat-server {
+  background: #dcfce7;
+  color: #166534;
+}
+.badge-cat-other {
+  background: #e5e7eb;
+  color: #374151;
 }
 
 /* Modal */

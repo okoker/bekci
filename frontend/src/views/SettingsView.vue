@@ -31,7 +31,9 @@ async function saveSettings() {
   error.value = ''
   loading.value = true
   try {
-    await api.put('/settings', settings.value)
+    const payload = {}
+    for (const [k, v] of Object.entries(settings.value)) payload[k] = String(v)
+    await api.put('/settings', payload)
     success.value = 'Settings saved'
   } catch (e) {
     error.value = e.response?.data?.error || 'Failed to save settings'
