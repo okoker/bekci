@@ -22,6 +22,7 @@ type Config struct {
 
 type ServerConfig struct {
 	Port       int    `yaml:"port"`
+	Host       string `yaml:"host"`
 	DBPath     string `yaml:"db_path"`
 	CORSOrigin string `yaml:"cors_origin"`
 }
@@ -81,6 +82,9 @@ func applyEnvOverrides(cfg *Config) {
 	if v := os.Getenv("BEKCI_DB_PATH"); v != "" {
 		cfg.Server.DBPath = v
 	}
+	if v := os.Getenv("BEKCI_HOST"); v != "" {
+		cfg.Server.Host = v
+	}
 	if v := os.Getenv("BEKCI_CORS_ORIGIN"); v != "" {
 		cfg.Server.CORSOrigin = v
 	}
@@ -89,6 +93,9 @@ func applyEnvOverrides(cfg *Config) {
 func applyDefaults(cfg *Config) {
 	if cfg.Server.Port == 0 {
 		cfg.Server.Port = 65000
+	}
+	if cfg.Server.Host == "" {
+		cfg.Server.Host = "0.0.0.0"
 	}
 	if cfg.Server.DBPath == "" {
 		cfg.Server.DBPath = "bekci.db"

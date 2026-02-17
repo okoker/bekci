@@ -97,8 +97,7 @@ func main() {
 			os.Exit(1)
 		}
 		slog.Warn("Created initial admin user — change the password after first login",
-			"username", cfg.InitAdmin.Username,
-			"password", cfg.InitAdmin.Password)
+			"username", cfg.InitAdmin.Username)
 	}
 
 	// Initialize auth service
@@ -122,7 +121,7 @@ func main() {
 
 	// Setup HTTP server
 	httpServer := &http.Server{
-		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),
+		Addr:         fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),
 		Handler:      apiServer.Handler(),
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 30 * time.Second,
@@ -169,7 +168,7 @@ func main() {
 
 	// Start HTTP server
 	go func() {
-		slog.Warn("Bekci started", "version", version, "port", cfg.Server.Port)
+		slog.Warn("Bekci started", "version", version, "addr", fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port))
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("HTTP server error", "error", err)
 			os.Exit(1)
