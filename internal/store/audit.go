@@ -24,6 +24,15 @@ func (s *Store) CreateAuditEntry(e *AuditEntry) error {
 	return err
 }
 
+func (s *Store) PurgeOldAuditEntries(days int) (int64, error) {
+	cutoff := time.Now().AddDate(0, 0, -days)
+	res, err := s.db.Exec(`DELETE FROM audit_logs WHERE created_at < ?`, cutoff)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
 func (s *Store) ListAuditEntries(limit, offset int) ([]AuditEntry, int, error) {
 	var total int
 	if err := s.db.QueryRow(`SELECT COUNT(*) FROM audit_logs`).Scan(&total); err != nil {

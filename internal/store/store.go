@@ -63,6 +63,7 @@ func (s *Store) migrate() error {
 		s.migration006,
 		s.migration007,
 		s.migration008,
+		s.migration009,
 	}
 
 	for i := current; i < len(migrations); i++ {
@@ -111,6 +112,7 @@ func (s *Store) migration001() error {
 	INSERT INTO settings (key, value) VALUES ('session_timeout_hours', '24');
 	INSERT INTO settings (key, value) VALUES ('history_days', '90');
 	INSERT INTO settings (key, value) VALUES ('default_check_interval', '300');
+	INSERT INTO settings (key, value) VALUES ('audit_retention_days', '91');
 	`
 	_, err := s.db.Exec(schema)
 	return err
@@ -353,5 +355,11 @@ func (s *Store) migration007() error {
 	}
 	// Map old severity values to default category
 	_, err = s.db.Exec(`UPDATE targets SET category = 'Other' WHERE category IN ('critical', 'warning', 'info')`)
+	return err
+}
+
+// migration009 seeds audit_retention_days setting.
+func (s *Store) migration009() error {
+	_, err := s.db.Exec(`INSERT OR IGNORE INTO settings (key, value) VALUES ('audit_retention_days', '91')`)
 	return err
 }
