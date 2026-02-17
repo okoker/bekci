@@ -1,14 +1,14 @@
 # Bekci v2 — Progress
 
-## Session Handover — 17/02/2026
+## Session Handover — 18/02/2026
 
-1. **What was done** — Phase 4a+4b email alerting. SOC page compact redesign (single-line card headers, filters in header row, owl icon linking home).
-2. **Decisions made** — Resend HTTP API (no SDK). API key masked in GET /settings. SOC icon links to `/` via plain `<a>` (works for unauthenticated users too).
-3. **Server state** — Running locally on port 65000. Not deployed yet.
-4. **What's next** — Deploy v2.4.0. Test with real Resend API key. Signal gateway (Phase 4c, deferred).
+1. **What was done** — Phase 4 email alerting. SOC compact redesign. Phone field (Profile self-service + Users table read-only). Category filter on Targets page. User dropdown menu (Profile + Logout) replacing standalone nav links. Removed stale server accounts (adm-tempubuntu, omer.koker). Verified UFW already active. Deployed v2.5.3.
+2. **Decisions made** — Category filters consistent across Dashboard, SOC, and Targets. Phone self-service only (no admin edit). Profile/Logout in user dropdown, not standalone nav links.
+3. **Server state** — Production v2.5.3. UFW active (22/80/443). Stale accounts removed.
+4. **What's next** — Test with real Resend API key. Signal gateway (Phase 4c, deferred). H3/H5 in backlog.
 
 ## Current Status
-**Phase**: Phase 4 (Email Alerting) complete. Ready for deployment.
+**Phase**: Phase 4 (Email Alerting) complete + UI polish. Deployed v2.5.3.
 
 ## Design Documents
 - `docs/DESIGN.md` — Full architecture, schema, API, phases
@@ -149,6 +149,22 @@
 | Frontend: Alert Recipients checkbox list in target edit form | done |
 | Frontend: /alerts page with paginated history table + navbar link | done |
 | Build + visual test: all pages verified working | done |
+
+### UI Polish (DONE)
+| Task | Status |
+|------|--------|
+| SOC page: compact single-line cards, filters in header, owl icon linking home | done |
+| Phone field: Profile page (self-service) + Users table (read-only) | done |
+| Category filter on Targets page (same pattern as Dashboard/SOC) | done |
+| User dropdown menu: Profile + Logout under username, removed standalone nav links | done |
+| Backend: handleUpdateMe accepts phone field | done |
+| Deployed v2.5.3 to production | done |
+
+### Server Maintenance (DONE)
+| Task | Status |
+|------|--------|
+| Removed stale accounts: adm-tempubuntu, omer.koker (no files, no processes) | done |
+| Verified UFW active: 22/80/443 allowed, default deny | done |
 
 ### Phase 5 — Polish
 | Task | Status |

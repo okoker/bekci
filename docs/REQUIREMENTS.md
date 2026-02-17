@@ -26,7 +26,7 @@ Scale: <1000 hosts, typically <400.
 | **Viewer** | view | view | view | view | view self | - |
 
 Auth: JWT + server sessions. No 2FA in v1. bcrypt passwords. Configurable session timeout.
-Self-service: any user can view own profile, update email, change own password.
+Self-service: any user can view own profile, update email and phone, change own password.
 Initial admin seeded from config.yaml / env vars on first boot.
 
 ## Check Types (v1)
@@ -67,8 +67,8 @@ Initial admin seeded from config.yaml / env vars on first boot.
 | `/targets` | Target list + CRUD (unified with conditions) | all (CRUD: operator+) |
 | `/targets/:id` | Target detail, checks, results | all |
 | `/alerts` | Alert history + acknowledge | all (ack: operator+) |
-| `/settings` | System settings — 5 tabs: General, Audit Log (operator+), Users (admin), Backup & Restore (admin), Fail2Ban (admin) | all (General), operator+ (Audit), admin (Users/Backup/F2B) |
-| `/profile` | Own profile, password change | all |
+| `/settings` | System settings — 6 tabs: General, Audit Log (operator+), Users (admin), Backup & Restore (admin), Alerting (admin), Fail2Ban (admin) | all (General), operator+ (Audit), admin (Users/Backup/Alerting/F2B) |
+| `/profile` | Own profile (email, phone), password change. Accessed via user dropdown menu in navbar. | all |
 
 ### Dashboard
 - Two bars per check: 90-day (1 bar/day, 90 bars) + 4-hour (1 bar/5 min, 48 bars)
