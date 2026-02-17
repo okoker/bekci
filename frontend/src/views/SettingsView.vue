@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import api from '../api'
@@ -22,10 +22,6 @@ const labels = {
 }
 
 const boolSettings = new Set(['soc_public'])
-
-// Backup & Restore state
-const restoreFile = ref(null)
-const restoring = ref(false)
 
 async function loadSettings() {
   try {
@@ -50,6 +46,10 @@ async function saveSettings() {
     loading.value = false
   }
 }
+
+// ── Backup & Restore state ──
+const restoreFile = ref(null)
+const restoring = ref(false)
 
 async function downloadBackup() {
   error.value = ''
@@ -96,6 +96,52 @@ async function restoreBackup() {
   } finally {
     restoring.value = false
   }
+}
+
+// ── Audit Log tab state ──
+const auditEntries = ref([])
+const auditTotal = ref(0)
+const auditPage = ref(1)
+const auditLimit = 50
+const auditLoading = ref(false)
+const auditError = ref('')
+
+const auditTotalPages = computed(() => Math.ceil(auditTotal.value / auditLimit) || 1)
+
+async function loadAuditLog() {
+  auditLoading.value = true
+  auditError.value = ''
+  try {
+    const { data } = await api.get('/audit-log', { params: { page: auditPage.value, limit: auditLimit } })
+    auditEntries.value = data.entries
+    auditTotal.value = data.total
+  } catch (e) {
+    auditError.value = 'Failed to load audit log'
+  } finally {
+    auditLoading.value = false
+  }
+}
+
+function auditPrevPage() {
+  if (auditPage.value > 1) { auditPage.value--; loadAuditLog() }
+}
+function auditNextPage() {
+  if (auditPage.value < auditTotalPages.value) { auditPage.value++; loadAuditLog() }
+}
+
+function fmtDate(d) {
+  if (!d) return '-'
+  const dt = new Date(d)
+  return dt.toLocaleDateString('en-GB') + ' ' + dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+}
+
+function actionClass(action) {
+  if (action.includes('login')) return 'badge-action-auth'
+  if (action.includes('create')) return 'badge-action-create'
+  if (action.includes('delete')) return 'badge-action-delete'
+  if (action.includes('suspend')) return 'badge-action-delete'
+  if (action.includes('failed')) return 'badge-action-delete'
+  return 'badge-action-default'
 }
 
 // ── Fail2Ban tab state ──
@@ -151,18 +197,16 @@ function stopF2BPolling() {
   }
 }
 
-function formatTime(iso) {
-  if (!iso) return ''
-  const d = new Date(iso)
-  return d.toLocaleDateString('en-GB') + ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-}
-
-// Start/stop polling when tab changes
+// Start/stop polling and load data when tab changes
 watch(activeTab, (tab) => {
   if (tab === 'fail2ban') {
     startF2BPolling()
   } else {
     stopF2BPolling()
+  }
+  if (tab === 'audit') {
+    auditPage.value = 1
+    loadAuditLog()
   }
 })
 
@@ -185,6 +229,18 @@ onUnmounted(() => {
         :class="{ active: activeTab === 'general' }"
         @click="activeTab = 'general'"
       >General</button>
+      <button
+        v-if="auth.isOperator"
+        class="tab-btn"
+        :class="{ active: activeTab === 'audit' }"
+        @click="activeTab = 'audit'"
+      >Audit Log</button>
+      <button
+        v-if="auth.isAdmin"
+        class="tab-btn"
+        :class="{ active: activeTab === 'backup' }"
+        @click="activeTab = 'backup'"
+      >Backup &amp; Restore</button>
       <button
         v-if="auth.isAdmin"
         class="tab-btn"
@@ -224,8 +280,61 @@ onUnmounted(() => {
           <p v-else class="text-muted">Only admins can modify settings.</p>
         </form>
       </div>
+    </div>
 
-      <div v-if="auth.isAdmin" class="card backup-card">
+    <!-- ── Audit Log Tab ── -->
+    <div v-if="activeTab === 'audit'">
+      <div class="audit-header">
+        <span class="text-muted">{{ auditTotal }} entries</span>
+      </div>
+
+      <div v-if="auditError" class="error-msg">{{ auditError }}</div>
+
+      <div class="card">
+        <table>
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>User</th>
+              <th>Action</th>
+              <th>Resource</th>
+              <th>Detail</th>
+              <th>Status</th>
+              <th>IP</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="auditLoading">
+              <td colspan="7" style="text-align:center; color:#94a3b8;">Loading...</td>
+            </tr>
+            <tr v-else-if="auditEntries.length === 0">
+              <td colspan="7" style="text-align:center; color:#94a3b8;">No audit entries</td>
+            </tr>
+            <tr v-for="e in auditEntries" :key="e.id">
+              <td class="nowrap">{{ fmtDate(e.created_at) }}</td>
+              <td>{{ e.username }}</td>
+              <td><span class="badge" :class="actionClass(e.action)">{{ e.action }}</span></td>
+              <td>{{ e.resource_type }}<span v-if="e.resource_id" class="text-muted"> #{{ e.resource_id.slice(0, 8) }}</span></td>
+              <td class="detail-cell">{{ e.detail || '-' }}</td>
+              <td><span :class="e.status === 'success' ? 'status-ok' : 'status-fail'">{{ e.status }}</span></td>
+              <td class="text-muted">{{ e.ip_address }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="pagination" v-if="auditTotalPages > 1">
+        <button class="btn btn-sm" :disabled="auditPage <= 1" @click="auditPrevPage">Prev</button>
+        <span>Page {{ auditPage }} of {{ auditTotalPages }}</span>
+        <button class="btn btn-sm" :disabled="auditPage >= auditTotalPages" @click="auditNextPage">Next</button>
+      </div>
+    </div>
+
+    <!-- ── Backup & Restore Tab ── -->
+    <div v-if="activeTab === 'backup'">
+      <div v-if="error" class="error-msg">{{ error }}</div>
+
+      <div class="card">
         <h3>Backup & Restore</h3>
         <p class="text-muted">Export or import configuration data (users, targets, checks, rules, settings). Historical check results are not included.</p>
 
@@ -263,7 +372,7 @@ onUnmounted(() => {
         <div class="f2b-header">
           <h3>Fail2Ban Jail Status</h3>
           <div class="f2b-actions">
-            <span v-if="f2bFetchedAt" class="f2b-updated">Updated: {{ formatTime(f2bFetchedAt) }}</span>
+            <span v-if="f2bFetchedAt" class="f2b-updated">Updated: {{ fmtDate(f2bFetchedAt) }}</span>
             <button class="btn btn-sm" :disabled="f2bLoading" @click="loadFail2Ban">
               {{ f2bLoading ? 'Loading...' : 'Refresh' }}
             </button>
@@ -357,7 +466,7 @@ onUnmounted(() => {
   border-bottom-color: #ea580c;
 }
 
-/* ── General tab (preserved) ── */
+/* ── General tab ── */
 .backup-card h3 {
   margin: 0 0 0.5rem;
 }
@@ -408,6 +517,20 @@ onUnmounted(() => {
 .btn-danger:hover {
   background: #b91c1c;
 }
+
+/* ── Audit Log tab ── */
+.audit-header {
+  margin-bottom: 0.75rem;
+}
+.nowrap { white-space: nowrap; }
+.detail-cell { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.status-ok { color: #16a34a; font-weight: 600; font-size: 0.8rem; }
+.status-fail { color: #dc2626; font-weight: 600; font-size: 0.8rem; }
+.pagination { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-top: 1rem; }
+.badge-action-auth { background: #dbeafe; color: #1d4ed8; }
+.badge-action-create { background: #dcfce7; color: #166534; }
+.badge-action-delete { background: #fee2e2; color: #991b1b; }
+.badge-action-default { background: #f1f5f9; color: #475569; }
 
 /* ── Fail2Ban tab ── */
 .f2b-header {
