@@ -20,7 +20,6 @@ async function handleLogout() {
         <router-link to="/targets" class="nav-link">Targets</router-link>
         <router-link to="/soc" class="nav-link">SOC</router-link>
         <router-link v-if="auth.isAdmin" to="/users" class="nav-link">Users</router-link>
-        <router-link v-if="auth.isOperator" to="/audit-log" class="nav-link">Audit Log</router-link>
         <router-link to="/settings" class="nav-link">Settings</router-link>
         <router-link to="/profile" class="nav-link">Profile</router-link>
       </div>
