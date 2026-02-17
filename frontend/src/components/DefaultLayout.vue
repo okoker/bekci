@@ -134,11 +134,13 @@ onUnmounted(() => {
             <div class="health-row" :class="dotColor('cpu')">{{ cpuLabel }}</div>
           </div>
         </div>
-        <div class="user-menu" @click.stop="toggleUserMenu">
-          <span class="navbar-user">{{ auth.user?.username }}</span>
-          <span class="navbar-role">({{ auth.user?.role }})</span>
-          <span class="user-caret">&#9662;</span>
-          <div v-if="showUserMenu" class="user-dropdown">
+        <div class="user-menu">
+          <div class="user-menu-trigger" @click.stop="toggleUserMenu">
+            <span class="navbar-user">{{ auth.user?.username }}</span>
+            <span class="navbar-role">({{ auth.user?.role }})</span>
+            <span class="user-caret">&#9662;</span>
+          </div>
+          <div v-if="showUserMenu" class="user-dropdown" @click.stop>
             <router-link to="/profile" class="user-dropdown-item" @click="showUserMenu = false">Profile</router-link>
             <button class="user-dropdown-item" @click="handleLogout">Logout</button>
           </div>

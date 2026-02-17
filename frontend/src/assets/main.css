@@ -80,6 +80,8 @@ a:hover { text-decoration: underline; }
 
 .user-menu {
   position: relative;
+}
+.user-menu-trigger {
   display: flex;
   align-items: center;
   gap: 0.35rem;
@@ -88,7 +90,7 @@ a:hover { text-decoration: underline; }
   border-radius: 4px;
   transition: background 0.15s;
 }
-.user-menu:hover { background: rgba(255,255,255,0.1); }
+.user-menu-trigger:hover { background: rgba(255,255,255,0.1); }
 .user-caret { font-size: 0.65rem; color: #fed7aa; }
 .user-dropdown {
   position: absolute;
