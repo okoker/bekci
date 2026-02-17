@@ -314,6 +314,9 @@ th {
   display: flex;
   align-items: center;
   gap: 4px;
+  background: rgba(255,255,255,0.25);
+  padding: 4px 8px;
+  border-radius: 10px;
 }
 .health-dot {
   width: 8px;
