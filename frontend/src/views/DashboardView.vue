@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '../api'
 
@@ -8,6 +8,8 @@ const dashboardData = ref([])
 const loading = ref(true)
 const error = ref('')
 const lastUpdated = ref(null)
+const activeCategory = ref('All')
+const categories = ['All', 'Network', 'Security', 'Physical Security', 'Key Services', 'Other']
 
 // Per-check history data
 const historyData = ref({}) // checkId -> { bar90d: [], bar4h: [] }
@@ -119,13 +121,18 @@ function toggleCheck(e, checkId) {
   expandedCheckId.value = expandedCheckId.value === checkId ? null : checkId
 }
 
-// Sort: problems first (unhealthy state or any down check)
-function sortedTargets() {
-  return [...dashboardData.value].sort((a, b) => {
+// Filter by category, sort: problems first (worst uptime at top), then healthy alphabetically
+function filteredAndSortedTargets() {
+  let list = dashboardData.value
+  if (activeCategory.value !== 'All') {
+    list = list.filter(t => t.category === activeCategory.value)
+  }
+  return [...list].sort((a, b) => {
     const aDown = isTargetDown(a)
     const bDown = isTargetDown(b)
     if (aDown && !bDown) return -1
     if (!aDown && bDown) return 1
+    if (aDown && bDown) return getWorstUptime(a) - getWorstUptime(b)
     return a.name.localeCompare(b.name)
   })
 }
@@ -179,10 +186,26 @@ function formatTooltip4h(r) {
 }
 
 function categoryClass(cat) {
-  if (['FW/WAF', 'VPN', 'SIEM/Logging', 'PAM/DAM', 'Security Other'].includes(cat)) return 'badge-cat-security'
-  if (['ISP', 'Router/Switch'].includes(cat)) return 'badge-cat-network'
-  if (cat === 'IT Server') return 'badge-cat-server'
+  if (cat === 'Security') return 'badge-cat-security'
+  if (cat === 'Network') return 'badge-cat-network'
+  if (cat === 'Physical Security') return 'badge-cat-physical'
+  if (cat === 'Key Services') return 'badge-cat-server'
   return 'badge-cat-other'
+}
+
+function categoryCount(cat) {
+  if (cat === 'All') return dashboardData.value.length
+  return dashboardData.value.filter(t => t.category === cat).length
+}
+
+function categoryHasProblems(cat) {
+  const targets = cat === 'All' ? dashboardData.value : dashboardData.value.filter(t => t.category === cat)
+  return targets.some(t => isTargetDown(t))
+}
+
+function getWorstUptime(target) {
+  if (!target.checks || target.checks.length === 0) return 100
+  return Math.min(...target.checks.map(c => c.uptime_90d_pct >= 0 ? c.uptime_90d_pct : 100))
 }
 
 onMounted(() => {
@@ -218,7 +241,16 @@ onUnmounted(() => {
     </div>
 
     <template v-else>
-      <div v-for="target in sortedTargets()" :key="target.id" class="target-card card">
+      <!-- Category filter bar -->
+      <div class="filter-bar">
+        <button v-for="cat in categories" :key="cat"
+          :class="['filter-btn', { active: activeCategory === cat, 'has-problems': categoryHasProblems(cat) }]"
+          @click="activeCategory = cat">
+          {{ cat }} <span class="filter-count">({{ categoryCount(cat) }})</span>
+        </button>
+      </div>
+
+      <div v-for="target in filteredAndSortedTargets()" :key="target.id" class="target-card card">
         <!-- Collapsed view: target header + preferred check bars -->
         <div class="target-header" @click="toggleTarget(target.id)">
           <div class="target-header-left">
@@ -240,7 +272,7 @@ onUnmounted(() => {
                 {{ getPreferredCheck(target)?.uptime_90d_pct.toFixed(1) }}%
               </span>
             </template>
-            <span v-if="target.category && target.category !== 'Other'" :class="['badge', categoryClass(target.category)]" style="font-size: 0.6rem;">
+            <span :class="['badge', categoryClass(target.category)]" style="font-size: 0.6rem;">
               {{ target.category }}
             </span>
             <span v-if="targetStateLabel(target)" :class="['badge', targetStateClass(target)]">{{ targetStateLabel(target) }}</span>
@@ -439,6 +471,48 @@ onUnmounted(() => {
   border-radius: 10px;
 }
 
+/* Filter bar */
+.filter-bar {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+.filter-btn {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.filter-btn:hover {
+  background: #e2e8f0;
+}
+.filter-btn.active {
+  background: #1e40af;
+  color: #fff;
+  border-color: #1e40af;
+}
+.filter-btn.has-problems:not(.active)::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #f56565;
+  margin-right: 0.35rem;
+  vertical-align: middle;
+}
+.filter-count {
+  font-weight: 400;
+  opacity: 0.75;
+}
+
 .badge-cat-security {
   background: #ede9fe;
   color: #6d28d9;
@@ -446,6 +520,10 @@ onUnmounted(() => {
 .badge-cat-network {
   background: #dbeafe;
   color: #1d4ed8;
+}
+.badge-cat-physical {
+  background: #fef3c7;
+  color: #92400e;
 }
 .badge-cat-server {
   background: #dcfce7;

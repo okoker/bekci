@@ -29,7 +29,7 @@ const checkTypes = [
 function getEmptyForm() {
   return {
     name: '', host: '', description: '', enabled: true,
-    operator: 'AND', category: 'Other',
+    operator: 'AND', category: '',
     conditions: []
   }
 }
@@ -229,13 +229,10 @@ function stateClass(state) {
 }
 
 function categoryClass(cat) {
-  // Security-related: purple
-  if (['FW/WAF', 'VPN', 'SIEM/Logging', 'PAM/DAM', 'Security Other'].includes(cat)) return 'badge-cat-security'
-  // Network: blue
-  if (['ISP', 'Router/Switch'].includes(cat)) return 'badge-cat-network'
-  // IT Server: green
-  if (cat === 'IT Server') return 'badge-cat-server'
-  // Other: grey
+  if (cat === 'Security') return 'badge-cat-security'
+  if (cat === 'Network') return 'badge-cat-network'
+  if (cat === 'Physical Security') return 'badge-cat-physical'
+  if (cat === 'Key Services') return 'badge-cat-server'
   return 'badge-cat-other'
 }
 
@@ -359,15 +356,12 @@ onMounted(() => loadTargets())
             </div>
             <div class="form-group">
               <label>Category</label>
-              <select v-model="form.category">
-                <option value="ISP">ISP</option>
-                <option value="Router/Switch">Router/Switch</option>
-                <option value="FW/WAF">FW/WAF</option>
-                <option value="VPN">VPN</option>
-                <option value="SIEM/Logging">SIEM/Logging</option>
-                <option value="PAM/DAM">PAM/DAM</option>
-                <option value="Security Other">Security Other</option>
-                <option value="IT Server">IT Server</option>
+              <select v-model="form.category" required>
+                <option value="" disabled>Select category</option>
+                <option value="Network">Network</option>
+                <option value="Security">Security</option>
+                <option value="Physical Security">Physical Security</option>
+                <option value="Key Services">Key Services</option>
                 <option value="Other">Other</option>
               </select>
             </div>
@@ -623,6 +617,10 @@ onMounted(() => loadTargets())
 .badge-cat-server {
   background: #dcfce7;
   color: #166534;
+}
+.badge-cat-physical {
+  background: #fef3c7;
+  color: #92400e;
 }
 .badge-cat-other {
   background: #e5e7eb;

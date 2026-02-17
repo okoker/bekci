@@ -64,6 +64,7 @@ func (s *Store) migrate() error {
 		s.migration007,
 		s.migration008,
 		s.migration009,
+		s.migration010,
 	}
 
 	for i := current; i < len(migrations); i++ {
@@ -361,5 +362,15 @@ func (s *Store) migration007() error {
 // migration009 seeds audit_retention_days setting.
 func (s *Store) migration009() error {
 	_, err := s.db.Exec(`INSERT OR IGNORE INTO settings (key, value) VALUES ('audit_retention_days', '91')`)
+	return err
+}
+
+// migration010 remaps old granular categories to simplified set.
+func (s *Store) migration010() error {
+	_, err := s.db.Exec(`
+		UPDATE targets SET category = 'Network' WHERE category IN ('ISP', 'Router/Switch');
+		UPDATE targets SET category = 'Security' WHERE category IN ('FW/WAF', 'VPN', 'SIEM/Logging', 'PAM/DAM', 'Security Other');
+		UPDATE targets SET category = 'Key Services' WHERE category = 'IT Server';
+	`)
 	return err
 }
