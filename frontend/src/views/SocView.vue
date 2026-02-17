@@ -149,7 +149,7 @@ function formatTooltip4h(r) {
 
 onMounted(() => {
   loadDashboard()
-  refreshTimer = setInterval(loadDashboard, 30000)
+  refreshTimer = setInterval(loadDashboard, 15000)
 })
 
 onUnmounted(() => {

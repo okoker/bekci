@@ -10,6 +10,7 @@ var knownSettings = map[string]bool{
 	"session_timeout_hours":  true,
 	"history_days":           true,
 	"default_check_interval": true,
+	"audit_retention_days":   true,
 	"soc_public":             true,
 }
 

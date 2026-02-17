@@ -18,6 +18,7 @@ const labels = {
   session_timeout_hours: 'Session Timeout (hours)',
   history_days: 'History Retention (days)',
   default_check_interval: 'Default Check Interval (seconds)',
+  audit_retention_days: 'Audit Log Retention (days)',
   soc_public: 'SOC View Public Access',
 }
 

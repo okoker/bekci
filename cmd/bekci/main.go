@@ -166,6 +166,30 @@ func main() {
 		}
 	}()
 
+	// Daily cleanup: audit log rotation
+	go func() {
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				retentionDays := 91
+				if v, err := db.GetSetting("audit_retention_days"); err == nil && v != "" {
+					if d, err := strconv.Atoi(v); err == nil && d > 0 {
+						retentionDays = d
+					}
+				}
+				if purged, err := db.PurgeOldAuditEntries(retentionDays); err != nil {
+					slog.Error("Audit log cleanup error", "error", err)
+				} else if purged > 0 {
+					slog.Info("Purged old audit entries", "count", purged, "older_than_days", retentionDays)
+				}
+			}
+		}
+	}()
+
 	// Start HTTP server
 	go func() {
 		slog.Warn("Bekci started", "version", version, "addr", fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port))
