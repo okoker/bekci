@@ -299,3 +299,64 @@ th {
   font-size: 1.5rem;
   color: #fff;
 }
+
+/* ─── Health Indicator ──────────────────────────────────── */
+.health-indicator {
+  position: relative;
+  cursor: pointer;
+  padding: 0.25rem 0.375rem;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+.health-indicator:hover { background: rgba(255,255,255,0.15); }
+
+.health-dots {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.health-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  transition: background 0.3s;
+}
+.health-dot.dot-green  { background: #22c55e; }
+.health-dot.dot-yellow { background: #eab308; }
+.health-dot.dot-red    { background: #ef4444; }
+.health-dot.dot-grey   { background: #94a3b8; }
+
+.health-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  background: #fff;
+  color: #1e293b;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.625rem 0.875rem;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  white-space: nowrap;
+  z-index: 100;
+  font-size: 0.8rem;
+  min-width: 180px;
+}
+.health-row {
+  padding: 0.25rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-weight: 500;
+}
+.health-row::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.health-row.dot-green::before  { background: #22c55e; }
+.health-row.dot-yellow::before { background: #eab308; }
+.health-row.dot-red::before    { background: #ef4444; }
+.health-row.dot-grey::before   { background: #94a3b8; }

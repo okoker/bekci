@@ -16,10 +16,11 @@ type Server struct {
 	version    string
 	spa        fs.FS // embedded frontend/dist
 	corsOrigin string
+	dbPath     string
 }
 
 // New creates a new API server.
-func New(st *store.Store, authSvc *auth.Service, sched *scheduler.Scheduler, version string, spa fs.FS, corsOrigin string) *Server {
+func New(st *store.Store, authSvc *auth.Service, sched *scheduler.Scheduler, version string, spa fs.FS, corsOrigin string, dbPath string) *Server {
 	return &Server{
 		store:      st,
 		auth:       authSvc,
@@ -27,6 +28,7 @@ func New(st *store.Store, authSvc *auth.Service, sched *scheduler.Scheduler, ver
 		version:    version,
 		spa:        spa,
 		corsOrigin: corsOrigin,
+		dbPath:     dbPath,
 	}
 }
 
@@ -73,6 +75,9 @@ func (s *Server) Handler() http.Handler {
 	opAuth := func(h http.HandlerFunc) http.Handler {
 		return s.requireAuth(requireRole("admin", "operator")(http.HandlerFunc(h)))
 	}
+
+	// System health
+	mux.Handle("GET /api/system/health", anyAuth(s.handleSystemHealth))
 
 	// Audit log
 	mux.Handle("GET /api/audit-log", opAuth(s.handleListAuditLogs))
