@@ -78,6 +78,48 @@ a:hover { text-decoration: underline; }
 .navbar-user { font-weight: 600; font-size: 0.85rem; }
 .navbar-role { color: #fed7aa; font-size: 0.8rem; }
 
+.user-menu {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+.user-menu:hover { background: rgba(255,255,255,0.1); }
+.user-caret { font-size: 0.65rem; color: #fed7aa; }
+.user-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  min-width: 140px;
+  z-index: 200;
+  overflow: hidden;
+}
+.user-dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.875rem;
+  font-size: 0.85rem;
+  color: #334155;
+  text-decoration: none;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.user-dropdown-item:hover {
+  background: #f1f5f9;
+  color: #ea580c;
+}
+
 .content {
   flex: 1;
   padding: 1.5rem;

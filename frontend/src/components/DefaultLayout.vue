@@ -12,6 +12,19 @@ async function handleLogout() {
   router.push('/login')
 }
 
+// --- User Menu ---
+const showUserMenu = ref(false)
+
+function toggleUserMenu() {
+  showUserMenu.value = !showUserMenu.value
+}
+
+function closeUserMenu(e) {
+  if (!e.target.closest('.user-menu')) {
+    showUserMenu.value = false
+  }
+}
+
 // --- System Health ---
 const health = ref(null)
 const showPopover = ref(false)
@@ -82,11 +95,13 @@ onMounted(() => {
   fetchHealth()
   pollTimer = setInterval(fetchHealth, 30000)
   document.addEventListener('click', closePopover)
+  document.addEventListener('click', closeUserMenu)
 })
 
 onUnmounted(() => {
   clearInterval(pollTimer)
   document.removeEventListener('click', closePopover)
+  document.removeEventListener('click', closeUserMenu)
 })
 </script>
 
@@ -100,7 +115,6 @@ onUnmounted(() => {
         <router-link to="/soc" class="nav-link">SOC</router-link>
         <router-link to="/alerts" class="nav-link">Alerts</router-link>
         <router-link to="/settings" class="nav-link">Settings</router-link>
-        <router-link to="/profile" class="nav-link">Profile</router-link>
       </div>
       <div class="navbar-right">
         <div class="health-indicator" @click.stop="togglePopover">
@@ -115,9 +129,15 @@ onUnmounted(() => {
             <div class="health-row" :class="dotColor('cpu')">{{ cpuLabel }}</div>
           </div>
         </div>
-        <span class="navbar-user">{{ auth.user?.username }}</span>
-        <span class="navbar-role">({{ auth.user?.role }})</span>
-        <button class="btn btn-sm" @click="handleLogout">Logout</button>
+        <div class="user-menu" @click.stop="toggleUserMenu">
+          <span class="navbar-user">{{ auth.user?.username }}</span>
+          <span class="navbar-role">({{ auth.user?.role }})</span>
+          <span class="user-caret">&#9662;</span>
+          <div v-if="showUserMenu" class="user-dropdown">
+            <router-link to="/profile" class="user-dropdown-item" @click="showUserMenu = false">Profile</router-link>
+            <button class="user-dropdown-item" @click="handleLogout">Logout</button>
+          </div>
+        </div>
       </div>
     </nav>
     <main class="content">
