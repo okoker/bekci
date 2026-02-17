@@ -144,6 +144,60 @@ function actionClass(action) {
   return 'badge-action-default'
 }
 
+// ── Users tab state ──
+const users = ref([])
+const userShowCreate = ref(false)
+const userShowResetPw = ref(null)
+const userError = ref('')
+const userSuccess = ref('')
+const userForm = ref({ username: '', email: '', password: '', role: 'operator' })
+const resetPwForm = ref({ password: '' })
+
+async function loadUsers() {
+  try {
+    const { data } = await api.get('/users')
+    users.value = data
+  } catch (e) {
+    userError.value = 'Failed to load users'
+  }
+}
+
+async function createUser() {
+  userError.value = ''
+  try {
+    await api.post('/users', userForm.value)
+    userSuccess.value = 'User created'
+    userShowCreate.value = false
+    userForm.value = { username: '', email: '', password: '', role: 'operator' }
+    await loadUsers()
+  } catch (e) {
+    userError.value = e.response?.data?.error || 'Failed to create user'
+  }
+}
+
+async function toggleSuspend(user) {
+  userError.value = ''
+  try {
+    await api.put(`/users/${user.id}/suspend`, { suspended: user.status === 'active' })
+    userSuccess.value = `User ${user.status === 'active' ? 'suspended' : 'activated'}`
+    await loadUsers()
+  } catch (e) {
+    userError.value = e.response?.data?.error || 'Failed to update user'
+  }
+}
+
+async function resetPassword(userId) {
+  userError.value = ''
+  try {
+    await api.put(`/users/${userId}/password`, { password: resetPwForm.value.password })
+    userSuccess.value = 'Password reset'
+    userShowResetPw.value = null
+    resetPwForm.value = { password: '' }
+  } catch (e) {
+    userError.value = e.response?.data?.error || 'Failed to reset password'
+  }
+}
+
 // ── Fail2Ban tab state ──
 const f2bJails = ref([])
 const f2bError = ref('')
@@ -208,6 +262,9 @@ watch(activeTab, (tab) => {
     auditPage.value = 1
     loadAuditLog()
   }
+  if (tab === 'users') {
+    loadUsers()
+  }
 })
 
 onMounted(() => {
@@ -235,6 +292,12 @@ onUnmounted(() => {
         :class="{ active: activeTab === 'audit' }"
         @click="activeTab = 'audit'"
       >Audit Log</button>
+      <button
+        v-if="auth.isAdmin"
+        class="tab-btn"
+        :class="{ active: activeTab === 'users' }"
+        @click="activeTab = 'users'"
+      >Users</button>
       <button
         v-if="auth.isAdmin"
         class="tab-btn"
@@ -327,6 +390,159 @@ onUnmounted(() => {
         <button class="btn btn-sm" :disabled="auditPage <= 1" @click="auditPrevPage">Prev</button>
         <span>Page {{ auditPage }} of {{ auditTotalPages }}</span>
         <button class="btn btn-sm" :disabled="auditPage >= auditTotalPages" @click="auditNextPage">Next</button>
+      </div>
+    </div>
+
+    <!-- ── Users Tab ── -->
+    <div v-if="activeTab === 'users'">
+      <div class="users-header">
+        <button class="btn btn-primary" @click="userShowCreate = !userShowCreate">
+          {{ userShowCreate ? 'Cancel' : 'Create User' }}
+        </button>
+      </div>
+
+      <div v-if="userError" class="error-msg">{{ userError }}</div>
+      <div v-if="userSuccess" class="success-msg" @click="userSuccess = ''">{{ userSuccess }}</div>
+
+      <div v-if="userShowCreate" class="card">
+        <h3>Create User</h3>
+        <form @submit.prevent="createUser">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Username</label>
+              <input v-model="userForm.username" required />
+            </div>
+            <div class="form-group">
+              <label>Email</label>
+              <input v-model="userForm.email" type="email" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Password (min 8 chars)</label>
+              <input v-model="userForm.password" type="password" required minlength="8" />
+            </div>
+            <div class="form-group">
+              <label>Role</label>
+              <select v-model="userForm.role">
+                <option value="admin">Admin</option>
+                <option value="operator">Operator</option>
+                <option value="viewer">Viewer</option>
+              </select>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary">Create</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <table>
+          <thead>
+            <tr>
+              <th>Username</th>
+              <th>Email</th>
+              <th>Role</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="u in users" :key="u.id">
+              <td>{{ u.username }}</td>
+              <td>{{ u.email || '-' }}</td>
+              <td><span :class="'badge badge-' + u.role">{{ u.role }}</span></td>
+              <td><span :class="'badge badge-' + u.status">{{ u.status }}</span></td>
+              <td class="actions">
+                <button class="btn btn-sm" @click="toggleSuspend(u)">
+                  {{ u.status === 'active' ? 'Suspend' : 'Activate' }}
+                </button>
+                <button class="btn btn-sm" @click="userShowResetPw = (userShowResetPw === u.id ? null : u.id)">
+                  Reset PW
+                </button>
+                <div v-if="userShowResetPw === u.id" class="inline-form">
+                  <input v-model="resetPwForm.password" type="password" placeholder="New password" minlength="8" />
+                  <button class="btn btn-sm btn-primary" @click="resetPassword(u.id)">Set</button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card privileges-card">
+        <h3>Role Privileges</h3>
+        <table class="privileges-table">
+          <thead>
+            <tr>
+              <th>Action</th>
+              <th>Viewer</th>
+              <th>Operator</th>
+              <th>Admin</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>View dashboard &amp; SOC</td>
+              <td class="perm-yes">Yes</td>
+              <td class="perm-yes">Yes</td>
+              <td class="perm-yes">Yes</td>
+            </tr>
+            <tr>
+              <td>View targets, checks &amp; results</td>
+              <td class="perm-yes">Yes</td>
+              <td class="perm-yes">Yes</td>
+              <td class="perm-yes">Yes</td>
+            </tr>
+            <tr>
+              <td>View settings</td>
+              <td class="perm-yes">Yes</td>
+              <td class="perm-yes">Yes</td>
+              <td class="perm-yes">Yes</td>
+            </tr>
+            <tr>
+              <td>Edit own profile &amp; password</td>
+              <td class="perm-yes">Yes</td>
+              <td class="perm-yes">Yes</td>
+              <td class="perm-yes">Yes</td>
+            </tr>
+            <tr>
+              <td>Create, edit &amp; delete targets</td>
+              <td class="perm-no">No</td>
+              <td class="perm-yes">Yes</td>
+              <td class="perm-yes">Yes</td>
+            </tr>
+            <tr>
+              <td>Run checks manually</td>
+              <td class="perm-no">No</td>
+              <td class="perm-yes">Yes</td>
+              <td class="perm-yes">Yes</td>
+            </tr>
+            <tr>
+              <td>View audit log</td>
+              <td class="perm-no">No</td>
+              <td class="perm-yes">Yes</td>
+              <td class="perm-yes">Yes</td>
+            </tr>
+            <tr>
+              <td>Modify settings</td>
+              <td class="perm-no">No</td>
+              <td class="perm-no">No</td>
+              <td class="perm-yes">Yes</td>
+            </tr>
+            <tr>
+              <td>Manage users</td>
+              <td class="perm-no">No</td>
+              <td class="perm-no">No</td>
+              <td class="perm-yes">Yes</td>
+            </tr>
+            <tr>
+              <td>Backup &amp; restore</td>
+              <td class="perm-no">No</td>
+              <td class="perm-no">No</td>
+              <td class="perm-yes">Yes</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
 
@@ -531,6 +747,34 @@ onUnmounted(() => {
 .badge-action-create { background: #dcfce7; color: #166534; }
 .badge-action-delete { background: #fee2e2; color: #991b1b; }
 .badge-action-default { background: #f1f5f9; color: #475569; }
+
+/* ── Users tab ── */
+.users-header {
+  margin-bottom: 0.75rem;
+}
+.privileges-card {
+  margin-top: 1.5rem;
+  opacity: 0.85;
+}
+.privileges-card h3 {
+  margin-bottom: 0.75rem;
+  font-size: 0.95rem;
+}
+.privileges-table {
+  font-size: 0.85rem;
+}
+.privileges-table th:not(:first-child),
+.privileges-table td:not(:first-child) {
+  text-align: center;
+  width: 100px;
+}
+.perm-yes {
+  color: #16a34a;
+  font-weight: 600;
+}
+.perm-no {
+  color: #9ca3af;
+}
 
 /* ── Fail2Ban tab ── */
 .f2b-header {
