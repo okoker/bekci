@@ -4,6 +4,7 @@ import (
 	"io/fs"
 	"net/http"
 
+	"github.com/bekci/internal/alerter"
 	"github.com/bekci/internal/auth"
 	"github.com/bekci/internal/scheduler"
 	"github.com/bekci/internal/store"
@@ -13,6 +14,7 @@ type Server struct {
 	store      *store.Store
 	auth       *auth.Service
 	scheduler  *scheduler.Scheduler
+	alerter    *alerter.AlertService
 	version    string
 	spa        fs.FS // embedded frontend/dist
 	corsOrigin string
@@ -20,11 +22,12 @@ type Server struct {
 }
 
 // New creates a new API server.
-func New(st *store.Store, authSvc *auth.Service, sched *scheduler.Scheduler, version string, spa fs.FS, corsOrigin string, dbPath string) *Server {
+func New(st *store.Store, authSvc *auth.Service, sched *scheduler.Scheduler, alertSvc *alerter.AlertService, version string, spa fs.FS, corsOrigin string, dbPath string) *Server {
 	return &Server{
 		store:      st,
 		auth:       authSvc,
 		scheduler:  sched,
+		alerter:    alertSvc,
 		version:    version,
 		spa:        spa,
 		corsOrigin: corsOrigin,
@@ -89,6 +92,10 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("PUT /api/targets/{id}", opAuth(s.handleUpdateTarget))
 	mux.Handle("DELETE /api/targets/{id}", opAuth(s.handleDeleteTarget))
 
+	// Target alert recipients
+	mux.Handle("GET /api/targets/{id}/recipients", anyAuth(s.handleListRecipients))
+	mux.Handle("PUT /api/targets/{id}/recipients", opAuth(s.handleSetRecipients))
+
 	// Checks (read-only + run)
 	mux.Handle("GET /api/targets/{id}/checks", anyAuth(s.handleListChecks))
 	mux.Handle("POST /api/checks/{id}/run", opAuth(s.handleRunCheckNow))
@@ -97,6 +104,10 @@ func (s *Server) Handler() http.Handler {
 	// Dashboard
 	mux.Handle("GET /api/dashboard/status", anyAuth(s.handleDashboardStatus))
 	mux.Handle("GET /api/dashboard/history/{checkId}", anyAuth(s.handleCheckHistory))
+
+	// Alerts
+	mux.Handle("GET /api/alerts", anyAuth(s.handleListAlerts))
+	mux.Handle("POST /api/settings/test-email", adminAuth(s.handleTestEmail))
 
 	// SOC — conditional auth based on soc_public setting
 	mux.Handle("GET /api/soc/status", s.socAuth(http.HandlerFunc(s.handleSocStatus)))

@@ -12,6 +12,12 @@ var knownSettings = map[string]bool{
 	"default_check_interval": true,
 	"audit_retention_days":   true,
 	"soc_public":             true,
+	// Alerting settings
+	"alert_method":     true,
+	"resend_api_key":   true,
+	"alert_from_email": true,
+	"alert_cooldown_s": true,
+	"alert_realert_s":  true,
 }
 
 // Boolean settings that accept "true"/"false" instead of positive integers.
@@ -19,11 +25,28 @@ var boolSettings = map[string]bool{
 	"soc_public": true,
 }
 
+// String settings that accept arbitrary text (not validated as positive integers).
+var stringSettings = map[string]bool{
+	"alert_method":     true,
+	"resend_api_key":   true,
+	"alert_from_email": true,
+}
+
+// Zero-allowed integer settings (allow 0 as a valid value, e.g. to disable re-alerting).
+var zeroAllowedSettings = map[string]bool{
+	"alert_cooldown_s": true,
+	"alert_realert_s":  true,
+}
+
 func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	settings, err := s.store.GetAllSettings()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to load settings")
 		return
+	}
+	// Mask sensitive values — show "configured" or empty
+	if v, ok := settings["resend_api_key"]; ok && v != "" {
+		settings["resend_api_key"] = "••••••••"
 	}
 	writeJSON(w, http.StatusOK, settings)
 }
@@ -35,7 +58,7 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate: only known keys, must be positive integers (or bool for soc_public)
+	// Validate: only known keys, type-appropriate values
 	for key, val := range req {
 		if !knownSettings[key] {
 			writeError(w, http.StatusBadRequest, "unknown setting: "+key)
@@ -46,6 +69,15 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusBadRequest, "setting "+key+" must be 'true' or 'false'")
 				return
 			}
+		} else if stringSettings[key] {
+			// Accept any string (including empty for clearing API keys)
+			continue
+		} else if zeroAllowedSettings[key] {
+			n, err := strconv.Atoi(val)
+			if err != nil || n < 0 {
+				writeError(w, http.StatusBadRequest, "setting "+key+" must be a non-negative integer")
+				return
+			}
 		} else {
 			n, err := strconv.Atoi(val)
 			if err != nil || n < 1 {
@@ -53,6 +85,11 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+	}
+
+	// Don't overwrite API key with the masked value
+	if v, ok := req["resend_api_key"]; ok && v == "••••••••" {
+		delete(req, "resend_api_key")
 	}
 
 	if err := s.store.SetSettings(req); err != nil {

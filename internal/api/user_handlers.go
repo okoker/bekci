@@ -117,6 +117,7 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var req struct {
 		Email string `json:"email"`
+		Phone string `json:"phone"`
 		Role  string `json:"role"`
 	}
 	if err := readJSON(r, &req); err != nil {
@@ -156,8 +157,9 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 	if email == "" {
 		email = user.Email
 	}
+	phone := req.Phone
 
-	if err := s.store.UpdateUser(id, email, role); err != nil {
+	if err := s.store.UpdateUser(id, email, phone, role); err != nil {
 		writeError(w, http.StatusInternalServerError, "update failed")
 		return
 	}

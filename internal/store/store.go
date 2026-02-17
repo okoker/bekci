@@ -65,6 +65,7 @@ func (s *Store) migrate() error {
 		s.migration008,
 		s.migration009,
 		s.migration010,
+		s.migration011,
 	}
 
 	for i := current; i < len(migrations); i++ {
@@ -371,6 +372,33 @@ func (s *Store) migration010() error {
 		UPDATE targets SET category = 'Network' WHERE category IN ('ISP', 'Router/Switch');
 		UPDATE targets SET category = 'Security' WHERE category IN ('FW/WAF', 'VPN', 'SIEM/Logging', 'PAM/DAM', 'Security Other');
 		UPDATE targets SET category = 'Key Services' WHERE category = 'IT Server';
+	`)
+	return err
+}
+
+// migration011 adds alerting support: target_alert_recipients, phone on users, target_id/recipient_id on alert_history,
+// drops unused alert_channels/rule_alerts tables, seeds alerting settings.
+func (s *Store) migration011() error {
+	_, err := s.db.Exec(`
+		CREATE TABLE target_alert_recipients (
+			target_id TEXT NOT NULL REFERENCES targets(id) ON DELETE CASCADE,
+			user_id   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			PRIMARY KEY (target_id, user_id)
+		);
+
+		ALTER TABLE users ADD COLUMN phone TEXT NOT NULL DEFAULT '';
+
+		ALTER TABLE alert_history ADD COLUMN target_id TEXT NOT NULL DEFAULT '';
+		ALTER TABLE alert_history ADD COLUMN recipient_id TEXT NOT NULL DEFAULT '';
+
+		DROP TABLE IF EXISTS rule_alerts;
+		DROP TABLE IF EXISTS alert_channels;
+
+		INSERT OR IGNORE INTO settings (key, value) VALUES ('alert_method', 'email');
+		INSERT OR IGNORE INTO settings (key, value) VALUES ('resend_api_key', '');
+		INSERT OR IGNORE INTO settings (key, value) VALUES ('alert_from_email', '');
+		INSERT OR IGNORE INTO settings (key, value) VALUES ('alert_cooldown_s', '1800');
+		INSERT OR IGNORE INTO settings (key, value) VALUES ('alert_realert_s', '3600');
 	`)
 	return err
 }

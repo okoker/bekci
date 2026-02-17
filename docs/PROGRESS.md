@@ -2,13 +2,13 @@
 
 ## Session Handover — 17/02/2026
 
-1. **What was done** — Added system health indicator: `GET /api/system/health` (net/disk/cpu), 3 colored dots in navbar with click popover. Deployed v2.3.0.
-2. **Decisions made** — Net check via TCP dial to 1.1.1.1:53 (no ICMP privileges needed). Disk via syscall.Statfs on DB path. Load via /proc/loadavg (Linux) with sysctl fallback (macOS).
-3. **Server state** — Running v2.3.0 at `https://bekci.home`.
-4. **What's next** — Phase 4 (Alerting).
+1. **What was done** — Phase 4a+4b: Email alerting via Resend API. migration011 (target_alert_recipients, phone column, alert_history columns, settings). Alerter module (dispatch, cooldown, re-alert, templates). Engine dispatcher hook. API handlers (recipients, alert history, test email). Frontend: Alerting tab in Settings, recipients in target edit form, Alerts page + navbar link.
+2. **Decisions made** — Resend HTTP API (no SDK). API key masked in GET /settings. Cooldown bypass for recovery alerts. Re-alert via 60s ticker. Creator auto-added as recipient on target create.
+3. **Server state** — Running locally on port 65000. Not deployed yet.
+4. **What's next** — Deploy v2.4.0. Test with real Resend API key. Signal gateway (Phase 4c, deferred).
 
 ## Current Status
-**Phase**: System health indicator added to navbar. Deployed v2.3.0.
+**Phase**: Phase 4 (Email Alerting) complete. Ready for deployment.
 
 ## Design Documents
 - `docs/DESIGN.md` — Full architecture, schema, API, phases
@@ -133,13 +133,22 @@
 | 30s poll interval, grey dots on failure | done |
 | Deployed v2.3.0 to production | done |
 
-### Phase 4 — Alerting
+### Phase 4 — Email Alerting (DONE)
 | Task | Status |
 |------|--------|
-| Alert channel management (API + Vue) | pending |
-| Email (Resend) sender | pending |
-| Alert lifecycle: trigger, resolve, cooldown | pending |
-| Alert history page + acknowledge UI | pending |
+| migration011: target_alert_recipients, users.phone, alert_history columns, seed settings | done |
+| Store: alerts.go (recipients CRUD, alert history, firing rules query) | done |
+| User struct: added Phone field, updated all queries + callers | done |
+| Targets: auto-add creator as alert recipient, include recipient_ids in detail | done |
+| Alerter module: internal/alerter/ (dispatch, cooldown, re-alert, email sender, templates) | done |
+| Engine: AlertDispatcher interface, async dispatch on state change | done |
+| API: recipients endpoints, alert history, test email, alerting settings in knownSettings | done |
+| Settings: API key masking, string/zero-allowed validation for alerting keys | done |
+| main.go: wire alerter to engine + API, 60s re-alert ticker | done |
+| Frontend: Alerting tab in Settings (method, API key, from email, cooldown, re-alert, test) | done |
+| Frontend: Alert Recipients checkbox list in target edit form | done |
+| Frontend: /alerts page with paginated history table + navbar link | done |
+| Build + visual test: all pages verified working | done |
 
 ### Phase 5 — Polish
 | Task | Status |

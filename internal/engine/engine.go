@@ -10,12 +10,23 @@ import (
 	"github.com/bekci/internal/store"
 )
 
+// AlertDispatcher is called when a rule state changes.
+type AlertDispatcher interface {
+	Dispatch(ruleID, oldState, newState string)
+}
+
 type Engine struct {
-	store *store.Store
+	store      *store.Store
+	dispatcher AlertDispatcher
 }
 
 func New(st *store.Store) *Engine {
 	return &Engine{store: st}
+}
+
+// SetDispatcher sets the alert dispatcher for state change notifications.
+func (e *Engine) SetDispatcher(d AlertDispatcher) {
+	e.dispatcher = d
 }
 
 // Evaluate evaluates all rules that reference the given check.
@@ -94,6 +105,11 @@ func (e *Engine) evaluateRule(rule store.Rule) {
 		}
 		slog.Warn("Rule state changed", "rule_id", rule.ID, "rule_name", rule.Name,
 			"from", oldState, "to", newState, "severity", rule.Severity)
+
+		// Dispatch alert asynchronously
+		if e.dispatcher != nil {
+			go e.dispatcher.Dispatch(rule.ID, oldState, newState)
+		}
 	} else {
 		_ = e.store.TouchRuleEvaluated(rule.ID)
 	}

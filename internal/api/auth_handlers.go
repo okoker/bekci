@@ -94,7 +94,7 @@ func (s *Server) handleUpdateMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.store.UpdateUser(user.ID, req.Email, user.Role); err != nil {
+	if err := s.store.UpdateUser(user.ID, req.Email, user.Phone, user.Role); err != nil {
 		writeError(w, http.StatusInternalServerError, "update failed")
 		return
 	}

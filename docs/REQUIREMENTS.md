@@ -136,12 +136,21 @@ Initial admin seeded from config.yaml / env vars on first boot.
 ### Alerts
 | Method | Path | Roles | Description |
 |--------|------|-------|-------------|
-| GET | `/api/alerts` | any | History (paginated) |
-| POST | `/api/alerts/:id/ack` | operator+ | Acknowledge |
-| GET | `/api/alert-channels` | admin | List channels |
-| POST | `/api/alert-channels` | admin | Create channel |
-| PUT | `/api/alert-channels/:id` | admin | Update channel |
-| DELETE | `/api/alert-channels/:id` | admin | Delete channel |
+| GET | `/api/alerts` | any | Alert history (paginated: `?page=1&limit=50`) |
+| GET | `/api/targets/:id/recipients` | any | List alert recipients for target |
+| PUT | `/api/targets/:id/recipients` | operator+ | Set recipients: `{ user_ids: [...] }` |
+| POST | `/api/settings/test-email` | admin | Send test email to current user |
+
+**Alert response**: `{ entries: [...], total: N }` where each entry has `id, rule_id, target_id, target_name, recipient_id, recipient_name, alert_type, message, sent_at`.
+
+**Target detail response** now includes `recipient_ids: [...]`.
+
+**Alerting settings** (in settings table):
+- `alert_method` — `email` | `signal` | `email+signal`
+- `resend_api_key` — Resend API key (masked in GET response)
+- `alert_from_email` — Sender email address
+- `alert_cooldown_s` — Min seconds between alerts per rule (default 1800)
+- `alert_realert_s` — Re-alert interval for ongoing issues (0 = disabled, default 3600)
 
 ### Dashboard
 | Method | Path | Roles | Description |
