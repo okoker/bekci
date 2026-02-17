@@ -190,22 +190,20 @@ onUnmounted(() => {
 <template>
   <div class="soc-page">
     <header class="soc-header">
-      <h1>Bekci SOC</h1>
+      <a href="/" class="soc-brand"><img src="/bekci-icon.png" alt="Bekci" class="soc-icon" />SOC</a>
+      <div v-if="!loading && dashboardData.length > 0" class="soc-filter-bar">
+        <button v-for="cat in categories" :key="cat"
+          :class="['soc-filter-btn', { active: activeCategory === cat, 'has-problems': categoryHasProblems(cat) }]"
+          @click="activeCategory = cat">
+          {{ cat }} <span class="soc-filter-count">({{ categoryCount(cat) }})</span>
+        </button>
+      </div>
       <span v-if="lastUpdated" class="soc-updated">
-        Last updated {{ lastUpdated.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) }}
+        {{ lastUpdated.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) }}
       </span>
     </header>
 
     <div v-if="error" class="soc-error">{{ error }}</div>
-
-    <!-- Category filter bar -->
-    <div v-if="!loading && dashboardData.length > 0" class="soc-filter-bar">
-      <button v-for="cat in categories" :key="cat"
-        :class="['soc-filter-btn', { active: activeCategory === cat, 'has-problems': categoryHasProblems(cat) }]"
-        @click="activeCategory = cat">
-        {{ cat }} <span class="soc-filter-count">({{ categoryCount(cat) }})</span>
-      </button>
-    </div>
 
     <div v-if="loading" class="soc-loading">Loading...</div>
 
@@ -213,19 +211,17 @@ onUnmounted(() => {
       <div v-for="target in filteredAndSortedTargets()" :key="target.id" class="soc-card" :class="{ 'soc-card-down': hasDownCheckTarget(target) }">
         <div class="soc-card-header">
           <span class="soc-target-name">{{ target.name }}</span>
+          <span class="soc-host">{{ target.host }}</span>
+          <span v-if="getPreferredCheck(target)?.uptime_90d_pct >= 0" class="soc-uptime"
+            :style="{ color: uptimeColor(getPreferredCheck(target)?.uptime_90d_pct) }">
+            {{ getPreferredCheck(target)?.uptime_90d_pct.toFixed(1) }}%
+          </span>
           <div class="soc-header-badges">
             <span :class="['soc-cat-badge', categoryClass(target.category)]">{{ target.category }}</span>
             <span :class="['soc-status-badge', hasDownCheckTarget(target) ? 'soc-badge-down' : 'soc-badge-up']">
               {{ hasDownCheckTarget(target) ? 'DOWN' : 'UP' }}
             </span>
           </div>
-        </div>
-        <div class="soc-card-meta">
-          <span>{{ target.host }}</span>
-          <span v-if="getPreferredCheck(target)?.uptime_90d_pct >= 0" class="soc-uptime"
-            :style="{ color: uptimeColor(getPreferredCheck(target)?.uptime_90d_pct) }">
-            {{ getPreferredCheck(target)?.uptime_90d_pct.toFixed(1) }}%
-          </span>
         </div>
         <!-- Compact bars -->
         <div v-if="getPreferredCheck(target)" class="soc-bars">
@@ -254,27 +250,42 @@ onUnmounted(() => {
   min-height: 100vh;
   background: #0f172a;
   color: #e2e8f0;
-  padding: 1.5rem;
+  padding: 1rem 1.5rem;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 .soc-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.5rem;
-  padding-bottom: 1rem;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
   border-bottom: 1px solid #1e293b;
 }
-.soc-header h1 {
-  font-size: 1.5rem;
+.soc-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 1.25rem;
   font-weight: 700;
   color: #fff;
-  letter-spacing: 0.05em;
+  text-decoration: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.soc-brand:hover {
+  opacity: 0.85;
+}
+.soc-icon {
+  width: 28px;
+  height: 28px;
 }
 .soc-updated {
   color: #64748b;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .soc-error {
@@ -309,7 +320,7 @@ onUnmounted(() => {
   background: #1e293b;
   border: 1px solid #334155;
   border-radius: 8px;
-  padding: 1rem;
+  padding: 0.6rem 0.8rem;
 }
 .soc-card-down {
   border-color: #f56565;
@@ -317,19 +328,34 @@ onUnmounted(() => {
 
 .soc-card-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.35rem;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
 }
 .soc-target-name {
   font-weight: 600;
-  font-size: 1rem;
+  font-size: 0.9rem;
   color: #fff;
+  white-space: nowrap;
+}
+.soc-host {
+  font-size: 0.75rem;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.soc-uptime {
+  font-weight: 700;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  margin-left: auto;
 }
 .soc-status-badge {
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   font-weight: 700;
-  padding: 0.15rem 0.5rem;
+  padding: 0.1rem 0.4rem;
   border-radius: 10px;
   text-transform: uppercase;
 }
@@ -342,29 +368,16 @@ onUnmounted(() => {
   color: #f56565;
 }
 
-.soc-card-meta {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.8rem;
-  color: #94a3b8;
-  margin-bottom: 0.75rem;
-}
-.soc-uptime {
-  font-weight: 700;
-  font-size: 0.9rem;
-}
-
 .soc-bars {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
 .soc-bar-track {
   display: flex;
   gap: 1px;
-  height: 18px;
+  height: 16px;
   align-items: stretch;
 }
 
@@ -378,20 +391,21 @@ onUnmounted(() => {
   opacity: 0.65;
 }
 
-/* Filter bar (dark theme) */
+/* Filter bar (inline in header) */
 .soc-filter-bar {
   display: flex;
-  justify-content: center;
-  gap: 0.5rem;
-  margin-bottom: 1.25rem;
+  gap: 0.35rem;
   flex-wrap: wrap;
+  justify-content: center;
+  flex: 1;
+  min-width: 0;
 }
 .soc-filter-btn {
   background: #1e293b;
   border: 1px solid #334155;
   border-radius: 20px;
-  padding: 0.35rem 0.85rem;
-  font-size: 0.8rem;
+  padding: 0.25rem 0.65rem;
+  font-size: 0.75rem;
   font-weight: 500;
   color: #94a3b8;
   cursor: pointer;
