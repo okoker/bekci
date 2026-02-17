@@ -124,7 +124,12 @@ func (s *Server) handleCreateTarget(w http.ResponseWriter, r *http.Request) {
 		Category: req.Category,
 	}
 
-	if err := s.store.CreateTargetWithConditions(t, conds); err != nil {
+	creatorID := ""
+	if claims := getClaims(r); claims != nil {
+		creatorID = claims.Subject
+	}
+
+	if err := s.store.CreateTargetWithConditions(t, conds, creatorID); err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
 			writeError(w, http.StatusConflict, "target name already exists")
 			return

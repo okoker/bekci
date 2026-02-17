@@ -98,6 +98,7 @@ onUnmounted(() => {
         <router-link to="/" class="nav-link">Dashboard</router-link>
         <router-link to="/targets" class="nav-link">Targets</router-link>
         <router-link to="/soc" class="nav-link">SOC</router-link>
+        <router-link to="/alerts" class="nav-link">Alerts</router-link>
         <router-link to="/settings" class="nav-link">Settings</router-link>
         <router-link to="/profile" class="nav-link">Profile</router-link>
       </div>

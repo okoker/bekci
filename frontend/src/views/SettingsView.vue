@@ -24,6 +24,9 @@ const labels = {
 
 const boolSettings = new Set(['soc_public'])
 
+// Keys shown on the General tab (filter alerting keys out)
+const generalKeys = new Set(Object.keys(labels))
+
 async function loadSettings() {
   try {
     const { data } = await api.get('/settings')
@@ -199,6 +202,69 @@ async function resetPassword(userId) {
   }
 }
 
+// ── Alerting tab state ──
+const alertError = ref('')
+const alertSuccess = ref('')
+const alertSaving = ref(false)
+const alertTesting = ref(false)
+
+const alertForm = ref({
+  alert_method: 'email',
+  resend_api_key: '',
+  alert_from_email: '',
+  alert_cooldown_s: '1800',
+  alert_realert_s: '3600',
+})
+
+function loadAlertSettings() {
+  // Pull alerting keys from the shared settings ref
+  const s = settings.value
+  alertForm.value = {
+    alert_method: s.alert_method || 'email',
+    resend_api_key: s.resend_api_key || '',
+    alert_from_email: s.alert_from_email || '',
+    alert_cooldown_s: s.alert_cooldown_s || '1800',
+    alert_realert_s: s.alert_realert_s || '3600',
+  }
+}
+
+async function saveAlertSettings() {
+  alertError.value = ''
+  alertSuccess.value = ''
+  alertSaving.value = true
+  try {
+    await api.put('/settings', {
+      alert_method: alertForm.value.alert_method,
+      resend_api_key: alertForm.value.resend_api_key,
+      alert_from_email: alertForm.value.alert_from_email,
+      alert_cooldown_s: String(alertForm.value.alert_cooldown_s),
+      alert_realert_s: String(alertForm.value.alert_realert_s),
+    })
+    alertSuccess.value = 'Alert settings saved'
+    // Reload to get masked API key
+    await loadSettings()
+    loadAlertSettings()
+  } catch (e) {
+    alertError.value = e.response?.data?.error || 'Failed to save alert settings'
+  } finally {
+    alertSaving.value = false
+  }
+}
+
+async function sendTestEmail() {
+  alertError.value = ''
+  alertSuccess.value = ''
+  alertTesting.value = true
+  try {
+    const { data } = await api.post('/settings/test-email')
+    alertSuccess.value = data.message || 'Test email sent'
+  } catch (e) {
+    alertError.value = e.response?.data?.error || 'Failed to send test email'
+  } finally {
+    alertTesting.value = false
+  }
+}
+
 // ── Fail2Ban tab state ──
 const f2bJails = ref([])
 const f2bError = ref('')
@@ -266,6 +332,9 @@ watch(activeTab, (tab) => {
   if (tab === 'users') {
     loadUsers()
   }
+  if (tab === 'alerting') {
+    loadAlertSettings()
+  }
 })
 
 onMounted(() => {
@@ -308,6 +377,12 @@ onUnmounted(() => {
       <button
         v-if="auth.isAdmin"
         class="tab-btn"
+        :class="{ active: activeTab === 'alerting' }"
+        @click="activeTab = 'alerting'"
+      >Alerting</button>
+      <button
+        v-if="auth.isAdmin"
+        class="tab-btn"
         :class="{ active: activeTab === 'fail2ban' }"
         @click="activeTab = 'fail2ban'"
       >Fail2Ban</button>
@@ -320,7 +395,7 @@ onUnmounted(() => {
 
       <div class="card">
         <form @submit.prevent="saveSettings">
-          <div v-for="(value, key) in settings" :key="key" class="form-group">
+          <div v-for="(value, key) in settings" :key="key" v-show="generalKeys.has(key)" class="form-group">
             <label>{{ labels[key] || key }}</label>
             <select
               v-if="boolSettings.has(key)"
@@ -583,6 +658,60 @@ onUnmounted(() => {
       </div>
     </div>
 
+    <!-- ── Alerting Tab ── -->
+    <div v-if="activeTab === 'alerting'">
+      <div v-if="alertError" class="error-msg">{{ alertError }}</div>
+      <div v-if="alertSuccess" class="success-msg" @click="alertSuccess = ''">{{ alertSuccess }}</div>
+
+      <div class="card">
+        <h3>Email Alerting</h3>
+        <p class="text-muted">Configure alerts sent when targets go down or recover. Uses the Resend API.</p>
+
+        <form @submit.prevent="saveAlertSettings">
+          <div class="form-group">
+            <label>Alert Method</label>
+            <select v-model="alertForm.alert_method">
+              <option value="email">Email</option>
+              <option value="signal">Signal (coming soon)</option>
+              <option value="email+signal">Email + Signal</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Resend API Key</label>
+            <input v-model="alertForm.resend_api_key" type="password" placeholder="re_..." autocomplete="off" />
+          </div>
+
+          <div class="form-group">
+            <label>From Email Address</label>
+            <input v-model="alertForm.alert_from_email" type="email" placeholder="alerts@yourdomain.com" />
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Cooldown (minutes)</label>
+              <input type="number" :value="Math.round(alertForm.alert_cooldown_s / 60)" @input="alertForm.alert_cooldown_s = $event.target.value * 60" min="0" />
+              <span class="text-muted input-hint">Min wait between alerts for same target</span>
+            </div>
+            <div class="form-group">
+              <label>Re-alert Interval (minutes)</label>
+              <input type="number" :value="Math.round(alertForm.alert_realert_s / 60)" @input="alertForm.alert_realert_s = $event.target.value * 60" min="0" />
+              <span class="text-muted input-hint">Repeat alert if still down (0 = disabled)</span>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" :disabled="alertSaving">
+              {{ alertSaving ? 'Saving...' : 'Save' }}
+            </button>
+            <button type="button" class="btn" :disabled="alertTesting" @click="sendTestEmail">
+              {{ alertTesting ? 'Sending...' : 'Send Test Email' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <!-- ── Fail2Ban Tab ── -->
     <div v-if="activeTab === 'fail2ban'">
       <div class="card">
@@ -775,6 +904,18 @@ onUnmounted(() => {
 }
 .perm-no {
   color: #9ca3af;
+}
+
+/* ── Alerting tab ── */
+.input-hint {
+  display: block;
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+}
+.form-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
 }
 
 /* ── Fail2Ban tab ── */

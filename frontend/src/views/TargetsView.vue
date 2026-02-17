@@ -77,11 +77,13 @@ async function loadTargets() {
 // Open form
 function openForm(target = null) {
   editingTarget.value = target
+  loadAllUsers()
   if (target) {
     // Load full detail for editing
     loadTargetDetail(target.id)
   } else {
     form.value = getEmptyForm()
+    selectedRecipients.value = []
     showForm.value = true
   }
   error.value = ''
@@ -114,6 +116,7 @@ async function loadTargetDetail(id) {
         }
       })
     }
+    selectedRecipients.value = data.recipient_ids || []
     showForm.value = true
   } catch (e) {
     error.value = 'Failed to load target details'
@@ -145,10 +148,17 @@ async function saveTarget() {
       }))
     }
 
+    let targetId
     if (editingTarget.value) {
       await api.put(`/targets/${editingTarget.value.id}`, payload)
+      targetId = editingTarget.value.id
     } else {
-      await api.post('/targets', payload)
+      const { data } = await api.post('/targets', payload)
+      targetId = data.id
+    }
+    // Save recipients
+    if (targetId && selectedRecipients.value.length > 0) {
+      await saveRecipients(targetId)
     }
     showForm.value = false
     await loadTargets()
@@ -183,6 +193,41 @@ function onConditionTypeChange(index) {
   // Only reset config if it's a new condition (no check_id)
   if (!cond.check_id) {
     cond.config = getDefaultConfig(cond.check_type)
+  }
+}
+
+// ── Alert recipients ──
+const allUsers = ref([])
+const selectedRecipients = ref([])
+
+async function loadAllUsers() {
+  try {
+    const { data } = await api.get('/users')
+    allUsers.value = data.filter(u => u.status === 'active')
+  } catch { /* ignore */ }
+}
+
+async function loadRecipients(targetId) {
+  try {
+    const { data } = await api.get(`/targets/${targetId}`)
+    selectedRecipients.value = data.recipient_ids || []
+  } catch { /* ignore */ }
+}
+
+async function saveRecipients(targetId) {
+  try {
+    await api.put(`/targets/${targetId}/recipients`, { user_ids: selectedRecipients.value })
+  } catch (e) {
+    error.value = e.response?.data?.error || 'Failed to save recipients'
+  }
+}
+
+function toggleRecipient(userId) {
+  const idx = selectedRecipients.value.indexOf(userId)
+  if (idx >= 0) {
+    selectedRecipients.value.splice(idx, 1)
+  } else {
+    selectedRecipients.value.push(userId)
   }
 }
 
@@ -559,6 +604,21 @@ onMounted(() => loadTargets())
             </div>
           </div>
 
+          <!-- Alert recipients -->
+          <div class="recipients-section">
+            <div class="conditions-header">
+              <strong>Alert Recipients</strong>
+            </div>
+            <p v-if="allUsers.length === 0" class="text-muted" style="font-size: 0.85rem;">No users available.</p>
+            <div v-else class="recipient-list">
+              <label v-for="u in allUsers" :key="u.id" class="recipient-item">
+                <input type="checkbox" :checked="selectedRecipients.includes(u.id)" @change="toggleRecipient(u.id)" />
+                <span>{{ u.username }}</span>
+                <span v-if="u.email" class="text-muted recipient-email">{{ u.email }}</span>
+              </label>
+            </div>
+          </div>
+
           <div class="form-actions">
             <button type="submit" class="btn btn-primary">Save</button>
             <button type="button" class="btn" @click="showForm = false">Cancel</button>
@@ -721,5 +781,31 @@ onMounted(() => loadTargets())
 
 .form-row-4 {
   grid-template-columns: 1fr 1fr 1fr 1fr;
+}
+
+/* Recipients */
+.recipients-section {
+  margin-top: 1rem;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 0.75rem;
+}
+.recipient-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+.recipient-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+.recipient-item input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+}
+.recipient-email {
+  font-size: 0.75rem;
 }
 </style>

@@ -7,6 +7,7 @@ import TargetsView from '../views/TargetsView.vue'
 import SettingsView from '../views/SettingsView.vue'
 import ProfileView from '../views/ProfileView.vue'
 import SocView from '../views/SocView.vue'
+import AlertsView from '../views/AlertsView.vue'
 
 const routes = [
   { path: '/login', name: 'Login', component: LoginView, meta: { public: true } },
@@ -16,6 +17,7 @@ const routes = [
   { path: '/settings', name: 'Settings', component: SettingsView, meta: { requiresAuth: true } },
   { path: '/profile', name: 'Profile', component: ProfileView, meta: { requiresAuth: true } },
   { path: '/soc', name: 'SOC', component: SocView, meta: { public: true } },
+  { path: '/alerts', name: 'Alerts', component: AlertsView, meta: { requiresAuth: true } },
   { path: '/audit-log', redirect: '/settings' },
 ]
 

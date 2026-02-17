@@ -10,6 +10,7 @@ type User struct {
 	ID           string    `json:"id"`
 	Username     string    `json:"username"`
 	Email        string    `json:"email"`
+	Phone        string    `json:"phone"`
 	PasswordHash string    `json:"-"`
 	Role         string    `json:"role"`
 	Status       string    `json:"status"`
@@ -19,18 +20,18 @@ type User struct {
 
 func (s *Store) CreateUser(u *User) error {
 	_, err := s.db.Exec(`
-		INSERT INTO users (id, username, email, password_hash, role, status, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-	`, u.ID, u.Username, u.Email, u.PasswordHash, u.Role, u.Status, u.CreatedAt, u.UpdatedAt)
+		INSERT INTO users (id, username, email, phone, password_hash, role, status, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, u.ID, u.Username, u.Email, u.Phone, u.PasswordHash, u.Role, u.Status, u.CreatedAt, u.UpdatedAt)
 	return err
 }
 
 func (s *Store) GetUserByID(id string) (*User, error) {
 	u := &User{}
 	err := s.db.QueryRow(`
-		SELECT id, username, email, password_hash, role, status, created_at, updated_at
+		SELECT id, username, email, phone, password_hash, role, status, created_at, updated_at
 		FROM users WHERE id = ?
-	`, id).Scan(&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.Role, &u.Status, &u.CreatedAt, &u.UpdatedAt)
+	`, id).Scan(&u.ID, &u.Username, &u.Email, &u.Phone, &u.PasswordHash, &u.Role, &u.Status, &u.CreatedAt, &u.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -40,9 +41,9 @@ func (s *Store) GetUserByID(id string) (*User, error) {
 func (s *Store) GetUserByUsername(username string) (*User, error) {
 	u := &User{}
 	err := s.db.QueryRow(`
-		SELECT id, username, email, password_hash, role, status, created_at, updated_at
+		SELECT id, username, email, phone, password_hash, role, status, created_at, updated_at
 		FROM users WHERE username = ?
-	`, username).Scan(&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.Role, &u.Status, &u.CreatedAt, &u.UpdatedAt)
+	`, username).Scan(&u.ID, &u.Username, &u.Email, &u.Phone, &u.PasswordHash, &u.Role, &u.Status, &u.CreatedAt, &u.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -51,7 +52,7 @@ func (s *Store) GetUserByUsername(username string) (*User, error) {
 
 func (s *Store) ListUsers() ([]User, error) {
 	rows, err := s.db.Query(`
-		SELECT id, username, email, role, status, created_at, updated_at
+		SELECT id, username, email, phone, role, status, created_at, updated_at
 		FROM users ORDER BY created_at ASC
 	`)
 	if err != nil {
@@ -62,7 +63,7 @@ func (s *Store) ListUsers() ([]User, error) {
 	var users []User
 	for rows.Next() {
 		var u User
-		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.Role, &u.Status, &u.CreatedAt, &u.UpdatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.Phone, &u.Role, &u.Status, &u.CreatedAt, &u.UpdatedAt); err != nil {
 			return nil, err
 		}
 		users = append(users, u)
@@ -70,12 +71,12 @@ func (s *Store) ListUsers() ([]User, error) {
 	return users, rows.Err()
 }
 
-// UpdateUser updates email and/or role. Does not touch password or status.
-func (s *Store) UpdateUser(id, email, role string) error {
+// UpdateUser updates email, phone and/or role. Does not touch password or status.
+func (s *Store) UpdateUser(id, email, phone, role string) error {
 	res, err := s.db.Exec(`
-		UPDATE users SET email = ?, role = ?, updated_at = CURRENT_TIMESTAMP
+		UPDATE users SET email = ?, phone = ?, role = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
-	`, email, role, id)
+	`, email, phone, role, id)
 	if err != nil {
 		return err
 	}

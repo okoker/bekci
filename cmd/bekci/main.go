@@ -18,6 +18,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/bekci/internal/alerter"
 	"github.com/bekci/internal/api"
 	"github.com/bekci/internal/auth"
 	"github.com/bekci/internal/config"
@@ -103,9 +104,11 @@ func main() {
 	// Initialize auth service
 	authSvc := auth.New(db, cfg.Auth.JWTSecret)
 
-	// Initialize scheduler + rules engine
+	// Initialize scheduler + rules engine + alerter
 	sched := scheduler.New(db)
 	eng := engine.New(db)
+	alertSvc := alerter.New(db)
+	eng.SetDispatcher(alertSvc)
 	sched.SetEngine(eng)
 
 	// Get embedded frontend (may be empty during dev)
@@ -117,7 +120,7 @@ func main() {
 	}
 
 	// Create API server
-	apiServer := api.New(db, authSvc, sched, version, spa, cfg.Server.CORSOrigin, cfg.Server.DBPath)
+	apiServer := api.New(db, authSvc, sched, alertSvc, version, spa, cfg.Server.CORSOrigin, cfg.Server.DBPath)
 
 	// Setup HTTP server
 	httpServer := &http.Server{
@@ -186,6 +189,20 @@ func main() {
 				} else if purged > 0 {
 					slog.Info("Purged old audit entries", "count", purged, "older_than_days", retentionDays)
 				}
+			}
+		}
+	}()
+
+	// Re-alert ticker: check for still-firing rules every 60s
+	go func() {
+		ticker := time.NewTicker(60 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				alertSvc.CheckRealerts()
 			}
 		}
 	}()

@@ -36,11 +36,12 @@ type TargetCondition struct {
 	FailWindow int    `json:"fail_window"`
 }
 
-// TargetDetail is a target with its conditions and rule state.
+// TargetDetail is a target with its conditions, rule state, and alert recipients.
 type TargetDetail struct {
 	Target
-	Conditions []TargetCondition `json:"conditions"`
-	State      *RuleState        `json:"state"`
+	Conditions   []TargetCondition `json:"conditions"`
+	State        *RuleState        `json:"state"`
+	RecipientIDs []string          `json:"recipient_ids"`
 }
 
 func scanTarget(row interface{ Scan(...any) error }) (*Target, error) {
@@ -114,7 +115,8 @@ func (s *Store) DeleteTarget(id string) error {
 // --- Unified target + conditions methods ---
 
 // CreateTargetWithConditions creates a target, its checks, and auto-manages the hidden rule.
-func (s *Store) CreateTargetWithConditions(t *Target, conds []TargetCondition) error {
+// If creatorID is non-empty, the creator is added as a default alert recipient.
+func (s *Store) CreateTargetWithConditions(t *Target, conds []TargetCondition, creatorID string) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -211,6 +213,11 @@ func (s *Store) CreateTargetWithConditions(t *Target, conds []TargetCondition) e
 	}
 	t.RuleID = &ruleID
 	t.PreferredCheckType = preferredType
+
+	// Auto-add creator as default alert recipient
+	if creatorID != "" {
+		tx.Exec(`INSERT OR IGNORE INTO target_alert_recipients (target_id, user_id) VALUES (?, ?)`, t.ID, creatorID)
+	}
 
 	return tx.Commit()
 }
@@ -445,6 +452,10 @@ func (s *Store) GetTargetDetail(id string) (*TargetDetail, error) {
 	if td.Conditions == nil {
 		td.Conditions = []TargetCondition{}
 	}
+
+	// Load alert recipient IDs
+	td.RecipientIDs, _ = s.ListTargetRecipientIDs(id)
+
 	return td, nil
 }
 
