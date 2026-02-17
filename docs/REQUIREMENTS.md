@@ -205,9 +205,27 @@ Fail2Ban tab displays jail status table with columns: Jail, Active Bans, Bans (t
 **Prod config**: bekci user has sudoers access to `fail2ban-client status` only. Filter at `/etc/fail2ban/filter.d/bekci.conf` parses `slog.Warn("Login failed")` lines. `bekci-login` jail: 10 retries / 10min window / 30min ban.
 
 ### System
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/health` | Public self-check |
+| Method | Path | Roles | Description |
+|--------|------|-------|-------------|
+| GET | `/api/health` | public | Public self-check |
+| GET | `/api/system/health` | any | Net/Disk/CPU vitals for navbar indicator |
+
+**System health response**:
+```json
+{
+  "net":  { "status": "ok", "latency_ms": 12 },
+  "disk": { "total_gb": 60, "free_gb": 56 },
+  "cpu":  { "load1": 0.3, "num_cpu": 4 }
+}
+```
+
+**Navbar health indicator**: 3 dots (Net/Disk/CPU) with green/yellow/red thresholds. Click opens popover with details. Polls every 30s. Grey dots when endpoint unreachable.
+
+| Metric | Green | Yellow | Red |
+|--------|-------|--------|-----|
+| Net | reachable | — | unreachable |
+| Disk | >20% free | 10-20% free | <10% free |
+| Load | <N cores | <2×N cores | ≥2×N cores |
 
 ## Configuration
 

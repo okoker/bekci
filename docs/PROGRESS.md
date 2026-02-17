@@ -2,13 +2,13 @@
 
 ## Session Handover — 17/02/2026
 
-1. **What was done** — `93d53c3` Move Users into Settings tab. `a083890` Audit log rotation + SOC 15s refresh. Both deployed (v2.2.0).
-2. **Decisions made** — Users tab admin-only, between Audit Log and Backup. Audit retention configurable via Settings (default 91 days). Daily hard delete of old entries.
-3. **Server state** — Running v2.2.0 at `https://bekci.home`.
+1. **What was done** — Added system health indicator: `GET /api/system/health` (net/disk/cpu), 3 colored dots in navbar with click popover. Deployed v2.3.0.
+2. **Decisions made** — Net check via TCP dial to 1.1.1.1:53 (no ICMP privileges needed). Disk via syscall.Statfs on DB path. Load via /proc/loadavg (Linux) with sysctl fallback (macOS).
+3. **Server state** — Running v2.3.0 at `https://bekci.home`.
 4. **What's next** — Phase 4 (Alerting).
 
 ## Current Status
-**Phase**: Settings page consolidation complete (5 tabs). Audit log rotation active. Deployed v2.2.0.
+**Phase**: System health indicator added to navbar. Deployed v2.3.0.
 
 ## Design Documents
 - `docs/DESIGN.md` — Full architecture, schema, API, phases
@@ -122,6 +122,16 @@
 | Audit log rotation: daily cleanup, configurable retention (default 91 days) | done |
 | SOC page auto-refresh: 30s → 15s | done |
 | Deployed v2.2.0 to production | done |
+
+### System Health Indicator (DONE)
+| Task | Status |
+|------|--------|
+| `GET /api/system/health` endpoint (net/disk/cpu, any auth) | done |
+| Net: TCP dial 1.1.1.1:53, Disk: syscall.Statfs, CPU: /proc/loadavg + sysctl fallback | done |
+| `dbPath` field added to Server struct, wired from main.go | done |
+| Navbar: 3 colored dots (green/yellow/red) with click popover | done |
+| 30s poll interval, grey dots on failure | done |
+| Deployed v2.3.0 to production | done |
 
 ### Phase 4 — Alerting
 | Task | Status |
