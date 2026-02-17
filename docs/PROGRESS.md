@@ -2,8 +2,8 @@
 
 ## Session Handover — 17/02/2026
 
-1. **What was done** — Phase 4a+4b: Email alerting via Resend API. migration011 (target_alert_recipients, phone column, alert_history columns, settings). Alerter module (dispatch, cooldown, re-alert, templates). Engine dispatcher hook. API handlers (recipients, alert history, test email). Frontend: Alerting tab in Settings, recipients in target edit form, Alerts page + navbar link.
-2. **Decisions made** — Resend HTTP API (no SDK). API key masked in GET /settings. Cooldown bypass for recovery alerts. Re-alert via 60s ticker. Creator auto-added as recipient on target create.
+1. **What was done** — Phase 4a+4b email alerting. SOC page compact redesign (single-line card headers, filters in header row, owl icon linking home).
+2. **Decisions made** — Resend HTTP API (no SDK). API key masked in GET /settings. SOC icon links to `/` via plain `<a>` (works for unauthenticated users too).
 3. **Server state** — Running locally on port 65000. Not deployed yet.
 4. **What's next** — Deploy v2.4.0. Test with real Resend API key. Signal gateway (Phase 4c, deferred).
 

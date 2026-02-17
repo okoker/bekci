@@ -517,6 +517,7 @@ onUnmounted(() => {
             <tr>
               <th>Username</th>
               <th>Email</th>
+              <th>Phone</th>
               <th>Role</th>
               <th>Status</th>
               <th>Actions</th>
@@ -526,6 +527,7 @@ onUnmounted(() => {
             <tr v-for="u in users" :key="u.id">
               <td>{{ u.username }}</td>
               <td>{{ u.email || '-' }}</td>
+              <td>{{ u.phone || '-' }}</td>
               <td><span :class="'badge badge-' + u.role">{{ u.role }}</span></td>
               <td><span :class="'badge badge-' + u.status">{{ u.status }}</span></td>
               <td class="actions">
