@@ -1,6 +1,7 @@
 package api
 
 import (
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -29,6 +30,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	token, user, err := s.auth.Login(req.Username, req.Password, ip)
 	if err != nil {
+		slog.Warn("Login failed", "username", req.Username, "ip", ip)
 		s.auditLogin(r, "", req.Username, "login_failed", err.Error(), "failure")
 		writeError(w, http.StatusUnauthorized, err.Error())
 		return
