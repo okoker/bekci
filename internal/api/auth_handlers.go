@@ -82,6 +82,7 @@ func (s *Server) handleUpdateMe(w http.ResponseWriter, r *http.Request) {
 	claims := getClaims(r)
 	var req struct {
 		Email string `json:"email"`
+		Phone string `json:"phone"`
 	}
 	if err := readJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
@@ -94,7 +95,7 @@ func (s *Server) handleUpdateMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.store.UpdateUser(user.ID, req.Email, user.Phone, user.Role); err != nil {
+	if err := s.store.UpdateUser(user.ID, req.Email, req.Phone, user.Role); err != nil {
 		writeError(w, http.StatusInternalServerError, "update failed")
 		return
 	}

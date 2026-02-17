@@ -5,6 +5,7 @@ import api from '../api'
 
 const auth = useAuthStore()
 const email = ref('')
+const phone = ref('')
 const profileMsg = ref('')
 const profileErr = ref('')
 
@@ -14,14 +15,16 @@ const pwErr = ref('')
 
 onMounted(() => {
   email.value = auth.user?.email || ''
+  phone.value = auth.user?.phone || ''
 })
 
 async function updateProfile() {
   profileErr.value = ''
   try {
-    await api.put('/me', { email: email.value })
+    await api.put('/me', { email: email.value, phone: phone.value })
     profileMsg.value = 'Profile updated'
     auth.user.email = email.value
+    auth.user.phone = phone.value
   } catch (e) {
     profileErr.value = e.response?.data?.error || 'Update failed'
   }
@@ -58,9 +61,14 @@ async function changePassword() {
           <label>Email</label>
           <input v-model="email" type="email" />
         </div>
+        <div class="form-group">
+          <label>Phone</label>
+          <input v-model="phone" type="tel" placeholder="+1234567890" />
+          <span class="text-muted" style="font-size:0.8rem;">For Signal alerts (coming soon)</span>
+        </div>
         <div v-if="profileErr" class="error-msg">{{ profileErr }}</div>
         <div v-if="profileMsg" class="success-msg" @click="profileMsg = ''">{{ profileMsg }}</div>
-        <button type="submit" class="btn btn-primary">Update Email</button>
+        <button type="submit" class="btn btn-primary">Save</button>
       </form>
     </div>
 
