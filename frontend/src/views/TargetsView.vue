@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import api from '../api'
 
@@ -11,6 +11,18 @@ const expandedTargetId = ref(null)
 const loading = ref(false)
 const error = ref('')
 const success = ref('')
+const activeCategory = ref('All')
+const categories = ['All', 'Network', 'Security', 'Physical Security', 'Key Services', 'Other']
+
+const filteredTargets = computed(() => {
+  if (activeCategory.value === 'All') return targets.value
+  return targets.value.filter(t => t.category === activeCategory.value)
+})
+
+function categoryCount(cat) {
+  if (cat === 'All') return targets.value.length
+  return targets.value.filter(t => t.category === cat).length
+}
 
 // Form state
 const showForm = ref(false)
@@ -294,6 +306,15 @@ onMounted(() => loadTargets())
     <div v-if="error" class="error-msg">{{ error }}</div>
     <div v-if="success" class="success-msg" @click="success = ''">{{ success }}</div>
 
+    <!-- Category filter bar -->
+    <div v-if="!loading && targets.length > 0" class="filter-bar">
+      <button v-for="cat in categories" :key="cat"
+        :class="['filter-btn', { active: activeCategory === cat }]"
+        @click="activeCategory = cat">
+        {{ cat }} <span class="filter-count">({{ categoryCount(cat) }})</span>
+      </button>
+    </div>
+
     <!-- Targets table -->
     <div class="card">
       <div v-if="loading" class="text-muted" style="padding: 1rem;">Loading...</div>
@@ -312,7 +333,7 @@ onMounted(() => loadTargets())
           </tr>
         </thead>
         <tbody>
-          <template v-for="t in targets" :key="t.id">
+          <template v-for="t in filteredTargets" :key="t.id">
             <tr :class="{ 'row-expanded': expandedTargetId === t.id }" @click="toggleTarget(t.id)" style="cursor: pointer;">
               <td>
                 <span class="expand-icon">{{ expandedTargetId === t.id ? '&#9660;' : '&#9654;' }}</span>
@@ -630,6 +651,39 @@ onMounted(() => loadTargets())
 </template>
 
 <style scoped>
+/* Category filter */
+.filter-bar {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+.filter-btn {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.filter-btn:hover {
+  background: #e2e8f0;
+  color: #334155;
+}
+.filter-btn.active {
+  background: #ea580c;
+  color: #fff;
+  border-color: #ea580c;
+}
+.filter-count {
+  font-weight: 400;
+  opacity: 0.7;
+}
+
 .row-expanded > td { background: #f8fafc; }
 
 .expand-icon {
