@@ -1,7 +1,6 @@
 package api
 
 import (
-	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -10,6 +9,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	probing "github.com/prometheus-community/pro-bing"
 )
 
 type netHealth struct {
@@ -36,16 +37,24 @@ func (s *Server) handleSystemHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
-// checkNet dials 1.1.1.1:53 (Cloudflare DNS) with a 3s timeout.
+// checkNet pings 1.1.1.1 (Cloudflare DNS) with a single ICMP packet.
 func checkNet() netHealth {
-	start := time.Now()
-	conn, err := net.DialTimeout("tcp", "1.1.1.1:53", 3*time.Second)
+	pinger, err := probing.NewPinger("1.1.1.1")
 	if err != nil {
 		return netHealth{Status: "unreachable", LatencyMs: -1}
 	}
-	conn.Close()
-	ms := time.Since(start).Milliseconds()
-	return netHealth{Status: "ok", LatencyMs: ms}
+	pinger.Count = 1
+	pinger.Timeout = 3 * time.Second
+	pinger.SetPrivileged(os.Getuid() == 0)
+
+	if err := pinger.Run(); err != nil {
+		return netHealth{Status: "unreachable", LatencyMs: -1}
+	}
+	stats := pinger.Statistics()
+	if stats.PacketsRecv == 0 {
+		return netHealth{Status: "unreachable", LatencyMs: -1}
+	}
+	return netHealth{Status: "ok", LatencyMs: stats.AvgRtt.Milliseconds()}
 }
 
 // checkDisk uses Statfs on the directory containing the DB file.
