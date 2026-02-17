@@ -1,11 +1,12 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import api from '../api'
 
 const auth = useAuthStore()
 const router = useRouter()
+const route = useRoute()
 
 async function handleLogout() {
   await auth.logout()
@@ -90,6 +91,10 @@ function closePopover(e) {
     showPopover.value = false
   }
 }
+
+watch(() => route.path, () => {
+  showUserMenu.value = false
+})
 
 onMounted(() => {
   fetchHealth()
