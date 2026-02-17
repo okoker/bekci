@@ -27,7 +27,7 @@ cd bekci
 docker compose up -d
 ```
 
-Open `http://localhost:65000` — login with `admin` / `admin1234`.
+Open `http://localhost:65000` — login with `admin` and the password set via `BEKCI_ADMIN_PASSWORD` (default: see `config.go`).
 
 ### Docker Environment Variables (optional)
 
@@ -36,7 +36,7 @@ Add to the `environment:` section in `docker-compose.yml`:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `BEKCI_JWT_SECRET` | auto-generated | JWT signing key |
-| `BEKCI_ADMIN_PASSWORD` | `admin1234` | Initial admin password (first boot only) |
+| `BEKCI_ADMIN_PASSWORD` | (built-in) | Initial admin password (first boot only) |
 | `BEKCI_PORT` | `65000` | HTTP port inside container |
 | `BEKCI_DB_PATH` | `/data/bekci.db` | SQLite database path |
 
@@ -74,7 +74,7 @@ make build && ./bin/bekci
 
 ```bash
 # Terminal 1 — backend
-BEKCI_JWT_SECRET=dev-secret BEKCI_ADMIN_PASSWORD=admin1234 make dev
+BEKCI_JWT_SECRET=dev-secret BEKCI_ADMIN_PASSWORD=changeme make dev
 
 # Terminal 2 — frontend with hot-reload
 cd frontend && npm run dev
