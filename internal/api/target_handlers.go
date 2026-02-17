@@ -9,9 +9,8 @@ import (
 
 var validOperators = map[string]bool{"AND": true, "OR": true}
 var validCategories = map[string]bool{
-	"ISP": true, "Router/Switch": true, "FW/WAF": true, "VPN": true,
-	"SIEM/Logging": true, "PAM/DAM": true, "Security Other": true,
-	"IT Server": true, "Other": true,
+	"Network": true, "Security": true, "Physical Security": true,
+	"Key Services": true, "Other": true,
 }
 var validCheckTypes = map[string]bool{
 	"http": true, "tcp": true, "ping": true,

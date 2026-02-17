@@ -10,6 +10,8 @@ const historyData = ref({})
 const loading = ref(true)
 const error = ref('')
 const lastUpdated = ref(null)
+const activeCategory = ref('All')
+const categories = ['All', 'Network', 'Security', 'Physical Security', 'Key Services', 'Other']
 let refreshTimer = null
 
 const empty90d = Array.from({ length: 90 }, () => ({ date: '', uptime_pct: -1, total_checks: 0 }))
@@ -112,12 +114,40 @@ function hasDownCheckTarget(target) {
   return target.checks?.some(c => c.last_status === 'down')
 }
 
-function sortedTargets() {
-  return [...dashboardData.value].sort((a, b) => {
+function categoryCount(cat) {
+  if (cat === 'All') return dashboardData.value.length
+  return dashboardData.value.filter(t => t.category === cat).length
+}
+
+function categoryHasProblems(cat) {
+  const targets = cat === 'All' ? dashboardData.value : dashboardData.value.filter(t => t.category === cat)
+  return targets.some(t => hasDownCheckTarget(t))
+}
+
+function getWorstUptime(target) {
+  if (!target.checks || target.checks.length === 0) return 100
+  return Math.min(...target.checks.map(c => c.uptime_90d_pct >= 0 ? c.uptime_90d_pct : 100))
+}
+
+function categoryClass(cat) {
+  if (cat === 'Security') return 'soc-cat-security'
+  if (cat === 'Network') return 'soc-cat-network'
+  if (cat === 'Physical Security') return 'soc-cat-physical'
+  if (cat === 'Key Services') return 'soc-cat-server'
+  return 'soc-cat-other'
+}
+
+function filteredAndSortedTargets() {
+  let list = dashboardData.value
+  if (activeCategory.value !== 'All') {
+    list = list.filter(t => t.category === activeCategory.value)
+  }
+  return [...list].sort((a, b) => {
     const aDown = hasDownCheckTarget(a)
     const bDown = hasDownCheckTarget(b)
     if (aDown && !bDown) return -1
     if (!aDown && bDown) return 1
+    if (aDown && bDown) return getWorstUptime(a) - getWorstUptime(b)
     return a.name.localeCompare(b.name)
   })
 }
@@ -168,15 +198,27 @@ onUnmounted(() => {
 
     <div v-if="error" class="soc-error">{{ error }}</div>
 
+    <!-- Category filter bar -->
+    <div v-if="!loading && dashboardData.length > 0" class="soc-filter-bar">
+      <button v-for="cat in categories" :key="cat"
+        :class="['soc-filter-btn', { active: activeCategory === cat, 'has-problems': categoryHasProblems(cat) }]"
+        @click="activeCategory = cat">
+        {{ cat }} <span class="soc-filter-count">({{ categoryCount(cat) }})</span>
+      </button>
+    </div>
+
     <div v-if="loading" class="soc-loading">Loading...</div>
 
     <div v-else class="soc-grid">
-      <div v-for="target in sortedTargets()" :key="target.id" class="soc-card" :class="{ 'soc-card-down': hasDownCheckTarget(target) }">
+      <div v-for="target in filteredAndSortedTargets()" :key="target.id" class="soc-card" :class="{ 'soc-card-down': hasDownCheckTarget(target) }">
         <div class="soc-card-header">
           <span class="soc-target-name">{{ target.name }}</span>
-          <span :class="['soc-status-badge', hasDownCheckTarget(target) ? 'soc-badge-down' : 'soc-badge-up']">
-            {{ hasDownCheckTarget(target) ? 'DOWN' : 'UP' }}
-          </span>
+          <div class="soc-header-badges">
+            <span :class="['soc-cat-badge', categoryClass(target.category)]">{{ target.category }}</span>
+            <span :class="['soc-status-badge', hasDownCheckTarget(target) ? 'soc-badge-down' : 'soc-badge-up']">
+              {{ hasDownCheckTarget(target) ? 'DOWN' : 'UP' }}
+            </span>
+          </div>
         </div>
         <div class="soc-card-meta">
           <span>{{ target.host }}</span>
@@ -334,5 +376,83 @@ onUnmounted(() => {
 }
 .soc-bar-tick:hover {
   opacity: 0.65;
+}
+
+/* Filter bar (dark theme) */
+.soc-filter-bar {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+.soc-filter-btn {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 20px;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.soc-filter-btn:hover {
+  background: #334155;
+  color: #e2e8f0;
+}
+.soc-filter-btn.active {
+  background: #3b82f6;
+  color: #fff;
+  border-color: #3b82f6;
+}
+.soc-filter-btn.has-problems:not(.active)::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #f56565;
+  margin-right: 0.35rem;
+  vertical-align: middle;
+}
+.soc-filter-count {
+  font-weight: 400;
+  opacity: 0.7;
+}
+
+/* Category badges (dark theme) */
+.soc-header-badges {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.soc-cat-badge {
+  font-size: 0.6rem;
+  font-weight: 600;
+  padding: 0.1rem 0.4rem;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.soc-cat-security {
+  background: rgba(139, 92, 246, 0.2);
+  color: #a78bfa;
+}
+.soc-cat-network {
+  background: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
+}
+.soc-cat-physical {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+}
+.soc-cat-server {
+  background: rgba(34, 197, 94, 0.2);
+  color: #86efac;
+}
+.soc-cat-other {
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
 }
 </style>
