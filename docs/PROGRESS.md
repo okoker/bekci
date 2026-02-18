@@ -4,11 +4,11 @@
 
 1. **What was done** — SLA page with Chart.js daily uptime trend charts per category. Backend `GET /api/sla/history`, frontend `SlaView.vue`, route + nav link.
 2. **Decisions made** — Chart.js + vue-chartjs + annotation plugin. 90-day padded daily data, 2-col grid, Y-axis auto-scales to lowest data point. Single API call, no auto-refresh.
-3. **Server state** — Dev server running on port 65000. Not yet deployed to production.
-4. **What's next** — Deploy to production. Test with real Resend API key. Signal gateway (Phase 4c, deferred).
+3. **Server state** — Production deployed v2.8.0 (19/02/2026).
+4. **What's next** — Test with real Resend API key. Signal gateway (Phase 4c, deferred).
 
 ## Current Status
-**Phase**: Phase 4 complete + SLA compliance feature. Deployed v2.7.0.
+**Phase**: Phase 4 complete + SLA compliance + SLA page. Deployed v2.8.0.
 
 ## Design Documents
 - `docs/REQUIREMENTS.md` — Current spec: architecture, API, decisions
@@ -218,7 +218,7 @@
 ### Production Server
 - **Host**: `cl@dias-bekci` (10.0.9.20), Ubuntu 22.04, x86_64
 - **Access**: `https://10.0.9.20` (self-signed cert), `https://bekci.home` when DNS ready
-- **Binary**: `/opt/bekci/bekci` v2.7.0, runs as `bekci` system user
+- **Binary**: `/opt/bekci/bekci` v2.8.0, runs as `bekci` system user
 - **Config**: `/etc/bekci/config.yaml` (640 root:bekci), `/etc/bekci/env` (600 root:root — JWT secret)
 - **DB**: `/var/lib/bekci/bekci.db`
 - **Logs**: `/var/log/bekci/bekci.log` + `journalctl -u bekci`

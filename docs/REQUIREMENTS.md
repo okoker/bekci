@@ -96,7 +96,7 @@ Full permission matrix, auth flow, middleware chain, session management, rate li
 
 ## API & DB
 
-35 endpoints across 11 domains. Full specs extracted to reference docs:
+36 endpoints across 12 domains. Full specs extracted to reference docs:
 - **`reference/api_reference.md`** — All endpoints, auth levels, request/response JSON, error codes
 - **`reference/db_schema.md`** — All tables, columns, migrations, entity relationships
 - **`reference/rbac.md`** — Permission matrix, auth flow, middleware, session management
