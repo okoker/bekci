@@ -82,6 +82,10 @@ func (s *Server) handleCreateTarget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate conditions
+	if len(req.Conditions) == 0 {
+		writeError(w, http.StatusBadRequest, "at least one condition is required")
+		return
+	}
 	conds := make([]store.TargetCondition, 0, len(req.Conditions))
 	for _, c := range req.Conditions {
 		if c.CheckType == "" || !validCheckTypes[c.CheckType] {
@@ -201,6 +205,10 @@ func (s *Server) handleUpdateTarget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate conditions
+	if len(req.Conditions) == 0 {
+		writeError(w, http.StatusBadRequest, "at least one condition is required")
+		return
+	}
 	conds := make([]store.TargetCondition, 0, len(req.Conditions))
 	for _, c := range req.Conditions {
 		if c.CheckType == "" || !validCheckTypes[c.CheckType] {

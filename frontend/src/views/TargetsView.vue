@@ -436,8 +436,8 @@ onMounted(() => loadTargets())
               <button type="button" class="btn btn-sm btn-primary" @click="addCondition">+ Add Condition</button>
             </div>
 
-            <div v-if="form.conditions.length === 0" class="text-muted" style="padding: 0.5rem 0; font-size: 0.85rem;">
-              No conditions yet. Add one to enable monitoring.
+            <div v-if="form.conditions.length === 0" class="validation-warning">
+              At least one condition is required.
             </div>
 
             <div v-for="(cond, idx) in form.conditions" :key="idx" class="condition-card">
@@ -634,7 +634,7 @@ onMounted(() => loadTargets())
           </div>
 
           <div class="form-actions">
-            <button type="submit" class="btn btn-primary">Save</button>
+            <button type="submit" class="btn btn-primary" :disabled="form.conditions.length === 0">Save</button>
             <button type="button" class="btn" @click="showForm = false">Cancel</button>
           </div>
         </form>
@@ -854,5 +854,14 @@ onMounted(() => loadTargets())
 }
 .recipient-email {
   font-size: 0.75rem;
+}
+
+.validation-warning {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  color: #b45309;
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  border-radius: 4px;
 }
 </style>

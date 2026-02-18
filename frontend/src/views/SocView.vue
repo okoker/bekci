@@ -111,6 +111,9 @@ function pad4hBars(data) {
 }
 
 function hasDownCheckTarget(target) {
+  if (target.state === 'unhealthy') return true
+  if (target.state === 'healthy') return false
+  // Fallback: no rule state — derive from raw check status
   return target.checks?.some(c => c.last_status === 'down')
 }
 
@@ -148,7 +151,8 @@ function filteredAndSortedTargets() {
     if (aDown && !bDown) return -1
     if (!aDown && bDown) return 1
     if (aDown && bDown) return getWorstUptime(a) - getWorstUptime(b)
-    return a.name.localeCompare(b.name)
+    const diff = getWorstUptime(a) - getWorstUptime(b)
+    return diff !== 0 ? diff : a.name.localeCompare(b.name)
   })
 }
 
