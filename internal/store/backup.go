@@ -19,6 +19,13 @@ type BackupData struct {
 	Checks        []BackupCheck     `json:"checks"`
 	RuleConditions []RuleCondition  `json:"rule_conditions"`
 	RuleStates    []RuleState       `json:"rule_states"`
+	Recipients    []BackupRecipient `json:"recipients"`
+}
+
+// BackupRecipient captures a target→user alert recipient mapping.
+type BackupRecipient struct {
+	TargetID string `json:"target_id"`
+	UserID   string `json:"user_id"`
 }
 
 // BackupUser mirrors User but exposes password_hash in JSON.
@@ -205,6 +212,23 @@ func (s *Store) ExportBackup(appVersion string) (*BackupData, error) {
 		return nil, err
 	}
 
+	// Recipients
+	recRows, err := s.db.Query(`SELECT target_id, user_id FROM target_alert_recipients ORDER BY target_id, user_id`)
+	if err != nil {
+		return nil, fmt.Errorf("exporting recipients: %w", err)
+	}
+	defer recRows.Close()
+	for recRows.Next() {
+		var rec BackupRecipient
+		if err := recRows.Scan(&rec.TargetID, &rec.UserID); err != nil {
+			return nil, err
+		}
+		data.Recipients = append(data.Recipients, rec)
+	}
+	if err := recRows.Err(); err != nil {
+		return nil, err
+	}
+
 	// Ensure nil slices become empty arrays in JSON
 	if data.Users == nil {
 		data.Users = []BackupUser{}
@@ -223,6 +247,9 @@ func (s *Store) ExportBackup(appVersion string) (*BackupData, error) {
 	}
 	if data.RuleStates == nil {
 		data.RuleStates = []RuleState{}
+	}
+	if data.Recipients == nil {
+		data.Recipients = []BackupRecipient{}
 	}
 
 	return data, nil
@@ -344,6 +371,20 @@ func (s *Store) RestoreBackup(data *BackupData) error {
 			}
 			if _, err := stmt.Exec(c.ID, c.TargetID, c.Type, c.Name, c.Config, c.IntervalS, enabled, c.CreatedAt, c.UpdatedAt); err != nil {
 				return fmt.Errorf("inserting check %s: %w", c.Name, err)
+			}
+		}
+	}
+
+	// Recipients (depends on targets + users)
+	if len(data.Recipients) > 0 {
+		stmt, err := tx.Prepare(`INSERT INTO target_alert_recipients (target_id, user_id) VALUES (?, ?)`)
+		if err != nil {
+			return fmt.Errorf("prepare recipients insert: %w", err)
+		}
+		defer stmt.Close()
+		for _, rec := range data.Recipients {
+			if _, err := stmt.Exec(rec.TargetID, rec.UserID); err != nil {
+				return fmt.Errorf("inserting recipient target=%s user=%s: %w", rec.TargetID, rec.UserID, err)
 			}
 		}
 	}

@@ -2,10 +2,10 @@
 
 ## Session Handover — 18/02/2026
 
-1. **What was done** — Phase 4 email alerting. SOC compact redesign. Phone field (Profile self-service + Users table read-only). Category filter on Targets page. User dropdown menu (Profile + Logout) replacing standalone nav links. Removed stale server accounts (adm-tempubuntu, omer.koker). Verified UFW already active. Deployed v2.5.3.
-2. **Decisions made** — Category filters consistent across Dashboard, SOC, and Targets. Phone self-service only (no admin edit). Profile/Logout in user dropdown, not standalone nav links.
-3. **Server state** — Production v2.5.3. UFW active (22/80/443). Stale accounts removed.
-4. **What's next** — Test with real Resend API key. Signal gateway (Phase 4c, deferred). H3/H5 in backlog.
+1. **What was done** — Code security review remediation: 3 bug fixes (restore broken tables + multipart + schema version, cross-target check ownership, clear recipients guard).
+2. **Decisions made** — Cross-target ownership returns 500 (not 400/403) since error propagates from store layer. Accepted for now.
+3. **Server state** — Local dev only. Production still at v2.5.3.
+4. **What's next** — Deploy fixes to production. Test with real Resend API key. Signal gateway (Phase 4c, deferred).
 
 ## Current Status
 **Phase**: Phase 4 (Email Alerting) complete + UI polish. Deployed v2.5.3.
@@ -165,6 +165,16 @@
 |------|--------|
 | Removed stale accounts: adm-tempubuntu, omer.koker (no files, no processes) | done |
 | Verified UFW active: 22/80/443 allowed, default deny | done |
+
+### Code Security Review Remediation (DONE)
+| Task | Status |
+|------|--------|
+| H1: Restore — remove stale table refs, add target_alert_recipients, multipart form support, dynamic schema version | done |
+| H3: Cross-target check ownership — RowsAffected check on UPDATE with target_id mismatch | done |
+| M2: Clear recipients — remove length > 0 guard preventing empty recipient save | done |
+| M3: Backup/restore includes target_alert_recipients (BackupRecipient struct, export + restore) | done |
+| M4: Secure IP extraction — clientIP() helper: loopback→X-Real-IP, else RemoteAddr, strip port | done |
+| S-M1: Nginx security headers (HSTS, X-Content-Type-Options, X-Frame-Options, CSP) — already done | done |
 
 ### Phase 5 — Polish
 | Task | Status |
