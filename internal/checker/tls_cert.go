@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"strconv"
 	"time"
 )
 
@@ -13,7 +14,7 @@ func runTLSCert(host string, config map[string]any) *Result {
 	warnDays := configInt(config, "warn_days", 30)
 	timeoutS := configInt(config, "timeout_s", 10)
 
-	addr := fmt.Sprintf("%s:%d", host, port)
+	addr := net.JoinHostPort(host, strconv.Itoa(port))
 	start := time.Now()
 
 	conn, err := tls.DialWithDialer(

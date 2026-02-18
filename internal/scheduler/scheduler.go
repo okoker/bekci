@@ -19,9 +19,9 @@ type RuleEvaluator interface {
 type Scheduler struct {
 	store     *store.Store
 	engine    RuleEvaluator
-	timers    map[string]*time.Timer    // check_id → timer
-	intervals map[string]time.Duration  // check_id → current interval
-	checkMu   map[string]*sync.Mutex    // per-check mutex to prevent concurrent runs
+	timers    map[string]*time.Timer   // check_id → timer
+	intervals map[string]time.Duration // check_id → current interval
+	checkMu   map[string]*sync.Mutex   // per-check mutex to prevent concurrent runs
 	mu        sync.Mutex
 	eventCh   chan string // check_id for immediate run
 	ctx       context.Context
@@ -162,7 +162,7 @@ func (s *Scheduler) scheduleCheck(ec store.EnabledCheck) {
 		interval = 10 * time.Second
 	}
 
-	// Schedule first run after a short random delay (stagger checks)
+	// Schedule first run after a short delay (stagger checks)
 	checkID := ec.ID
 	timer := time.AfterFunc(5*time.Second, func() {
 		s.runAndReschedule(checkID, interval)
@@ -222,7 +222,10 @@ func (s *Scheduler) runCheck(checkID string) {
 	result := checker.Run(check.Type, target.Host, check.Config)
 
 	// Serialize metrics
-	metricsJSON, _ := json.Marshal(result.Metrics)
+	metricsJSON, err := json.Marshal(result.Metrics)
+	if err != nil {
+		slog.Error("Scheduler: failed to marshal metrics", "check_id", checkID, "error", err)
+	}
 
 	// Save result
 	cr := &store.CheckResult{

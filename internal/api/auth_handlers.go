@@ -144,7 +144,9 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Invalidate all other sessions
-	s.store.DeleteUserSessionsExcept(user.ID, claims.SessionID)
+	if err := s.store.DeleteUserSessionsExcept(user.ID, claims.SessionID); err != nil {
+		slog.Error("Failed to delete other sessions", "user_id", user.ID, "error", err)
+	}
 	s.audit(r, "change_password", "user", user.ID, "", "success")
 	writeJSON(w, http.StatusOK, map[string]string{"message": "password changed"})
 }

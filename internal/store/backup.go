@@ -8,18 +8,18 @@ import (
 
 // BackupData is the top-level structure for a Bekci config backup.
 type BackupData struct {
-	Version       int               `json:"version"`
-	SchemaVersion int               `json:"schema_version"`
-	CreatedAt     string            `json:"created_at"`
-	AppVersion    string            `json:"app_version"`
-	Users         []BackupUser      `json:"users"`
-	Settings      map[string]string `json:"settings"`
-	Rules         []BackupRule      `json:"rules"`
-	Targets       []BackupTarget    `json:"targets"`
-	Checks        []BackupCheck     `json:"checks"`
-	RuleConditions []RuleCondition  `json:"rule_conditions"`
-	RuleStates    []RuleState       `json:"rule_states"`
-	Recipients    []BackupRecipient `json:"recipients"`
+	Version        int               `json:"version"`
+	SchemaVersion  int               `json:"schema_version"`
+	CreatedAt      string            `json:"created_at"`
+	AppVersion     string            `json:"app_version"`
+	Users          []BackupUser      `json:"users"`
+	Settings       map[string]string `json:"settings"`
+	Rules          []BackupRule      `json:"rules"`
+	Targets        []BackupTarget    `json:"targets"`
+	Checks         []BackupCheck     `json:"checks"`
+	RuleConditions []RuleCondition   `json:"rule_conditions"`
+	RuleStates     []RuleState       `json:"rule_states"`
+	Recipients     []BackupRecipient `json:"recipients"`
 }
 
 // BackupRecipient captures a target→user alert recipient mapping.
@@ -54,15 +54,15 @@ type BackupRule struct {
 
 // BackupTarget mirrors Target for backup.
 type BackupTarget struct {
-	ID                 string  `json:"id"`
-	Name               string  `json:"name"`
-	Host               string  `json:"host"`
-	Description        string  `json:"description"`
-	Enabled            bool    `json:"enabled"`
-	PreferredCheckType string  `json:"preferred_check_type"`
-	Operator           string  `json:"operator"`
-	Category           string  `json:"category"`
-	RuleID             *string `json:"rule_id"`
+	ID                 string    `json:"id"`
+	Name               string    `json:"name"`
+	Host               string    `json:"host"`
+	Description        string    `json:"description"`
+	Enabled            bool      `json:"enabled"`
+	PreferredCheckType string    `json:"preferred_check_type"`
+	Operator           string    `json:"operator"`
+	Category           string    `json:"category"`
+	RuleID             *string   `json:"rule_id"`
 	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at"`
 }
@@ -83,10 +83,10 @@ type BackupCheck struct {
 // ExportBackup reads all config tables and assembles a BackupData.
 func (s *Store) ExportBackup(appVersion string) (*BackupData, error) {
 	data := &BackupData{
-		Version:       1,
-		CreatedAt:     time.Now().UTC().Format(time.RFC3339),
-		AppVersion:    appVersion,
-		Settings:      make(map[string]string),
+		Version:    1,
+		CreatedAt:  time.Now().UTC().Format(time.RFC3339),
+		AppVersion: appVersion,
+		Settings:   make(map[string]string),
 	}
 
 	// Schema version

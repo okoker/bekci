@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"log"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -124,7 +125,7 @@ func main() {
 
 	// Setup HTTP server
 	httpServer := &http.Server{
-		Addr:         fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),
+		Addr:         net.JoinHostPort(cfg.Server.Host, strconv.Itoa(cfg.Server.Port)),
 		Handler:      apiServer.Handler(),
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 30 * time.Second,
