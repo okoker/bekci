@@ -251,5 +251,5 @@ Both check `CountActiveAdmins()` -- users where `role = 'admin' AND status = 'ac
 
 Sessions store the client IP at creation time. IP extraction logic:
 - Parse `RemoteAddr` (strips port)
-- If IP is loopback (behind reverse proxy): use `X-Real-IP` header
+- If IP is loopback (behind reverse proxy) and `X-Real-IP` header exists: use it; otherwise falls back to loopback address
 - `X-Forwarded-For` is intentionally ignored (spoofable)

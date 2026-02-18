@@ -150,6 +150,13 @@ func (s *Store) CreateTargetWithConditions(t *Target, conds []TargetCondition, c
 		return err
 	}
 
+	// Auto-add creator as default alert recipient (before early return for no conditions)
+	if creatorID != "" {
+		if _, err := tx.Exec(`INSERT OR IGNORE INTO target_alert_recipients (target_id, user_id) VALUES (?, ?)`, t.ID, creatorID); err != nil {
+			return err
+		}
+	}
+
 	if len(conds) == 0 {
 		return tx.Commit()
 	}
@@ -214,11 +221,6 @@ func (s *Store) CreateTargetWithConditions(t *Target, conds []TargetCondition, c
 	t.RuleID = &ruleID
 	t.PreferredCheckType = preferredType
 
-	// Auto-add creator as default alert recipient
-	if creatorID != "" {
-		tx.Exec(`INSERT OR IGNORE INTO target_alert_recipients (target_id, user_id) VALUES (?, ?)`, t.ID, creatorID)
-	}
-
 	return tx.Commit()
 }
 
@@ -269,11 +271,17 @@ func (s *Store) UpdateTargetWithConditions(id, name, host, description string, e
 	if len(conds) == 0 {
 		// No conditions — delete rule if exists
 		if ruleID.Valid {
-			tx.Exec(`DELETE FROM rules WHERE id = ?`, ruleID.String)
-			tx.Exec(`UPDATE targets SET rule_id = NULL WHERE id = ?`, id)
+			if _, err := tx.Exec(`DELETE FROM rules WHERE id = ?`, ruleID.String); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(`UPDATE targets SET rule_id = NULL WHERE id = ?`, id); err != nil {
+				return err
+			}
 		}
 		// Delete all checks for this target
-		tx.Exec(`DELETE FROM checks WHERE target_id = ?`, id)
+		if _, err := tx.Exec(`DELETE FROM checks WHERE target_id = ?`, id); err != nil {
+			return err
+		}
 		return tx.Commit()
 	}
 
@@ -322,12 +330,16 @@ func (s *Store) UpdateTargetWithConditions(id, name, host, description string, e
 	}
 	for _, eid := range existingChecks {
 		if !incomingIDs[eid] {
-			tx.Exec(`DELETE FROM checks WHERE id = ?`, eid)
+			if _, err := tx.Exec(`DELETE FROM checks WHERE id = ?`, eid); err != nil {
+				return err
+			}
 		}
 	}
 
 	// Delete all rule conditions — will recreate
-	tx.Exec(`DELETE FROM rule_conditions WHERE rule_id = ?`, rid)
+	if _, err := tx.Exec(`DELETE FROM rule_conditions WHERE rule_id = ?`, rid); err != nil {
+		return err
+	}
 
 	// Upsert checks + create conditions
 	for i, c := range conds {

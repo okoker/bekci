@@ -100,11 +100,20 @@ func (s *Server) handleUpdateMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.store.UpdateUser(user.ID, req.Email, req.Phone, user.Role); err != nil {
+	email := req.Email
+	if email == "" {
+		email = user.Email
+	}
+	phone := req.Phone
+	if phone == "" {
+		phone = user.Phone
+	}
+
+	if err := s.store.UpdateUser(user.ID, email, phone, user.Role); err != nil {
 		writeError(w, http.StatusInternalServerError, "update failed")
 		return
 	}
-	s.audit(r, "update_profile", "user", user.ID, "email="+req.Email, "success")
+	s.audit(r, "update_profile", "user", user.ID, "email="+email, "success")
 	writeJSON(w, http.StatusOK, map[string]string{"message": "profile updated"})
 }
 

@@ -29,14 +29,6 @@ func (s *Store) GetAllSettings() (map[string]string, error) {
 	return settings, rows.Err()
 }
 
-func (s *Store) SetSetting(key, value string) error {
-	_, err := s.db.Exec(`
-		INSERT INTO settings (key, value) VALUES (?, ?)
-		ON CONFLICT(key) DO UPDATE SET value = excluded.value
-	`, key, value)
-	return err
-}
-
 func (s *Store) SetSettings(kv map[string]string) error {
 	tx, err := s.db.Begin()
 	if err != nil {

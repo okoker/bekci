@@ -1,24 +1,9 @@
 package store
 
 import (
+	"database/sql"
 	"time"
 )
-
-// AddTargetRecipient adds a user as an alert recipient for a target.
-func (s *Store) AddTargetRecipient(targetID, userID string) error {
-	_, err := s.db.Exec(`
-		INSERT OR IGNORE INTO target_alert_recipients (target_id, user_id) VALUES (?, ?)
-	`, targetID, userID)
-	return err
-}
-
-// RemoveTargetRecipient removes a user as an alert recipient for a target.
-func (s *Store) RemoveTargetRecipient(targetID, userID string) error {
-	_, err := s.db.Exec(`
-		DELETE FROM target_alert_recipients WHERE target_id = ? AND user_id = ?
-	`, targetID, userID)
-	return err
-}
 
 // SetTargetRecipients replaces all recipients for a target with the given user IDs.
 func (s *Store) SetTargetRecipients(targetID string, userIDs []string) error {
@@ -28,7 +13,9 @@ func (s *Store) SetTargetRecipients(targetID string, userIDs []string) error {
 	}
 	defer tx.Rollback()
 
-	tx.Exec(`DELETE FROM target_alert_recipients WHERE target_id = ?`, targetID)
+	if _, err := tx.Exec(`DELETE FROM target_alert_recipients WHERE target_id = ?`, targetID); err != nil {
+		return err
+	}
 	for _, uid := range userIDs {
 		if _, err := tx.Exec(`INSERT INTO target_alert_recipients (target_id, user_id) VALUES (?, ?)`, targetID, uid); err != nil {
 			return err
@@ -113,8 +100,11 @@ func (s *Store) GetLastAlertTime(ruleID string) (time.Time, error) {
 	err := s.db.QueryRow(`
 		SELECT sent_at FROM alert_history WHERE rule_id = ? ORDER BY sent_at DESC LIMIT 1
 	`, ruleID).Scan(&t)
-	if err != nil {
+	if err == sql.ErrNoRows {
 		return time.Time{}, nil // no previous alert
+	}
+	if err != nil {
+		return time.Time{}, err
 	}
 	return t, nil
 }

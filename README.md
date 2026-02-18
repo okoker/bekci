@@ -27,7 +27,7 @@ cd bekci
 docker compose up -d
 ```
 
-Open `http://localhost:65000` — login with `admin` and the password set via `BEKCI_ADMIN_PASSWORD` (default: see `config.go`).
+Open `http://localhost:65000` — login with `admin` / `admin1234` (or the password set via `BEKCI_ADMIN_PASSWORD`).
 
 ### Docker Environment Variables (optional)
 
@@ -36,7 +36,7 @@ Add to the `environment:` section in `docker-compose.yml`:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `BEKCI_JWT_SECRET` | auto-generated | JWT signing key |
-| `BEKCI_ADMIN_PASSWORD` | (built-in) | Initial admin password (first boot only) |
+| `BEKCI_ADMIN_PASSWORD` | `admin1234` | Initial admin password (first boot only) |
 | `BEKCI_PORT` | `65000` | HTTP port inside container |
 | `BEKCI_DB_PATH` | `/data/bekci.db` | SQLite database path |
 
@@ -118,7 +118,7 @@ init_admin:
 |--------|----------|-------------|
 | POST | `/api/logout` | End session |
 | GET | `/api/me` | Current user profile |
-| PUT | `/api/me` | Update own email |
+| PUT | `/api/me` | Update own email/phone |
 | PUT | `/api/me/password` | Change own password |
 
 ### Targets (unified with conditions)
@@ -148,16 +148,43 @@ init_admin:
 | GET | `/api/soc/status` | SOC flat view |
 | GET | `/api/soc/history/:check_id` | SOC history |
 
+### Alert Recipients
+
+| Method | Endpoint | Role | Description |
+|--------|----------|------|-------------|
+| GET | `/api/targets/:id/recipients` | any | List alert recipients |
+| PUT | `/api/targets/:id/recipients` | operator+ | Set alert recipients |
+
+### Alerts
+
+| Method | Endpoint | Role | Description |
+|--------|----------|------|-------------|
+| GET | `/api/alerts` | any | Alert history (paginated) |
+
 ### Users & Admin
 
 | Method | Endpoint | Role | Description |
 |--------|----------|------|-------------|
 | GET | `/api/users` | operator+ | List users |
 | POST | `/api/users` | admin | Create user |
+| GET | `/api/users/:id` | admin | Get user |
 | PUT | `/api/users/:id` | admin | Update user |
 | PUT | `/api/users/:id/suspend` | admin | Suspend / activate |
 | PUT | `/api/users/:id/password` | admin | Reset password |
 | GET/PUT | `/api/settings` | any/admin | Read / update settings |
+| POST | `/api/settings/test-email` | admin | Send test email |
+| GET | `/api/audit-log` | operator+ | Audit log (paginated) |
+
+### System & Backup
+
+| Method | Endpoint | Role | Description |
+|--------|----------|------|-------------|
+| GET | `/api/system/health` | any | System health (net/disk/cpu) |
+| GET | `/api/fail2ban/status` | admin | Fail2Ban jail status |
+| GET | `/api/backup` | admin | Download config backup |
+| POST | `/api/backup/restore` | admin | Restore from backup |
+
+> **Role notation:** `operator+` = admin or operator. `any` = any authenticated role. `admin` = admin only.
 
 ## Project Structure
 
