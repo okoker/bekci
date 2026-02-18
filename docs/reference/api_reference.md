@@ -647,7 +647,7 @@ Response formats are identical to their Dashboard counterparts.
 }
 ```
 
-`alert_type` values: `"firing"`, `"recovery"`.
+`alert_type` values: `"firing"`, `"recovery"`, `"re-alert"`.
 
 ### POST /api/settings/test-email
 
@@ -687,8 +687,8 @@ Returns all settings as key-value map. Sensitive values (e.g. `resend_api_key`) 
   "default_check_interval": "300",
   "audit_retention_days": "90",
   "soc_public": "false",
-  "alert_method": "resend",
-  "resend_api_key": "--------",
+  "alert_method": "email",
+  "resend_api_key": "••••••••",
   "alert_from_email": "alerts@example.com",
   "alert_cooldown_s": "300",
   "alert_realert_s": "3600"
@@ -697,7 +697,7 @@ Returns all settings as key-value map. Sensitive values (e.g. `resend_api_key`) 
 
 ### PUT /api/settings
 
-Update one or more settings. Only known keys are accepted. Sending masked API key value (`"--------"`) is silently ignored (preserves existing key).
+Update one or more settings. Only known keys are accepted. Sending masked API key value (`"••••••••"`) is silently ignored (preserves existing key).
 
 **Request:**
 ```json

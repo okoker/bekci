@@ -51,7 +51,7 @@ docker compose up -d --build
 
 ### Prerequisites
 
-- Go 1.22+
+- Go 1.24+
 - Node.js 20+ (for frontend build)
 - GCC (for SQLite CGO)
 
@@ -59,14 +59,14 @@ docker compose up -d --build
 
 ```bash
 make build
-BEKCI_JWT_SECRET=your-secret BEKCI_ADMIN_PASSWORD=changeme123 ./bin/bekci
+BEKCI_ADMIN_PASSWORD=changeme123 ./bin/bekci
 ```
 
 Or with config file:
 
 ```bash
 cp config.example.yaml config.yaml
-# Edit config.yaml — set auth.jwt_secret and init_admin.password
+# Edit config.yaml — set init_admin.password (JWT secret auto-generates if not set)
 make build && ./bin/bekci
 ```
 
@@ -92,7 +92,7 @@ server:
   db_path: bekci.db
 
 auth:
-  jwt_secret: "your-secret-here"   # REQUIRED
+  jwt_secret: ""                   # Optional — auto-generated if not set
 
 logging:
   level: warn     # debug, info, warn, error
@@ -148,16 +148,16 @@ init_admin:
 | GET | `/api/soc/status` | SOC flat view |
 | GET | `/api/soc/history/:check_id` | SOC history |
 
-### Admin
+### Users & Admin
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/users` | List users |
-| POST | `/api/users` | Create user |
-| PUT | `/api/users/:id` | Update user |
-| PUT | `/api/users/:id/suspend` | Suspend / activate |
-| PUT | `/api/users/:id/password` | Reset password |
-| GET/PUT | `/api/settings` | Read / update settings |
+| Method | Endpoint | Role | Description |
+|--------|----------|------|-------------|
+| GET | `/api/users` | operator+ | List users |
+| POST | `/api/users` | admin | Create user |
+| PUT | `/api/users/:id` | admin | Update user |
+| PUT | `/api/users/:id/suspend` | admin | Suspend / activate |
+| PUT | `/api/users/:id/password` | admin | Reset password |
+| GET/PUT | `/api/settings` | any/admin | Read / update settings |
 
 ## Project Structure
 

@@ -10,7 +10,7 @@ Scale: <1000 hosts, typically <400.
 
 | Layer | Choice |
 |-------|--------|
-| Backend | Go 1.22+, net/http, no framework |
+| Backend | Go 1.24+, net/http, no framework |
 | Frontend | Vue 3 + Vite, hand-rolled CSS |
 | DB | SQLite WAL |
 | Auth | JWT (HS256) + server-side sessions, bcrypt |
@@ -31,14 +31,13 @@ Full permission matrix, auth flow, middleware chain, session management, rate li
 | **HTTP/HTTPS** | GET/HEAD, status code, custom port | scheme, port, endpoint, expect_status, headers, skip_tls_verify |
 | **TCP** | Port connect | port |
 | **DNS** | Resolve hostname, optional expected value | query, record_type, expect_value, nameserver |
-| **SNMP v2c/v3** | Query OID, compare value | version, community/auth creds, oid, security_level |
 | **Page Hash** | SHA256 of response body | endpoint, auto-capture baseline on first run |
 | **TLS Certificate** | Cert expiry check | port, warn_days |
 
 ## Rules Engine (Unified Target Model)
 
 - Rules are hidden — auto-managed per target. No standalone rules API.
-- Each target has `operator` (AND/OR), `severity` (critical/warning/info), and a linked `rule_id`.
+- Each target has `operator` (AND/OR), `category` (Network/Security/Physical Security/Key Services/Other), and a linked `rule_id`.
 - **Conditions** are defined inline when creating/editing a target.
 - Each condition = check definition + alert criteria (field, comparator, value, fail_count, fail_window).
 - Engine evaluates after each check result. State changes trigger alerts.
@@ -48,9 +47,9 @@ Full permission matrix, auth flow, middleware chain, session management, rate li
 
 - v1: Email via Resend API
 - Pluggable channel system (v2: Signal gateway, MS Teams)
-- Cooldown per rule+channel
+- Cooldown per rule (configurable via `alert_cooldown_s`)
+- Re-alert for still-firing rules (configurable via `alert_realert_s`, 0 = disabled)
 - Recovery alerts always sent (bypass cooldown)
-- Alert acknowledgment by operator+
 
 ## Web UI
 
@@ -70,7 +69,7 @@ Full permission matrix, auth flow, middleware chain, session management, rate li
 - Problems sorted to top
 - Hover tooltip: date/time + short status summary
 - Drill-down to configure (operator+)
-- 15s auto-refresh
+- 30s auto-refresh
 
 ## API & DB
 
@@ -113,7 +112,7 @@ Single image, single container, single port.
 
 | # | Decision |
 |---|----------|
-| 1 | SNMP credentials plaintext in DB |
+| 1 | ~~SNMP credentials plaintext in DB~~ *(SNMP deferred, decision moot)* |
 | 2 | Hybrid scheduler: event-driven + 60s poll safety net |
 | 3 | Dashboard shows check results, problems first, drill-down to configure |
 | 4 | SSH checks deferred to v2 |
@@ -121,7 +120,7 @@ Single image, single container, single port.
 | 6 | Page hash auto-capture on first run |
 | 7 | No migration from v1 YAML config — clean start via web UI |
 | 8 | Config.yaml = process bootstrap, settings table = runtime. Zero overlap. |
-| 9 | SNMP deferred — not in Phase 2 |
+| 9 | SNMP deferred — removed from v1 check types |
 | 10 | Check config stored as JSON blob in TEXT column — flexible per check type |
 | 11 | Checker package: complete rewrite (v1 coupled to old config types) |
 | 12 | Scheduler: complete rewrite (v1 reads YAML, v2 reads DB) |
