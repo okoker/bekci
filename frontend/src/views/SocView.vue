@@ -466,8 +466,8 @@ onUnmounted(() => {
   color: #fbbf24;
 }
 .soc-cat-server {
-  background: rgba(20, 184, 166, 0.2);
-  color: #5eead4;
+  background: rgba(219, 39, 119, 0.2);
+  color: #f9a8d4;
 }
 .soc-cat-other {
   background: rgba(148, 163, 184, 0.15);
