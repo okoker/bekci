@@ -23,10 +23,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ip := r.Header.Get("X-Forwarded-For")
-	if ip == "" {
-		ip = r.RemoteAddr
-	}
+	ip := clientIP(r)
 
 	token, user, err := s.auth.Login(req.Username, req.Password, ip)
 	if err != nil {
