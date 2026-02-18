@@ -22,7 +22,7 @@ Scale: <1000 hosts, typically <400.
 | Role | Dashboard | Targets/Checks | Rules | Alerts | Users | Settings |
 |------|-----------|----------------|-------|--------|-------|----------|
 | **Admin** | view | CRUD | CRUD | view, ack, config channels | CRUD | read/write |
-| **Operator** | view | CRUD | CRUD | view, ack | view self | read |
+| **Operator** | view | CRUD | CRUD | view, ack | list + view self | read |
 | **Viewer** | view | view | view | view | view self | - |
 
 Auth: JWT + server sessions. No 2FA in v1. bcrypt passwords. Configurable session timeout.
@@ -83,21 +83,21 @@ Initial admin seeded from config.yaml / env vars on first boot.
 ### Auth
 | Method | Path | Roles | Description |
 |--------|------|-------|-------------|
-| POST | `/api/auth/login` | public | Login → JWT |
-| POST | `/api/auth/logout` | any | Kill session |
-| GET | `/api/auth/me` | any | Own profile |
-| PUT | `/api/auth/me` | any | Update own email |
-| PUT | `/api/auth/me/password` | any | Change own password |
+| POST | `/api/login` | public | Login → JWT. Rate limited: 5 attempts/5min per IP, 15min lockout. Generic error message (no username enumeration). |
+| POST | `/api/logout` | any | Kill session |
+| GET | `/api/me` | any | Own profile |
+| PUT | `/api/me` | any | Update own email/phone |
+| PUT | `/api/me/password` | any | Change own password |
 
-### Users (admin only)
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/users` | List users |
-| POST | `/api/users` | Create user |
-| GET | `/api/users/:id` | Get user |
-| PUT | `/api/users/:id` | Update user |
-| DELETE | `/api/users/:id` | Suspend user |
-| PUT | `/api/users/:id/password` | Reset password |
+### Users (CUD: admin only, list: operator+)
+| Method | Path | Roles | Description |
+|--------|------|-------|-------------|
+| GET | `/api/users` | operator+ | List users (needed for recipient picker) |
+| POST | `/api/users` | admin | Create user |
+| GET | `/api/users/:id` | admin | Get user |
+| PUT | `/api/users/:id` | admin | Update user |
+| PUT | `/api/users/:id/suspend` | admin | Suspend user |
+| PUT | `/api/users/:id/password` | admin | Reset password |
 
 ### Targets (Unified — includes conditions)
 | Method | Path | Roles | Description |
@@ -163,7 +163,7 @@ Initial admin seeded from config.yaml / env vars on first boot.
 ### Settings
 | Method | Path | Roles | Description |
 |--------|------|-------|-------------|
-| GET | `/api/settings` | admin, operator | Read settings |
+| GET | `/api/settings` | any | Read settings |
 | PUT | `/api/settings` | admin | Update settings |
 
 ### Backup & Restore (admin only)
@@ -175,9 +175,10 @@ Initial admin seeded from config.yaml / env vars on first boot.
 **Backup JSON format** (version 1):
 ```json
 {
-  "version": 1, "schema_version": 7, "created_at": "...", "app_version": "2.0.0",
+  "version": 1, "schema_version": 11, "created_at": "...", "app_version": "2.0.0",
   "users": [], "settings": {}, "rules": [], "targets": [],
-  "checks": [], "rule_conditions": [], "rule_states": []
+  "checks": [], "rule_conditions": [], "rule_states": [],
+  "recipients": [{ "target_id": "...", "user_id": "..." }]
 }
 ```
 
@@ -189,7 +190,7 @@ Initial admin seeded from config.yaml / env vars on first boot.
 
 ### Fail2Ban Status (Settings → Fail2Ban tab, admin only)
 
-Settings page uses 5 tabs: **General** (settings form, all users) | **Audit Log** (operator+, loads on tab switch) | **Users** (admin only, loads on tab switch) | **Backup & Restore** (admin only) | **Fail2Ban** (admin only). Old `/audit-log` and `/users` URLs redirect to `/settings`.
+Settings page uses 6 tabs: **General** (settings form, all users) | **Audit Log** (operator+, loads on tab switch) | **Users** (admin only, loads on tab switch) | **Backup & Restore** (admin only) | **Alerting** (admin only) | **Fail2Ban** (admin only). Old `/audit-log` and `/users` URLs redirect to `/settings`.
 
 Fail2Ban tab displays jail status table with columns: Jail, Active Bans, Bans (total), Failed (window), Failed (total), Show IPs. Status badges: red for active bans > 0, green for 0; amber for active failures. Expandable row shows banned IPs (monospace, red-tinted). Auto-refresh every 30s (stops on tab switch/unmount). Refresh button + "last updated" timestamp. Graceful error when fail2ban unavailable.
 
