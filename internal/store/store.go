@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -66,6 +67,7 @@ func (s *Store) migrate() error {
 		s.migration009,
 		s.migration010,
 		s.migration011,
+		s.migration012,
 	}
 
 	for i := current; i < len(migrations); i++ {
@@ -408,4 +410,81 @@ func (s *Store) migration011() error {
 		INSERT OR IGNORE INTO settings (key, value) VALUES ('alert_realert_s', '3600');
 	`)
 	return err
+}
+
+// migration012 backfills rules for targets that have checks but no rule_id.
+func (s *Store) migration012() error {
+	rows, err := s.db.Query(`
+		SELECT t.id, t.name, t.operator
+		FROM targets t
+		JOIN checks c ON c.target_id = t.id
+		WHERE t.rule_id IS NULL
+		GROUP BY t.id
+	`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	type orphan struct {
+		id, name, operator string
+	}
+	var orphans []orphan
+	for rows.Next() {
+		var o orphan
+		if err := rows.Scan(&o.id, &o.name, &o.operator); err != nil {
+			return err
+		}
+		orphans = append(orphans, o)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	for _, o := range orphans {
+		ruleID := uuid.New().String()
+
+		if _, err := s.db.Exec(`
+			INSERT INTO rules (id, name, description, operator, severity, enabled, created_at, updated_at)
+			VALUES (?, ?, '', ?, 'critical', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		`, ruleID, o.name+" rule", o.operator); err != nil {
+			return err
+		}
+		if _, err := s.db.Exec(`INSERT INTO rule_states (rule_id, current_state) VALUES (?, 'healthy')`, ruleID); err != nil {
+			return err
+		}
+
+		// Create rule_conditions from existing checks
+		checkRows, err := s.db.Query(`SELECT id FROM checks WHERE target_id = ? ORDER BY created_at ASC`, o.id)
+		if err != nil {
+			return err
+		}
+		order := 0
+		for checkRows.Next() {
+			var checkID string
+			if err := checkRows.Scan(&checkID); err != nil {
+				checkRows.Close()
+				return err
+			}
+			condID := uuid.New().String()
+			if _, err := s.db.Exec(`
+				INSERT INTO rule_conditions (id, rule_id, check_id, field, comparator, value, fail_count, fail_window, sort_order)
+				VALUES (?, ?, ?, 'status', 'eq', 'down', 1, 0, ?)
+			`, condID, ruleID, checkID, order); err != nil {
+				checkRows.Close()
+				return err
+			}
+			order++
+		}
+		checkRows.Close()
+
+		// Link rule to target
+		if _, err := s.db.Exec(`UPDATE targets SET rule_id = ? WHERE id = ?`, ruleID, o.id); err != nil {
+			return err
+		}
+
+		slog.Info("Backfilled rule for target", "target", o.name, "rule_id", ruleID)
+	}
+
+	return nil
 }

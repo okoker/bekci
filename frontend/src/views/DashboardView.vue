@@ -133,18 +133,22 @@ function filteredAndSortedTargets() {
     if (aDown && !bDown) return -1
     if (!aDown && bDown) return 1
     if (aDown && bDown) return getWorstUptime(a) - getWorstUptime(b)
-    return a.name.localeCompare(b.name)
+    const diff = getWorstUptime(a) - getWorstUptime(b)
+    return diff !== 0 ? diff : a.name.localeCompare(b.name)
   })
 }
 
 function isTargetDown(target) {
   if (target.state === 'unhealthy') return true
+  if (target.state === 'healthy') return false
+  // Fallback: no rule state — derive from raw check status
   return target.checks?.some(c => c.last_status === 'down')
 }
 
 function targetStateLabel(target) {
-  if (target.state === 'unhealthy') return 'UNHEALTHY'
-  if (target.state === 'healthy') return 'HEALTHY'
+  if (target.state === 'unhealthy') return 'DOWN'
+  if (target.state === 'healthy') return 'UP'
+  // Fallback: no rule state
   if (target.checks?.some(c => c.last_status === 'down')) return 'DOWN'
   if (target.checks?.some(c => c.last_status === 'up')) return 'UP'
   return ''
@@ -152,8 +156,8 @@ function targetStateLabel(target) {
 
 function targetStateClass(target) {
   const label = targetStateLabel(target)
-  if (label === 'UNHEALTHY' || label === 'DOWN') return 'badge-down'
-  if (label === 'HEALTHY' || label === 'UP') return 'badge-up'
+  if (label === 'DOWN') return 'badge-down'
+  if (label === 'UP') return 'badge-up'
   return ''
 }
 
