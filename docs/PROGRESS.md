@@ -4,8 +4,8 @@
 
 1. **What was done** — Fixed A-H4 (login rate limiting + generic errors), A-M1 (scheduler interval change detection), A-M8 (operator user listing). Archived stale DESIGN.md. Fixed 5 doc discrepancies in REQUIREMENTS.md.
 2. **Decisions made** — Rate limiter is in-memory (resets on restart, acceptable for fail2ban backup). GET /api/users moved to opAuth (operators see user list for recipient picker, CUD stays admin).
-3. **Server state** — Local dev only. Production still at v2.5.3.
-4. **What's next** — Deploy fixes to production. Test with real Resend API key. Signal gateway (Phase 4c, deferred).
+3. **Server state** — Deployed v2.6.0 to production. Service active.
+4. **What's next** — Test with real Resend API key. Signal gateway (Phase 4c, deferred).
 
 ## Current Status
 **Phase**: Phase 4 (Email Alerting) complete + UI polish. Deployed v2.5.3.
@@ -196,7 +196,7 @@
 ### Production Server
 - **Host**: `cl@dias-bekci` (10.0.9.20), Ubuntu 22.04, x86_64
 - **Access**: `https://10.0.9.20` (self-signed cert), `https://bekci.home` when DNS ready
-- **Binary**: `/opt/bekci/bekci` v2.5.3, runs as `bekci` system user
+- **Binary**: `/opt/bekci/bekci` v2.6.0, runs as `bekci` system user
 - **Config**: `/etc/bekci/config.yaml` (640 root:bekci), `/etc/bekci/env` (600 root:root — JWT secret)
 - **DB**: `/var/lib/bekci/bekci.db`
 - **Logs**: `/var/log/bekci/bekci.log` + `journalctl -u bekci`
