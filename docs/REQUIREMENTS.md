@@ -19,15 +19,9 @@ Scale: <1000 hosts, typically <400.
 
 ## RBAC — 3 Roles
 
-| Role | Dashboard | Targets/Checks | Rules | Alerts | Users | Settings |
-|------|-----------|----------------|-------|--------|-------|----------|
-| **Admin** | view | CRUD | CRUD | view, ack, config channels | CRUD | read/write |
-| **Operator** | view | CRUD | CRUD | view, ack | list + view self | read |
-| **Viewer** | view | view | view | view | view self | - |
+3 roles: admin (full), operator (monitoring ops), viewer (read-only). JWT + server sessions, bcrypt, configurable timeout. Self-service profile/password for all. Admin seeded on first boot.
 
-Auth: JWT + server sessions. No 2FA in v1. bcrypt passwords. Configurable session timeout.
-Self-service: any user can view own profile, update email and phone, change own password.
-Initial admin seeded from config.yaml / env vars on first boot.
+Full permission matrix, auth flow, middleware chain, session management, rate limiting: **`reference/rbac.md`**
 
 ## Check Types (v1)
 
@@ -78,164 +72,12 @@ Initial admin seeded from config.yaml / env vars on first boot.
 - Drill-down to configure (operator+)
 - 15s auto-refresh
 
-## API Endpoints
+## API & DB
 
-### Auth
-| Method | Path | Roles | Description |
-|--------|------|-------|-------------|
-| POST | `/api/login` | public | Login → JWT. Rate limited: 5 attempts/5min per IP, 15min lockout. Generic error message (no username enumeration). |
-| POST | `/api/logout` | any | Kill session |
-| GET | `/api/me` | any | Own profile |
-| PUT | `/api/me` | any | Update own email/phone |
-| PUT | `/api/me/password` | any | Change own password |
-
-### Users (CUD: admin only, list: operator+)
-| Method | Path | Roles | Description |
-|--------|------|-------|-------------|
-| GET | `/api/users` | operator+ | List users (needed for recipient picker) |
-| POST | `/api/users` | admin | Create user |
-| GET | `/api/users/:id` | admin | Get user |
-| PUT | `/api/users/:id` | admin | Update user |
-| PUT | `/api/users/:id/suspend` | admin | Suspend user |
-| PUT | `/api/users/:id/password` | admin | Reset password |
-
-### Targets (Unified — includes conditions)
-| Method | Path | Roles | Description |
-|--------|------|-------|-------------|
-| GET | `/api/targets` | any | List with condition_count + state |
-| POST | `/api/targets` | operator+ | Create with conditions (auto-manages rule) |
-| GET | `/api/targets/:id` | any | Detail + conditions + state |
-| PUT | `/api/targets/:id` | operator+ | Update + smart-diff conditions |
-| DELETE | `/api/targets/:id` | operator+ | Delete (cascades checks + rule) |
-
-**Target create/update body**:
-```json
-{
-  "name": "Web Server", "host": "example.com", "description": "...",
-  "enabled": true, "operator": "OR", "severity": "critical",
-  "conditions": [
-    {
-      "check_id": "",
-      "check_type": "ping", "check_name": "Ping", "config": "{\"count\":3}",
-      "interval_s": 60, "field": "status", "comparator": "eq", "value": "down",
-      "fail_count": 1, "fail_window": 0
-    }
-  ]
-}
-```
-
-**Target detail response** includes `conditions[]` and `state: { rule_id, current_state, last_change, last_evaluated }`.
-
-### Checks (read-only + run)
-| Method | Path | Roles | Description |
-|--------|------|-------|-------------|
-| GET | `/api/targets/:id/checks` | any | List checks for target |
-| POST | `/api/checks/:id/run` | operator+ | Trigger immediate check |
-| GET | `/api/checks/:id/results` | any | Query results (time range) |
-
-### Alerts
-| Method | Path | Roles | Description |
-|--------|------|-------|-------------|
-| GET | `/api/alerts` | any | Alert history (paginated: `?page=1&limit=50`) |
-| GET | `/api/targets/:id/recipients` | any | List alert recipients for target |
-| PUT | `/api/targets/:id/recipients` | operator+ | Set recipients: `{ user_ids: [...] }` |
-| POST | `/api/settings/test-email` | admin | Send test email to current user |
-
-**Alert response**: `{ entries: [...], total: N }` where each entry has `id, rule_id, target_id, target_name, recipient_id, recipient_name, alert_type, message, sent_at`.
-
-**Target detail response** now includes `recipient_ids: [...]`.
-
-**Alerting settings** (in settings table):
-- `alert_method` — `email` | `signal` | `email+signal`
-- `resend_api_key` — Resend API key (masked in GET response)
-- `alert_from_email` — Sender email address
-- `alert_cooldown_s` — Min seconds between alerts per rule (default 1800)
-- `alert_realert_s` — Re-alert interval for ongoing issues (0 = disabled, default 3600)
-
-### Dashboard
-| Method | Path | Roles | Description |
-|--------|------|-------|-------------|
-| GET | `/api/dashboard/status` | any | Flat `[]dashboardTarget` with per-target state+severity |
-| GET | `/api/dashboard/history/:check_id` | any | `?range=90d` or `?range=4h` |
-| GET | `/api/soc/status` | configurable | Flat `[]dashboardTarget` (no rules_summary) |
-| GET | `/api/soc/history/:check_id` | configurable | Same as dashboard history |
-
-### Settings
-| Method | Path | Roles | Description |
-|--------|------|-------|-------------|
-| GET | `/api/settings` | any | Read settings |
-| PUT | `/api/settings` | admin | Update settings |
-
-### Backup & Restore (admin only)
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/backup` | Download JSON backup (config only — no check results) |
-| POST | `/api/backup/restore` | Wipe DB + restore from JSON. Invalidates all sessions. |
-
-**Backup JSON format** (version 1):
-```json
-{
-  "version": 1, "schema_version": 11, "created_at": "...", "app_version": "2.0.0",
-  "users": [], "settings": {}, "rules": [], "targets": [],
-  "checks": [], "rule_conditions": [], "rule_states": [],
-  "recipients": [{ "target_id": "...", "user_id": "..." }]
-}
-```
-
-**Restore behaviour**: Single atomic transaction — deletes all config tables (leaf→root), inserts from backup (root→leaf). On any error, entire transaction rolls back. After success, scheduler reloads. Passwords (bcrypt hashes) are preserved. 10MB body limit.
-
-**Validation**: version must be 1, schema_version ≤ 7, at least one active admin user required.
-
-**Frontend**: Backup & Restore tab on Settings page (admin only). Download button triggers blob download. File picker + warning banner + confirm dialog for restore. On success: clears auth, redirects to login.
-
-### Fail2Ban Status (Settings → Fail2Ban tab, admin only)
-
-Settings page uses 6 tabs: **General** (settings form, all users) | **Audit Log** (operator+, loads on tab switch) | **Users** (admin only, loads on tab switch) | **Backup & Restore** (admin only) | **Alerting** (admin only) | **Fail2Ban** (admin only). Old `/audit-log` and `/users` URLs redirect to `/settings`.
-
-Fail2Ban tab displays jail status table with columns: Jail, Active Bans, Bans (total), Failed (window), Failed (total), Show IPs. Status badges: red for active bans > 0, green for 0; amber for active failures. Expandable row shows banned IPs (monospace, red-tinted). Auto-refresh every 30s (stops on tab switch/unmount). Refresh button + "last updated" timestamp. Graceful error when fail2ban unavailable.
-
-### Fail2Ban (admin only)
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/fail2ban/status` | Read-only jail status (shells out to `fail2ban-client`) |
-
-**Response**:
-```json
-{
-  "jails": [
-    { "name": "sshd", "currently_failed": 0, "total_failed": 15,
-      "currently_banned": 1, "total_banned": 8, "banned_ips": ["1.2.3.4"] }
-  ],
-  "fetched_at": "2026-02-17T01:18:00Z"
-}
-```
-
-**Error codes**: 503 (fail2ban not installed), 504 (timeout). 5s exec timeout. Jail names validated against `^[a-zA-Z0-9_-]+$`.
-
-**Prod config**: bekci user has sudoers access to `fail2ban-client status` only. Filter at `/etc/fail2ban/filter.d/bekci.conf` parses `slog.Warn("Login failed")` lines. `bekci-login` jail: 10 retries / 10min window / 30min ban.
-
-### System
-| Method | Path | Roles | Description |
-|--------|------|-------|-------------|
-| GET | `/api/health` | public | Public self-check |
-| GET | `/api/system/health` | any | Net/Disk/CPU vitals for navbar indicator |
-
-**System health response**:
-```json
-{
-  "net":  { "status": "ok", "latency_ms": 12 },
-  "disk": { "total_gb": 60, "free_gb": 56 },
-  "cpu":  { "load1": 0.3, "num_cpu": 4 }
-}
-```
-
-**Navbar health indicator**: 3 dots (Net/Disk/CPU) with green/yellow/red thresholds. Click opens popover with details. Polls every 30s. Grey dots when endpoint unreachable.
-
-| Metric | Green | Yellow | Red |
-|--------|-------|--------|-----|
-| Net | reachable | — | unreachable |
-| Disk | >20% free | 10-20% free | <10% free |
-| Load | <N cores | <2×N cores | ≥2×N cores |
+31 endpoints across 10 domains. Full specs extracted to reference docs:
+- **`reference/api_reference.md`** — All endpoints, auth levels, request/response JSON, error codes
+- **`reference/db_schema.md`** — All tables, columns, migrations, entity relationships
+- **`reference/rbac.md`** — Permission matrix, auth flow, middleware, session management
 
 ## Configuration
 
