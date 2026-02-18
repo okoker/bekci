@@ -722,8 +722,8 @@ onMounted(() => loadTargets())
   color: #1d4ed8;
 }
 .badge-cat-server {
-  background: #dcfce7;
-  color: #166534;
+  background: #ccfbf1;
+  color: #115e59;
 }
 .badge-cat-physical {
   background: #fef3c7;

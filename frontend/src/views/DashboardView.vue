@@ -260,7 +260,7 @@ onUnmounted(() => {
           <div class="target-header-left">
             <span class="expand-icon">{{ expandedTargetId === target.id ? '&#9660;' : '&#9654;' }}</span>
             <span v-if="target.checks.length > 0"
-              :class="['status-dot', isTargetDown(target) ? 'dot-down' : (getPreferredCheck(target)?.last_status === 'up' ? 'dot-up' : 'dot-unknown')]">
+              :class="['status-dot', isTargetDown(target) ? 'dot-down' : (targetStateLabel(target) === 'UP' ? 'dot-up' : 'dot-unknown')]">
             </span>
             <span class="target-name">{{ target.name }}</span>
             <span class="target-host text-muted">{{ target.host }}</span>
@@ -531,8 +531,8 @@ onUnmounted(() => {
   color: #92400e;
 }
 .badge-cat-server {
-  background: #dcfce7;
-  color: #166534;
+  background: #ccfbf1;
+  color: #115e59;
 }
 .badge-cat-other {
   background: #e5e7eb;
