@@ -25,14 +25,22 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	ip := clientIP(r)
 
+	if !s.loginLimiter.allow(ip) {
+		slog.Warn("Login rate limited", "ip", ip)
+		writeError(w, http.StatusTooManyRequests, "too many login attempts, try again later")
+		return
+	}
+
 	token, user, err := s.auth.Login(req.Username, req.Password, ip)
 	if err != nil {
 		slog.Warn("Login failed", "username", req.Username, "ip", ip)
 		s.auditLogin(r, "", req.Username, "login_failed", err.Error(), "failure")
-		writeError(w, http.StatusUnauthorized, err.Error())
+		s.loginLimiter.recordFailure(ip)
+		writeError(w, http.StatusUnauthorized, "invalid username or password")
 		return
 	}
 
+	s.loginLimiter.resetSuccess(ip)
 	s.auditLogin(r, user.ID, user.Username, "login", "", "success")
 	writeJSON(w, http.StatusOK, map[string]any{
 		"token": token,

@@ -22,6 +22,9 @@ Prefix: `S-` = server/infra, `A-` = application/code
 | ~~A-M2~~ | 18/02 | Frontend can't clear recipients |
 | ~~A-M3~~ | 18/02 | Recipients included in backup/restore |
 | ~~A-M4~~ | 18/02 | Secure client IP extraction (loopback→X-Real-IP, else RemoteAddr) |
+| ~~A-H4~~ | 18/02 | Login rate limiting (5/5min/15min lockout) + generic error message |
+| ~~A-M1~~ | 18/02 | Scheduler detects interval changes and reschedules |
+| ~~A-M8~~ | 18/02 | Operators can list users (GET /api/users) for recipient picker |
 | ~~S-M1~~ | 18/02 | Nginx security headers (HSTS, X-Content-Type-Options, X-Frame-Options, CSP) |
 
 ---
@@ -33,7 +36,6 @@ Prefix: `S-` = server/infra, `A-` = application/code
 | ID | Priority | Tags | Description |
 |----|----------|------|-------------|
 | A-H2 | `[P0]` | `[security]` | Default bootstrap admin password (`admin1234`). See KI-001 — accepting for now, mitigated by first-boot-only + log warning. |
-| A-H4 | `[P0]` | `[security]` | No login rate limiting. Error messages leak auth state (`account suspended` vs `invalid credentials`). Add per-IP rate limit + generic error. |
 | S-H3 | `[P0]` | `[security]` | SSH allows root login (`PermitRootLogin yes`) + password auth. Disable both. |
 | S-C4 | `[P0]` | `[security]` | CGO_ENABLED=0 deploy caused ~26 restart cycles. Add systemd `StartLimitBurst` / deploy validation. |
 | S-H5 | `[P1]` | `[security]` | systemd service has no sandboxing (`ProtectSystem`, `NoNewPrivileges`, `PrivateTmp`). |
@@ -42,11 +44,9 @@ Prefix: `S-` = server/infra, `A-` = application/code
 
 | ID | Priority | Tags | Description |
 |----|----------|------|-------------|
-| A-M1 | `[P1]` | `[bug]` | Scheduler doesn't apply interval changes for already-scheduled checks. Reload only schedules new checks; existing timers keep old interval. |
 | A-M5 | `[P1]` | `[bug]` | IPv6 bug in TCP checker: `fmt.Sprintf("%s:%d")` breaks IPv6 literals. Use `net.JoinHostPort`. |
 | A-M6 | `[P1]` | `[bug]` | IPv6 bug in DNS checker: `strings.Contains(":")` misclassifies raw IPv6 addresses. Use `net.JoinHostPort`. |
 | A-M7 | `[P1]` | `[debt]` | Signal alert mode selectable in UI but backend is stub-only. Hide or mark disabled until implemented. |
-| A-M8 | `[P1]` | `[bug]` | Role inconsistency: operators can set recipients but can't list users (`/users` admin-only), so UI shows "No users available". |
 | A-M9 | `[P2]` | `[debt]` | Error swallowing in state-changing paths (`alerts.go:31`, `alerts.go:116`, `auth_handlers.go:142`). Log errors explicitly. |
 | S-M2 | `[P2]` | `[security]` | Binary `/opt/bekci/bekci` owned by `cl`, not root. Compromised `cl` could replace binary. |
 | S-M3 | `[P1]` | `[security]` | Two accounts (`omer`, `cl`) with `NOPASSWD: ALL` sudo. |
