@@ -59,7 +59,7 @@ Full permission matrix, auth flow, middleware chain, session management, rate li
 | `/` | Dashboard — status bars, problems first | all |
 | `/targets` | Target list + CRUD (unified with conditions) | all (CRUD: operator+) |
 | `/targets/:id` | Target detail, checks, results | all |
-| `/alerts` | Alert history + acknowledge | all (ack: operator+) |
+| `/alerts` | Alert history | all |
 | `/settings` | System settings — 6 tabs: General, Audit Log (operator+), Users (admin), Backup & Restore (admin), Alerting (admin), Fail2Ban (admin) | all (General), operator+ (Audit), admin (Users/Backup/Alerting/F2B) |
 | `/profile` | Own profile (email, phone), password change. Accessed via user dropdown menu in navbar. | all |
 
@@ -138,6 +138,7 @@ Single image, single container, single port.
 
 ## v2 Scope (deferred)
 
+- Alert acknowledgment (DB columns exist but no API/UI wired up)
 - SSH command checks
 - Service restart (local, SSH, Docker)
 - Signal gateway alerting

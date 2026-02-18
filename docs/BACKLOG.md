@@ -37,6 +37,12 @@ Prefix: `S-` = server/infra, `A-` = application/code
 | ~~A-L4~~ | 18/02 | Config docs: JWT secret comment updated in README + config.example.yaml |
 | ~~A-L6~~ | 18/02 | README.md: Go version, JWT auto-gen, users RBAC roles fixed |
 | ~~A-L7~~ | 18/02 | REQUIREMENTS.md: removed SNMP, severity→category, ack→deferred, 15s→30s refresh |
+| ~~A-H5~~ | 18/02 | Restore accepts `application/json; charset=utf-8` via `mime.ParseMediaType` |
+| ~~A-M10~~ | 18/02 | Silent store errors: 8 unchecked `tx.Exec`/`QueryRow` now propagate errors |
+| ~~A-M11~~ | 18/02 | `PUT /api/me` preserves email/phone when fields omitted |
+| ~~A-M12~~ | 18/02 | `PUT /api/users/{id}` preserves phone when field omitted |
+| ~~A-M13~~ | 18/02 | Creator auto-add as recipient works even with no conditions |
+| ~~A-L5~~ | 18/02 | Dead store functions removed: `SetSetting`, `AddTargetRecipient`, `RemoveTargetRecipient` |
 
 ---
 
@@ -47,7 +53,6 @@ Prefix: `S-` = server/infra, `A-` = application/code
 | ID | Priority | Tags | Description |
 |----|----------|------|-------------|
 | A-H2 | `[P0]` | `[security]` | Default bootstrap admin password (`admin1234`). See KI-001 — accepting for now, mitigated by first-boot-only + log warning. |
-| A-H5 | `[P0]` | `[bug]` | Restore endpoint rejects `application/json; charset=utf-8`. `backup_handlers.go:35` checks exact match. Use `mime.ParseMediaType`. |
 | S-H3 | `[P0]` | `[security]` | SSH allows root login (`PermitRootLogin yes`) + password auth. Disable both. |
 | S-C4 | `[P0]` | `[security]` | CGO_ENABLED=0 deploy caused ~26 restart cycles. Add systemd `StartLimitBurst` / deploy validation. |
 | S-H5 | `[P1]` | `[security]` | systemd service has no sandboxing (`ProtectSystem`, `NoNewPrivileges`, `PrivateTmp`). |
@@ -56,10 +61,6 @@ Prefix: `S-` = server/infra, `A-` = application/code
 
 | ID | Priority | Tags | Description |
 |----|----------|------|-------------|
-| A-M10 | `[P1]` | `[bug]` | Silent errors in store layer: `alerts.go:31` (delete in recipient replace), `alerts.go:116-117` (GetLastAlertTime swallows DB error), `targets.go:272-276,325-330` (unchecked `tx.Exec` in target updates). Propagate/log errors. |
-| A-M11 | `[P1]` | `[bug]` | `PUT /api/me` clears email/phone when fields omitted (`auth_handlers.go:103`). Preserve existing values for empty fields. |
-| A-M12 | `[P1]` | `[bug]` | `PUT /api/users/{id}` clears phone when omitted (`user_handlers.go:161`). Same class as A-M11. |
-| A-M13 | `[P1]` | `[bug]` | Creator auto-add as recipient skipped when target has no conditions — early return at `targets.go:153-155` bypasses auto-add at `targets.go:217`. |
 | A-M7 | `[P1]` | `[debt]` | Signal alert mode selectable in UI but backend is stub-only. Hide or mark disabled until implemented. |
 | A-M16 | `[P2]` | `[security]` | JWT stored in `localStorage` (`auth.js:6`). XSS can exfiltrate token. Mitigate with HttpOnly cookies or stricter CSP. |
 | S-M2 | `[P2]` | `[security]` | Binary `/opt/bekci/bekci` owned by `cl`, not root. Compromised `cl` could replace binary. |
@@ -71,7 +72,6 @@ Prefix: `S-` = server/infra, `A-` = application/code
 
 | ID | Priority | Tags | Description |
 |----|----------|------|-------------|
-| A-L5 | `[P2]` | `[debt]` | Dead store functions: `SetSetting` (settings.go:32), `AddTargetRecipient` (alerts.go:8), `RemoveTargetRecipient` (alerts.go:16). No callers. |
 | A-L8 | `[P2]` | `[debt]` | Zero test files. Need baseline tests for auth/RBAC, backup/restore, target CRUD, alerting. |
 | S-L1 | `[P2]` | `[debt]` | No log rotation for `/var/log/bekci/bekci.log`. |
 | S-L2 | `[P2]` | `[feature]` | No automated DB backups (manual backup/restore exists in UI). |

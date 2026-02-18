@@ -159,6 +159,9 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 		email = user.Email
 	}
 	phone := req.Phone
+	if phone == "" {
+		phone = user.Phone
+	}
 
 	if err := s.store.UpdateUser(id, email, phone, role); err != nil {
 		writeError(w, http.StatusInternalServerError, "update failed")

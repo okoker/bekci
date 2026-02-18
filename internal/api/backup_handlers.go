@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"mime"
 	"net/http"
 	"time"
 
@@ -32,7 +33,15 @@ func (s *Server) handleRestore(w http.ResponseWriter, r *http.Request) {
 	var data store.BackupData
 
 	// Support both multipart form upload (frontend) and raw JSON (API/curl)
-	if ct := r.Header.Get("Content-Type"); len(ct) > 0 && ct != "application/json" {
+	isMultipart := false
+	if ct := r.Header.Get("Content-Type"); ct != "" {
+		mediaType, _, _ := mime.ParseMediaType(ct)
+		if mediaType != "application/json" {
+			isMultipart = true
+		}
+	}
+
+	if isMultipart {
 		// Multipart form: parse and read the "file" field
 		if err := r.ParseMultipartForm(10 << 20); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid form data: "+err.Error())
@@ -49,7 +58,7 @@ func (s *Server) handleRestore(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		// Raw JSON body
+		// Raw JSON body (including no Content-Type header)
 		if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 			return

@@ -664,6 +664,7 @@ Sends a test email to the authenticated user's email address. Requires the alert
 |-------|------|
 | No email on account | 400 |
 | User not found | 404 |
+| Email send failed | 500 |
 | Alerter not initialized | 503 |
 
 ---

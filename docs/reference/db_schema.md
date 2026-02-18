@@ -99,7 +99,8 @@ Key-value config store.
 - `project_id` FK was removed in migration004 (projects table dropped).
 - `UNIQUE(project_id, name)` was replaced by `UNIQUE(name)` after migration004 table rebuild.
 - `rule_id` is a logical FK to `rules(id)` but not enforced at DDL level (nullable, set by app code).
-- `category` was originally `severity` (renamed in migration007). Values remapped in migration010.
+- `category` was originally `severity` (renamed in migration007). Values remapped in migration010. DDL default is `'critical'` but app code defaults to `'Other'` when empty.
+- `idx_targets_project_id` index from migration002 is orphaned after migration004 dropped the projects table (harmless but unclean).
 
 ### checks
 
