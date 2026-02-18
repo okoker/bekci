@@ -169,7 +169,7 @@ async function saveTarget() {
       targetId = data.id
     }
     // Save recipients
-    if (targetId && selectedRecipients.value.length > 0) {
+    if (targetId) {
       await saveRecipients(targetId)
     }
     showForm.value = false

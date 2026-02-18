@@ -81,6 +81,13 @@ func (s *Store) migrate() error {
 	return nil
 }
 
+// SchemaVersion returns the current database schema version.
+func (s *Store) SchemaVersion() int {
+	var v int
+	s.db.QueryRow(`SELECT version FROM schema_version LIMIT 1`).Scan(&v)
+	return v
+}
+
 // migration001 creates the v2 auth tables.
 func (s *Store) migration001() error {
 	schema := `

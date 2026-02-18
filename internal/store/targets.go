@@ -334,11 +334,15 @@ func (s *Store) UpdateTargetWithConditions(id, name, host, description string, e
 		checkID := c.CheckID
 		if checkID != "" {
 			// Update existing check — enforce target ownership
-			_, err = tx.Exec(`
+			res, err := tx.Exec(`
 				UPDATE checks SET name = ?, config = ?, interval_s = ?, enabled = 1, updated_at = ? WHERE id = ? AND target_id = ?
 			`, c.CheckName, c.Config, c.IntervalS, now, checkID, id)
 			if err != nil {
 				return err
+			}
+			rows, _ := res.RowsAffected()
+			if rows == 0 {
+				return fmt.Errorf("check %s does not belong to target %s", checkID, id)
 			}
 		} else {
 			// Create new check
