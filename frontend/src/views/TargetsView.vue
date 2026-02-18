@@ -41,7 +41,7 @@ const checkTypes = [
 function getEmptyForm() {
   return {
     name: '', host: '', description: '', enabled: true,
-    operator: 'AND', category: '',
+    operator: 'AND', category: '', preferred_check_type: '',
     conditions: []
   }
 }
@@ -111,6 +111,7 @@ async function loadTargetDetail(id) {
       enabled: data.enabled,
       operator: data.operator || 'AND',
       category: data.category || 'Other',
+      preferred_check_type: data.preferred_check_type || '',
       conditions: (data.conditions || []).map(c => {
         let cfg = {}
         try { cfg = JSON.parse(c.config) } catch { cfg = {} }
@@ -146,6 +147,7 @@ async function saveTarget() {
       enabled: form.value.enabled,
       operator: form.value.operator,
       category: form.value.category,
+      preferred_check_type: form.value.preferred_check_type,
       conditions: form.value.conditions.map(c => ({
         check_id: c.check_id || undefined,
         check_type: c.check_type,
@@ -297,6 +299,20 @@ function categoryClass(cat) {
   return 'badge-cat-other'
 }
 
+// Unique check types from current conditions — for preferred check dropdown
+const availableCheckTypes = computed(() => {
+  const seen = new Set()
+  const types = []
+  for (const c of form.value.conditions) {
+    if (c.check_type && !seen.has(c.check_type)) {
+      seen.add(c.check_type)
+      const label = checkTypes.find(t => t.value === c.check_type)?.label || c.check_type
+      types.push({ value: c.check_type, label })
+    }
+  }
+  return types
+})
+
 onMounted(() => loadTargets())
 </script>
 
@@ -436,6 +452,14 @@ onMounted(() => loadTargets())
               </select>
             </div>
           </div>
+          <div v-if="form.conditions.length > 1" class="form-group">
+            <label>Preferred Check (for SLA &amp; dashboard)</label>
+            <select v-model="form.preferred_check_type">
+              <option v-for="t in availableCheckTypes" :key="t.value" :value="t.value">{{ t.label }}</option>
+            </select>
+            <span class="text-muted input-hint">Which check type drives the SLA badge and dashboard uptime display</span>
+          </div>
+
           <div class="form-group checkbox-group">
             <label class="checkbox-label"><input type="checkbox" v-model="form.enabled" /> Enabled</label>
           </div>
@@ -877,6 +901,12 @@ onMounted(() => loadTargets())
 }
 .recipient-email {
   font-size: 0.75rem;
+}
+
+.input-hint {
+  display: block;
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
 }
 
 .validation-warning {

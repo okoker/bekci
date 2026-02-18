@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 // Known settings with their validation rules.
@@ -18,6 +19,12 @@ var knownSettings = map[string]bool{
 	"alert_from_email": true,
 	"alert_cooldown_s": true,
 	"alert_realert_s":  true,
+	// SLA thresholds (per category, float 0–100)
+	"sla_network":           true,
+	"sla_security":          true,
+	"sla_physical_security": true,
+	"sla_key_services":      true,
+	"sla_other":             true,
 }
 
 // Boolean settings that accept "true"/"false" instead of positive integers.
@@ -36,6 +43,15 @@ var stringSettings = map[string]bool{
 var zeroAllowedSettings = map[string]bool{
 	"alert_cooldown_s": true,
 	"alert_realert_s":  true,
+}
+
+// Float settings validated as 0–100 range (SLA thresholds).
+var floatSettings = map[string]bool{
+	"sla_network":           true,
+	"sla_security":          true,
+	"sla_physical_security": true,
+	"sla_key_services":      true,
+	"sla_other":             true,
 }
 
 func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
@@ -67,6 +83,13 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		if boolSettings[key] {
 			if val != "true" && val != "false" {
 				writeError(w, http.StatusBadRequest, "setting "+key+" must be 'true' or 'false'")
+				return
+			}
+		} else if floatSettings[key] {
+			// Normalize: strip trailing zeros/dot for clean storage
+			f, err := strconv.ParseFloat(strings.TrimSpace(val), 64)
+			if err != nil || f < 0 || f > 100 {
+				writeError(w, http.StatusBadRequest, "setting "+key+" must be a number between 0 and 100")
 				return
 			}
 		} else if stringSettings[key] {

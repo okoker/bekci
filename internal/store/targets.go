@@ -175,8 +175,16 @@ func (s *Store) CreateTargetWithConditions(t *Target, conds []TargetCondition, c
 		return err
 	}
 
-	// Set preferred_check_type from first condition
+	// Use caller-specified preferred type if it matches a condition, else first condition's type
 	preferredType := conds[0].CheckType
+	if t.PreferredCheckType != "" {
+		for _, c := range conds {
+			if c.CheckType == t.PreferredCheckType {
+				preferredType = t.PreferredCheckType
+				break
+			}
+		}
+	}
 
 	// Create checks + conditions
 	for i, c := range conds {
@@ -225,7 +233,7 @@ func (s *Store) CreateTargetWithConditions(t *Target, conds []TargetCondition, c
 }
 
 // UpdateTargetWithConditions updates a target and smart-diffs its checks/conditions.
-func (s *Store) UpdateTargetWithConditions(id, name, host, description string, enabled bool, operator, category string, conds []TargetCondition) error {
+func (s *Store) UpdateTargetWithConditions(id, name, host, description string, enabled bool, operator, category, preferredCheck string, conds []TargetCondition) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -253,7 +261,15 @@ func (s *Store) UpdateTargetWithConditions(id, name, host, description string, e
 
 	now := time.Now()
 	preferredType := currentPreferred
-	if len(conds) > 0 {
+	if preferredCheck != "" && len(conds) > 0 {
+		// Use caller-specified preferred type if it matches a condition
+		for _, c := range conds {
+			if c.CheckType == preferredCheck {
+				preferredType = preferredCheck
+				break
+			}
+		}
+	} else if len(conds) > 0 {
 		preferredType = conds[0].CheckType
 	}
 

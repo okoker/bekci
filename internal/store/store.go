@@ -68,6 +68,7 @@ func (s *Store) migrate() error {
 		s.migration010,
 		s.migration011,
 		s.migration012,
+		s.migration013,
 	}
 
 	for i := current; i < len(migrations); i++ {
@@ -487,4 +488,16 @@ func (s *Store) migration012() error {
 	}
 
 	return nil
+}
+
+// migration013 seeds SLA threshold settings per category.
+func (s *Store) migration013() error {
+	_, err := s.db.Exec(`
+		INSERT OR IGNORE INTO settings (key, value) VALUES ('sla_network', '99.9');
+		INSERT OR IGNORE INTO settings (key, value) VALUES ('sla_security', '99.9');
+		INSERT OR IGNORE INTO settings (key, value) VALUES ('sla_physical_security', '99.9');
+		INSERT OR IGNORE INTO settings (key, value) VALUES ('sla_key_services', '99.9');
+		INSERT OR IGNORE INTO settings (key, value) VALUES ('sla_other', '99.9');
+	`)
+	return err
 }

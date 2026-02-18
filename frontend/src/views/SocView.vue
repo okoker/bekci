@@ -140,6 +140,18 @@ function categoryClass(cat) {
   return 'soc-cat-other'
 }
 
+function slaLabel(target) {
+  if (target.sla_status === 'healthy') return 'HEALTHY'
+  if (target.sla_status === 'unhealthy') return 'UNHEALTHY'
+  return ''
+}
+
+function slaClass(target) {
+  if (target.sla_status === 'healthy') return 'soc-badge-sla-healthy'
+  if (target.sla_status === 'unhealthy') return 'soc-badge-sla-unhealthy'
+  return ''
+}
+
 function filteredAndSortedTargets() {
   let list = dashboardData.value
   if (activeCategory.value !== 'All') {
@@ -151,6 +163,10 @@ function filteredAndSortedTargets() {
     if (aDown && !bDown) return -1
     if (!aDown && bDown) return 1
     if (aDown && bDown) return getWorstUptime(a) - getWorstUptime(b)
+    const aUnhealthy = a.sla_status === 'unhealthy'
+    const bUnhealthy = b.sla_status === 'unhealthy'
+    if (aUnhealthy && !bUnhealthy) return -1
+    if (!aUnhealthy && bUnhealthy) return 1
     const diff = getWorstUptime(a) - getWorstUptime(b)
     return diff !== 0 ? diff : a.name.localeCompare(b.name)
   })
@@ -222,6 +238,7 @@ onUnmounted(() => {
           </span>
           <div class="soc-header-badges">
             <span :class="['soc-cat-badge', categoryClass(target.category)]">{{ target.category }}</span>
+            <span v-if="slaLabel(target)" :class="['soc-status-badge', slaClass(target)]">{{ slaLabel(target) }}</span>
             <span :class="['soc-status-badge', hasDownCheckTarget(target) ? 'soc-badge-down' : 'soc-badge-up']">
               {{ hasDownCheckTarget(target) ? 'DOWN' : 'UP' }}
             </span>
@@ -370,6 +387,14 @@ onUnmounted(() => {
 .soc-badge-down {
   background: rgba(245, 101, 101, 0.2);
   color: #f56565;
+}
+.soc-badge-sla-healthy {
+  background: rgba(72, 187, 120, 0.2);
+  color: #48bb78;
+}
+.soc-badge-sla-unhealthy {
+  background: rgba(251, 146, 60, 0.2);
+  color: #fb923c;
 }
 
 .soc-bars {

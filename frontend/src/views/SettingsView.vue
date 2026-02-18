@@ -22,6 +22,14 @@ const labels = {
   soc_public: 'SOC View Public Access',
 }
 
+const slaKeys = [
+  { key: 'sla_network', label: 'Network' },
+  { key: 'sla_security', label: 'Security' },
+  { key: 'sla_physical_security', label: 'Physical Security' },
+  { key: 'sla_key_services', label: 'Key Services' },
+  { key: 'sla_other', label: 'Other' },
+]
+
 const boolSettings = new Set(['soc_public'])
 
 // Keys shown on the General tab (filter alerting keys out)
@@ -357,11 +365,16 @@ onUnmounted(() => {
         @click="activeTab = 'general'"
       >General</button>
       <button
-        v-if="auth.isOperator"
         class="tab-btn"
-        :class="{ active: activeTab === 'audit' }"
-        @click="activeTab = 'audit'"
-      >Audit Log</button>
+        :class="{ active: activeTab === 'sla' }"
+        @click="activeTab = 'sla'"
+      >SLA</button>
+      <button
+        v-if="auth.isAdmin"
+        class="tab-btn"
+        :class="{ active: activeTab === 'alerting' }"
+        @click="activeTab = 'alerting'"
+      >Alerting</button>
       <button
         v-if="auth.isAdmin"
         class="tab-btn"
@@ -375,11 +388,11 @@ onUnmounted(() => {
         @click="activeTab = 'backup'"
       >Backup &amp; Restore</button>
       <button
-        v-if="auth.isAdmin"
+        v-if="auth.isOperator"
         class="tab-btn"
-        :class="{ active: activeTab === 'alerting' }"
-        @click="activeTab = 'alerting'"
-      >Alerting</button>
+        :class="{ active: activeTab === 'audit' }"
+        @click="activeTab = 'audit'"
+      >Audit Log</button>
       <button
         v-if="auth.isAdmin"
         class="tab-btn"
@@ -417,6 +430,52 @@ onUnmounted(() => {
             {{ loading ? 'Saving...' : 'Save' }}
           </button>
           <p v-else class="text-muted">Only admins can modify settings.</p>
+        </form>
+      </div>
+
+    </div>
+
+    <!-- ── SLA Tab ── -->
+    <div v-if="activeTab === 'sla'">
+      <div v-if="error" class="error-msg">{{ error }}</div>
+      <div v-if="success" class="success-msg" @click="success = ''">{{ success }}</div>
+
+      <div class="card sla-tab-card">
+        <div class="sla-intro">
+          <h3>SLA Compliance Thresholds</h3>
+          <p class="text-muted">Define minimum uptime targets per category. Each target's preferred check 90-day uptime is compared against its category threshold. Targets below the threshold display an <span class="sla-badge-example sla-badge-unhealthy-ex">UNHEALTHY</span> badge on the Dashboard and SOC views.</p>
+        </div>
+
+        <form @submit.prevent="saveSettings">
+          <div class="sla-cards-grid">
+            <div v-for="s in slaKeys" :key="s.key" class="sla-item">
+              <div class="sla-item-header">
+                <span class="sla-item-label">{{ s.label }}</span>
+                <span v-if="settings[s.key] == 0" class="sla-item-status sla-disabled">Disabled</span>
+                <span v-else class="sla-item-status sla-active">Active</span>
+              </div>
+              <div class="sla-input-row">
+                <input
+                  v-model="settings[s.key]"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  :disabled="!auth.isAdmin"
+                  class="sla-input"
+                />
+                <span class="sla-unit">%</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="sla-footer">
+            <p class="text-muted sla-hint">Set to <strong>0</strong> to disable SLA tracking for a category.</p>
+            <button v-if="auth.isAdmin" type="submit" class="btn btn-primary" :disabled="loading">
+              {{ loading ? 'Saving...' : 'Save' }}
+            </button>
+            <p v-else class="text-muted">Only admins can modify SLA settings.</p>
+          </div>
         </form>
       </div>
     </div>
@@ -864,6 +923,107 @@ onUnmounted(() => {
 }
 .btn-danger:hover {
   background: #b91c1c;
+}
+
+/* ── SLA tab ── */
+.sla-tab-card {
+  max-width: 720px;
+}
+.sla-intro {
+  margin-bottom: 1.25rem;
+}
+.sla-intro h3 {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+}
+.sla-intro p {
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.sla-badge-example {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.05rem 0.4rem;
+  border-radius: 10px;
+  vertical-align: middle;
+}
+.sla-badge-unhealthy-ex {
+  background: #fed7aa;
+  color: #9a3412;
+}
+.sla-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+.sla-item {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.75rem;
+}
+.sla-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+.sla-item-label {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: #1e293b;
+}
+.sla-item-status {
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.1rem 0.4rem;
+  border-radius: 10px;
+  text-transform: uppercase;
+}
+.sla-active {
+  background: #dcfce7;
+  color: #166534;
+}
+.sla-disabled {
+  background: #f1f5f9;
+  color: #94a3b8;
+}
+.sla-input-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.sla-input {
+  flex: 1;
+  font-size: 1.1rem;
+  font-weight: 600;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  text-align: right;
+  width: 100%;
+}
+.sla-input:focus {
+  outline: none;
+  border-color: #ea580c;
+  box-shadow: 0 0 0 2px rgba(234, 88, 12, 0.15);
+}
+.sla-unit {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #64748b;
+}
+.sla-footer {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.sla-hint {
+  font-size: 0.8rem;
+  margin: 0;
 }
 
 /* ── Audit Log tab ── */

@@ -2,6 +2,8 @@ package api
 
 import (
 	"net/http"
+	"strconv"
+	"strings"
 )
 
 type dashboardCheck struct {
@@ -23,13 +25,35 @@ type dashboardTarget struct {
 	PreferredCheckType string           `json:"preferred_check_type"`
 	State              string           `json:"state"`
 	Category           string           `json:"category"`
+	SLAStatus          string           `json:"sla_status"`
+	SLATarget          float64          `json:"sla_target"`
 	Checks             []dashboardCheck `json:"checks"`
+}
+
+// categoryToSLAKey maps target category names to settings keys.
+var categoryToSLAKey = map[string]string{
+	"Network":           "sla_network",
+	"Security":          "sla_security",
+	"Physical Security": "sla_physical_security",
+	"Key Services":      "sla_key_services",
+	"Other":             "sla_other",
 }
 
 func (s *Server) buildDashboardTargets() ([]dashboardTarget, error) {
 	targets, err := s.store.ListTargets()
 	if err != nil {
 		return nil, err
+	}
+
+	// Load SLA thresholds once
+	allSettings, _ := s.store.GetAllSettings()
+	slaThresholds := make(map[string]float64)
+	for cat, key := range categoryToSLAKey {
+		if v, ok := allSettings[key]; ok {
+			if f, err := strconv.ParseFloat(strings.TrimSpace(v), 64); err == nil {
+				slaThresholds[cat] = f
+			}
+		}
 	}
 
 	var result []dashboardTarget
@@ -80,6 +104,29 @@ func (s *Server) buildDashboardTargets() ([]dashboardTarget, error) {
 		}
 		if dt.Checks == nil {
 			dt.Checks = []dashboardCheck{}
+		}
+
+		// Compute SLA status from preferred check's 90d uptime vs category threshold
+		if threshold, ok := slaThresholds[t.Category]; ok && threshold > 0 {
+			dt.SLATarget = threshold
+			// Find preferred check's uptime
+			var prefUptime float64 = -1
+			for _, c := range dt.Checks {
+				if c.Type == t.PreferredCheckType {
+					prefUptime = c.Uptime90d
+					break
+				}
+			}
+			if prefUptime < 0 && len(dt.Checks) > 0 {
+				prefUptime = dt.Checks[0].Uptime90d
+			}
+			if prefUptime >= 0 {
+				if prefUptime >= threshold {
+					dt.SLAStatus = "healthy"
+				} else {
+					dt.SLAStatus = "unhealthy"
+				}
+			}
 		}
 
 		result = append(result, dt)
