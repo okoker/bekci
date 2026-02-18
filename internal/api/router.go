@@ -113,6 +113,9 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/alerts", anyAuth(s.handleListAlerts))
 	mux.Handle("POST /api/settings/test-email", adminAuth(s.handleTestEmail))
 
+	// SLA
+	mux.Handle("GET /api/sla/history", anyAuth(s.handleSLAHistory))
+
 	// SOC — conditional auth based on soc_public setting
 	mux.Handle("GET /api/soc/status", s.socAuth(http.HandlerFunc(s.handleSocStatus)))
 	mux.Handle("GET /api/soc/history/{checkId}", s.socAuth(http.HandlerFunc(s.handleSocHistory)))
