@@ -30,9 +30,30 @@ func (s *Server) handleRestore(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	var data store.BackupData
-	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
-		return
+
+	// Support both multipart form upload (frontend) and raw JSON (API/curl)
+	if ct := r.Header.Get("Content-Type"); len(ct) > 0 && ct != "application/json" {
+		// Multipart form: parse and read the "file" field
+		if err := r.ParseMultipartForm(10 << 20); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid form data: "+err.Error())
+			return
+		}
+		file, _, err := r.FormFile("file")
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "missing file field: "+err.Error())
+			return
+		}
+		defer file.Close()
+		if err := json.NewDecoder(file).Decode(&data); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid JSON in uploaded file: "+err.Error())
+			return
+		}
+	} else {
+		// Raw JSON body
+		if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+			return
+		}
 	}
 
 	// Validate backup format
@@ -40,8 +61,9 @@ func (s *Server) handleRestore(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, fmt.Sprintf("unsupported backup version: %d", data.Version))
 		return
 	}
-	if data.SchemaVersion > 8 {
-		writeError(w, http.StatusBadRequest, fmt.Sprintf("backup schema version %d is newer than this server supports (8)", data.SchemaVersion))
+	currentSchema := s.store.SchemaVersion()
+	if data.SchemaVersion > currentSchema {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("backup schema version %d is newer than this server supports (%d)", data.SchemaVersion, currentSchema))
 		return
 	}
 
