@@ -203,7 +203,7 @@ Append-only log of sent alerts. Not purged automatically.
 
 **Notes:**
 - `channel_id` and `acknowledged*` columns are legacy from the old alert_channels system (pre-migration011). Current code only writes `rule_id`, `target_id`, `recipient_id`, `alert_type`, `message`, `sent_at`.
-- `alert_type` values: `firing`, `recovery`
+- `alert_type` values: `firing`, `recovery`, `re-alert`
 
 ### target_alert_recipients
 
