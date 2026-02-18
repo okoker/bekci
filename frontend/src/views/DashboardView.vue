@@ -133,6 +133,11 @@ function filteredAndSortedTargets() {
     if (aDown && !bDown) return -1
     if (!aDown && bDown) return 1
     if (aDown && bDown) return getWorstUptime(a) - getWorstUptime(b)
+    // UNHEALTHY SLA before HEALTHY/no-SLA
+    const aUnhealthy = a.sla_status === 'unhealthy'
+    const bUnhealthy = b.sla_status === 'unhealthy'
+    if (aUnhealthy && !bUnhealthy) return -1
+    if (!aUnhealthy && bUnhealthy) return 1
     const diff = getWorstUptime(a) - getWorstUptime(b)
     return diff !== 0 ? diff : a.name.localeCompare(b.name)
   })
@@ -187,6 +192,18 @@ function formatTooltip4h(r) {
   const d = new Date(r.checked_at)
   const timeStr = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
   return `${timeStr}: ${r.status} (${r.response_ms}ms)`
+}
+
+function slaLabel(target) {
+  if (target.sla_status === 'healthy') return 'HEALTHY'
+  if (target.sla_status === 'unhealthy') return 'UNHEALTHY'
+  return ''
+}
+
+function slaClass(target) {
+  if (target.sla_status === 'healthy') return 'badge-sla-healthy'
+  if (target.sla_status === 'unhealthy') return 'badge-sla-unhealthy'
+  return ''
 }
 
 function categoryClass(cat) {
@@ -279,6 +296,7 @@ onUnmounted(() => {
             <span :class="['badge', categoryClass(target.category)]" style="font-size: 0.6rem;">
               {{ target.category }}
             </span>
+            <span v-if="slaLabel(target)" :class="['badge', slaClass(target)]">{{ slaLabel(target) }}</span>
             <span v-if="targetStateLabel(target)" :class="['badge', targetStateClass(target)]">{{ targetStateLabel(target) }}</span>
           </div>
         </div>
@@ -470,6 +488,22 @@ onUnmounted(() => {
 .badge-down {
   background: #fee2e2;
   color: #991b1b;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.1rem 0.5rem;
+  border-radius: 10px;
+}
+.badge-sla-healthy {
+  background: #dcfce7;
+  color: #166534;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.1rem 0.5rem;
+  border-radius: 10px;
+}
+.badge-sla-unhealthy {
+  background: #fed7aa;
+  color: #9a3412;
   font-size: 0.7rem;
   font-weight: 600;
   padding: 0.1rem 0.5rem;

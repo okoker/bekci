@@ -18,13 +18,14 @@ var validCheckTypes = map[string]bool{
 }
 
 type targetRequest struct {
-	Name        string                   `json:"name"`
-	Host        string                   `json:"host"`
-	Description string                   `json:"description"`
-	Enabled     *bool                    `json:"enabled"`
-	Operator    string                   `json:"operator"`
-	Category    string                   `json:"category"`
-	Conditions  []targetConditionRequest `json:"conditions"`
+	Name               string                   `json:"name"`
+	Host               string                   `json:"host"`
+	Description        string                   `json:"description"`
+	Enabled            *bool                    `json:"enabled"`
+	Operator           string                   `json:"operator"`
+	Category           string                   `json:"category"`
+	PreferredCheckType string                   `json:"preferred_check_type"`
+	Conditions         []targetConditionRequest `json:"conditions"`
 }
 
 type targetConditionRequest struct {
@@ -120,12 +121,13 @@ func (s *Server) handleCreateTarget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	t := &store.Target{
-		Name:        req.Name,
-		Host:        req.Host,
-		Description: req.Description,
-		Enabled:     enabled,
-		Operator:    req.Operator,
-		Category:    req.Category,
+		Name:               req.Name,
+		Host:               req.Host,
+		Description:        req.Description,
+		Enabled:            enabled,
+		Operator:           req.Operator,
+		Category:           req.Category,
+		PreferredCheckType: req.PreferredCheckType,
 	}
 
 	creatorID := ""
@@ -242,7 +244,7 @@ func (s *Server) handleUpdateTarget(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	if err := s.store.UpdateTargetWithConditions(id, req.Name, req.Host, req.Description, enabled, req.Operator, req.Category, conds); err != nil {
+	if err := s.store.UpdateTargetWithConditions(id, req.Name, req.Host, req.Description, enabled, req.Operator, req.Category, req.PreferredCheckType, conds); err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			writeError(w, http.StatusNotFound, "target not found")
 			return
