@@ -175,6 +175,9 @@
 | M3: Backup/restore includes target_alert_recipients (BackupRecipient struct, export + restore) | done |
 | M4: Secure IP extraction — clientIP() helper: loopback→X-Real-IP, else RemoteAddr, strip port | done |
 | S-M1: Nginx security headers (HSTS, X-Content-Type-Options, X-Frame-Options, CSP) — already done | done |
+| H4: Login rate limiting (5 attempts/5min, 15min lockout) + generic "invalid username or password" error | done |
+| M1: Scheduler detects interval changes on reload, reschedules with new interval | done |
+| M8: GET /api/users moved from adminAuth to opAuth — operators can see users for recipient picker | done |
 
 ### Phase 5 — Polish
 | Task | Status |

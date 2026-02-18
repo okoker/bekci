@@ -17,14 +17,15 @@ type RuleEvaluator interface {
 }
 
 type Scheduler struct {
-	store   *store.Store
-	engine  RuleEvaluator
-	timers  map[string]*time.Timer // check_id → timer
-	checkMu map[string]*sync.Mutex // per-check mutex to prevent concurrent runs
-	mu      sync.Mutex
-	eventCh chan string // check_id for immediate run
-	ctx     context.Context
-	cancel  context.CancelFunc
+	store     *store.Store
+	engine    RuleEvaluator
+	timers    map[string]*time.Timer    // check_id → timer
+	intervals map[string]time.Duration  // check_id → current interval
+	checkMu   map[string]*sync.Mutex    // per-check mutex to prevent concurrent runs
+	mu        sync.Mutex
+	eventCh   chan string // check_id for immediate run
+	ctx       context.Context
+	cancel    context.CancelFunc
 }
 
 // SetEngine sets the rule evaluator called after each check result.
@@ -34,10 +35,11 @@ func (s *Scheduler) SetEngine(e RuleEvaluator) {
 
 func New(st *store.Store) *Scheduler {
 	return &Scheduler{
-		store:   st,
-		timers:  make(map[string]*time.Timer),
-		checkMu: make(map[string]*sync.Mutex),
-		eventCh: make(chan string, 100),
+		store:     st,
+		timers:    make(map[string]*time.Timer),
+		intervals: make(map[string]time.Duration),
+		checkMu:   make(map[string]*sync.Mutex),
+		eventCh:   make(chan string, 100),
 	}
 }
 
@@ -85,6 +87,7 @@ func (s *Scheduler) Stop() {
 	for id, t := range s.timers {
 		t.Stop()
 		delete(s.timers, id)
+		delete(s.intervals, id)
 	}
 	slog.Info("Scheduler stopped")
 }
@@ -124,14 +127,26 @@ func (s *Scheduler) loadChecks() {
 		if !activeIDs[id] {
 			t.Stop()
 			delete(s.timers, id)
+			delete(s.intervals, id)
 			slog.Debug("Scheduler: removed check", "check_id", id)
 		}
 	}
 
-	// Add or update timers for active checks
+	// Add new checks or reschedule if interval changed
 	for _, ec := range checks {
+		interval := time.Duration(ec.IntervalS) * time.Second
+		if interval < 10*time.Second {
+			interval = 10 * time.Second
+		}
 		if _, exists := s.timers[ec.ID]; !exists {
 			s.scheduleCheck(ec)
+		} else if stored := s.intervals[ec.ID]; stored != interval {
+			s.timers[ec.ID].Stop()
+			delete(s.timers, ec.ID)
+			delete(s.intervals, ec.ID)
+			s.scheduleCheck(ec)
+			slog.Info("Scheduler: interval changed, rescheduled",
+				"check_id", ec.ID, "old", stored, "new", interval)
 		}
 	}
 }
@@ -153,6 +168,7 @@ func (s *Scheduler) scheduleCheck(ec store.EnabledCheck) {
 		s.runAndReschedule(checkID, interval)
 	})
 	s.timers[checkID] = timer
+	s.intervals[checkID] = interval
 	slog.Debug("Scheduler: scheduled check", "check_id", checkID, "interval", interval)
 }
 

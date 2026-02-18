@@ -11,27 +11,29 @@ import (
 )
 
 type Server struct {
-	store      *store.Store
-	auth       *auth.Service
-	scheduler  *scheduler.Scheduler
-	alerter    *alerter.AlertService
-	version    string
-	spa        fs.FS // embedded frontend/dist
-	corsOrigin string
-	dbPath     string
+	store        *store.Store
+	auth         *auth.Service
+	scheduler    *scheduler.Scheduler
+	alerter      *alerter.AlertService
+	version      string
+	spa          fs.FS // embedded frontend/dist
+	corsOrigin   string
+	dbPath       string
+	loginLimiter *loginLimiter
 }
 
 // New creates a new API server.
 func New(st *store.Store, authSvc *auth.Service, sched *scheduler.Scheduler, alertSvc *alerter.AlertService, version string, spa fs.FS, corsOrigin string, dbPath string) *Server {
 	return &Server{
-		store:      st,
-		auth:       authSvc,
-		scheduler:  sched,
-		alerter:    alertSvc,
-		version:    version,
-		spa:        spa,
-		corsOrigin: corsOrigin,
-		dbPath:     dbPath,
+		store:        st,
+		auth:         authSvc,
+		scheduler:    sched,
+		alerter:      alertSvc,
+		version:      version,
+		spa:          spa,
+		corsOrigin:   corsOrigin,
+		dbPath:       dbPath,
+		loginLimiter: newLoginLimiter(),
 	}
 }
 
@@ -53,11 +55,10 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/settings", s.requireAuth(http.HandlerFunc(s.handleGetSettings)))
 	mux.Handle("PUT /api/settings", s.requireAuth(requireRole("admin")(http.HandlerFunc(s.handleUpdateSettings))))
 
-	// User management — admin only
+	// User management — admin only (except list, which operators need for recipient picker)
 	adminAuth := func(h http.HandlerFunc) http.Handler {
 		return s.requireAuth(requireRole("admin")(http.HandlerFunc(h)))
 	}
-	mux.Handle("GET /api/users", adminAuth(s.handleListUsers))
 	mux.Handle("POST /api/users", adminAuth(s.handleCreateUser))
 	mux.Handle("GET /api/users/{id}", adminAuth(s.handleGetUser))
 	mux.Handle("PUT /api/users/{id}", adminAuth(s.handleUpdateUser))
@@ -78,6 +79,9 @@ func (s *Server) Handler() http.Handler {
 	opAuth := func(h http.HandlerFunc) http.Handler {
 		return s.requireAuth(requireRole("admin", "operator")(http.HandlerFunc(h)))
 	}
+
+	// User list — operators need this for recipient picker
+	mux.Handle("GET /api/users", opAuth(s.handleListUsers))
 
 	// System health
 	mux.Handle("GET /api/system/health", anyAuth(s.handleSystemHealth))
