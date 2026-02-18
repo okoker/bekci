@@ -410,19 +410,20 @@ onUnmounted(() => {
 
 .expanded-checks {
   margin-top: 0.5rem;
-  border-top: 1px solid #f1f5f9;
-  padding-top: 0.5rem;
+  margin-left: 1rem;
+  padding: 0.35rem 0 0.15rem 0.75rem;
+  border-left: 2px solid #cbd5e1;
+  background: #e2e8f0;
+  border-radius: 0 0 6px 0;
 }
 
 .check-row {
-  padding: 0.6rem 0;
-  border-top: 1px solid #f1f5f9;
+  padding: 0.5rem 0.5rem;
+  margin-bottom: 2px;
+  border-radius: 4px;
   cursor: pointer;
 }
-.check-row:first-child {
-  border-top: none;
-}
-.check-row:hover { background: #fafbfc; }
+.check-row:hover { background: #cbd5e1; }
 
 .check-info {
   display: flex;
@@ -574,6 +575,10 @@ onUnmounted(() => {
   color: #a0aec0;
   margin-top: 2px;
   padding: 0 1px;
+}
+
+.expanded-checks .bar-track {
+  height: 22px;
 }
 
 .check-detail {
