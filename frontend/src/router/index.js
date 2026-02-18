@@ -8,10 +8,12 @@ import SettingsView from '../views/SettingsView.vue'
 import ProfileView from '../views/ProfileView.vue'
 import SocView from '../views/SocView.vue'
 import AlertsView from '../views/AlertsView.vue'
+import SlaView from '../views/SlaView.vue'
 
 const routes = [
   { path: '/login', name: 'Login', component: LoginView, meta: { public: true } },
   { path: '/', name: 'Dashboard', component: DashboardView, meta: { requiresAuth: true } },
+  { path: '/sla', name: 'SLA', component: SlaView, meta: { requiresAuth: true } },
   { path: '/targets', name: 'Targets', component: TargetsView, meta: { requiresAuth: true } },
   { path: '/users', redirect: '/settings' },
   { path: '/settings', name: 'Settings', component: SettingsView, meta: { requiresAuth: true } },
