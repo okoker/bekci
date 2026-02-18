@@ -180,8 +180,19 @@ async function saveTarget() {
   }
 }
 
-async function deleteTarget(id) {
-  if (!confirm('Delete this target and all its checks?')) return
+// Delete confirmation modal
+const showDeleteConfirm = ref(false)
+const pendingDeleteId = ref(null)
+
+function deleteTarget(id) {
+  pendingDeleteId.value = id
+  showDeleteConfirm.value = true
+}
+
+async function confirmDelete() {
+  showDeleteConfirm.value = false
+  const id = pendingDeleteId.value
+  pendingDeleteId.value = null
   try {
     await api.delete(`/targets/${id}`)
     await loadTargets()
@@ -638,6 +649,18 @@ onMounted(() => loadTargets())
             <button type="button" class="btn" @click="showForm = false">Cancel</button>
           </div>
         </form>
+      </div>
+    </div>
+
+    <!-- Delete confirmation modal -->
+    <div v-if="showDeleteConfirm" class="modal-overlay" @click.self="showDeleteConfirm = false">
+      <div class="modal-card">
+        <h3>Delete Target</h3>
+        <p>Delete this target and all its checks? This cannot be undone.</p>
+        <div class="form-actions">
+          <button class="btn btn-danger" @click="confirmDelete">Delete</button>
+          <button class="btn" @click="showDeleteConfirm = false">Cancel</button>
+        </div>
       </div>
     </div>
   </div>
