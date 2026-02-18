@@ -12,7 +12,7 @@
 
 ## Design Documents
 - `docs/REQUIREMENTS.md` — Current spec: architecture, API, decisions
-- `docs/old_progress/01_design_phase2.md` — Archived Phase 2 design (stale: describes removed projects/rules/SNMP)
+- `docs/design/initial_architecture.md` — Original design (pre-unified-target-model, projects/rules/SNMP). Historical context only, not source of truth.
 
 ## Implementation Phases
 
