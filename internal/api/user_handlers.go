@@ -1,6 +1,7 @@
 package api
 
 import (
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -203,7 +204,9 @@ func (s *Server) handleSuspendUser(w http.ResponseWriter, r *http.Request) {
 
 	// Kill all sessions when suspending
 	if req.Suspended {
-		s.store.DeleteUserSessions(id)
+		if err := s.store.DeleteUserSessions(id); err != nil {
+			slog.Error("Failed to delete user sessions", "user_id", id, "error", err)
+		}
 	}
 
 	action := "activate_user"
@@ -245,7 +248,9 @@ func (s *Server) handleResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Kill all sessions so user must re-login
-	s.store.DeleteUserSessions(id)
+	if err := s.store.DeleteUserSessions(id); err != nil {
+		slog.Error("Failed to delete user sessions", "user_id", id, "error", err)
+	}
 
 	s.audit(r, "reset_password", "user", id, "username="+user.Username, "success")
 	writeJSON(w, http.StatusOK, map[string]string{"message": "password reset"})

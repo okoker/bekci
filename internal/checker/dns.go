@@ -17,8 +17,8 @@ func runDNS(host string, config map[string]any) *Result {
 
 	var resolver *net.Resolver
 	if nameserver != "" {
-		if !strings.Contains(nameserver, ":") {
-			nameserver += ":53"
+		if _, _, err := net.SplitHostPort(nameserver); err != nil {
+			nameserver = net.JoinHostPort(nameserver, "53")
 		}
 		resolver = &net.Resolver{
 			PreferGo: true,

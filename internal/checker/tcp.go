@@ -3,6 +3,7 @@ package checker
 import (
 	"fmt"
 	"net"
+	"strconv"
 	"time"
 )
 
@@ -10,7 +11,7 @@ func runTCP(host string, config map[string]any) *Result {
 	port := configInt(config, "port", 80)
 	timeoutS := configInt(config, "timeout_s", 5)
 
-	addr := fmt.Sprintf("%s:%d", host, port)
+	addr := net.JoinHostPort(host, strconv.Itoa(port))
 	start := time.Now()
 	conn, err := net.DialTimeout("tcp", addr, time.Duration(timeoutS)*time.Second)
 	elapsed := time.Since(start).Milliseconds()

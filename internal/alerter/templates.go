@@ -44,19 +44,3 @@ func renderEmailHTML(targetName, targetHost, stateLabel, color string, checks []
 </body>
 </html>`, color, color, stateLabel, targetName, targetName, targetHost, checksHTML, timestamp)
 }
-
-// RenderSignalAlert renders a plain text message for Signal (stub for now).
-func RenderSignalAlert(targetName, targetHost, state string, checks []string, ts time.Time) string {
-	timestamp := ts.UTC().Format("02/01/2006 15:04 UTC")
-
-	if state == "unhealthy" {
-		msg := fmt.Sprintf("🔴 ALERT: %s is DOWN\nHost: %s\nTime: %s", targetName, targetHost, timestamp)
-		if len(checks) > 0 {
-			msg += "\nChecks: " + strings.Join(checks, ", ")
-		}
-		return msg
-	}
-
-	msg := fmt.Sprintf("🟢 RECOVERED: %s is UP\nHost: %s\nTime: %s", targetName, targetHost, timestamp)
-	return msg
-}

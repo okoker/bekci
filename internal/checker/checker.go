@@ -7,7 +7,7 @@ import (
 
 // Result returned by every check type.
 type Result struct {
-	Status     string         `json:"status"`      // "up" or "down"
+	Status     string         `json:"status"` // "up" or "down"
 	ResponseMs int64          `json:"response_ms"`
 	Message    string         `json:"message"`
 	Metrics    map[string]any `json:"metrics"`

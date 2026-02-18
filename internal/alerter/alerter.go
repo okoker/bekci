@@ -100,7 +100,9 @@ func (a *AlertService) Dispatch(ruleID, oldState, newState string) {
 					"target", target.Name, "recipient", user.Username, "type", alertType)
 			}
 			// Log regardless of send success (so we know we tried)
-			a.store.LogAlert(targetID, ruleID, user.ID, alertType, subject)
+			if err := a.store.LogAlert(targetID, ruleID, user.ID, alertType, subject); err != nil {
+				slog.Error("Alerter: failed to log alert", "target_id", targetID, "rule_id", ruleID, "error", err)
+			}
 		}
 	}
 
@@ -168,7 +170,9 @@ func (a *AlertService) CheckRealerts() {
 					slog.Info("Alerter: re-alert email sent",
 						"target", target.Name, "recipient", user.Username)
 				}
-				a.store.LogAlert(fr.TargetID, fr.RuleID, user.ID, "re-alert", subject)
+				if err := a.store.LogAlert(fr.TargetID, fr.RuleID, user.ID, "re-alert", subject); err != nil {
+					slog.Error("Alerter: failed to log re-alert", "target_id", fr.TargetID, "rule_id", fr.RuleID, "error", err)
+				}
 			}
 		}
 	}

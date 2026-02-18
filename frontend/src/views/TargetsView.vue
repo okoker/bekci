@@ -219,13 +219,6 @@ async function loadAllUsers() {
   } catch { /* ignore */ }
 }
 
-async function loadRecipients(targetId) {
-  try {
-    const { data } = await api.get(`/targets/${targetId}`)
-    selectedRecipients.value = data.recipient_ids || []
-  } catch { /* ignore */ }
-}
-
 async function saveRecipients(targetId) {
   try {
     await api.put(`/targets/${targetId}/recipients`, { user_ids: selectedRecipients.value })

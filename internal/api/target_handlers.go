@@ -116,12 +116,12 @@ func (s *Server) handleCreateTarget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	t := &store.Target{
-		Name:     req.Name,
-		Host:     req.Host,
+		Name:        req.Name,
+		Host:        req.Host,
 		Description: req.Description,
-		Enabled:  enabled,
-		Operator: req.Operator,
-		Category: req.Category,
+		Enabled:     enabled,
+		Operator:    req.Operator,
+		Category:    req.Category,
 	}
 
 	creatorID := ""

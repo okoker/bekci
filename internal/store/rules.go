@@ -116,4 +116,3 @@ func (s *Store) TouchRuleEvaluated(ruleID string) error {
 	`, ruleID)
 	return err
 }
-
