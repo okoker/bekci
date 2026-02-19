@@ -157,10 +157,6 @@ func (s *Server) handleSocStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, targets)
 }
 
-func (s *Server) handleSocHistory(w http.ResponseWriter, r *http.Request) {
-	s.handleCheckHistory(w, r)
-}
-
 func (s *Server) handleCheckHistory(w http.ResponseWriter, r *http.Request) {
 	checkID := r.PathValue("checkId")
 	rangeParam := r.URL.Query().Get("range")
