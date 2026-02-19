@@ -117,8 +117,7 @@ Env var overrides: `BEKCI_JWT_SECRET`, `BEKCI_ADMIN_PASSWORD`, `BEKCI_PORT`, `BE
 ### settings table (runtime, editable via UI)
 - `session_timeout_hours` (default: 24)
 - `history_days` (default: 90)
-- `default_check_interval` (default: 300)
-- `audit_retention_days` (default: 91) — daily hard-delete of audit entries older than this
+- `audit_retention_days` (default: 91) — daily hard-delete of audit entries and alert history older than this
 - `soc_public` (default: false) — make SOC status page publicly accessible
 - `alert_method` (default: email) — alerting method
 - `resend_api_key` (default: empty) — Resend API key for email alerting
