@@ -1,6 +1,7 @@
 package api
 
 import (
+	"math"
 	"net/http"
 	"os"
 	"os/exec"
@@ -111,5 +112,5 @@ func readLoad1() float64 {
 }
 
 func round2(f float64) float64 {
-	return float64(int(f*100)) / 100
+	return math.Round(f*100) / 100
 }
