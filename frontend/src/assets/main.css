@@ -344,6 +344,12 @@ th {
   color: #fff;
 }
 
+.app-version {
+  font-size: 0.75rem;
+  color: #cbd5e1;
+  margin-right: 0.5rem;
+}
+
 /* ─── Health Indicator ──────────────────────────────────── */
 .health-indicator {
   position: relative;

@@ -28,6 +28,7 @@ function closeUserMenu(e) {
 
 // --- System Health ---
 const health = ref(null)
+const appVersion = ref('')
 const showPopover = ref(false)
 let pollTimer = null
 
@@ -35,6 +36,7 @@ async function fetchHealth() {
   try {
     const { data } = await api.get('/system/health')
     health.value = data
+    if (data.version) appVersion.value = data.version
   } catch {
     health.value = null
   }
@@ -123,6 +125,7 @@ onUnmounted(() => {
         <router-link to="/settings" class="nav-link">Settings</router-link>
       </div>
       <div class="navbar-right">
+        <span v-if="appVersion" class="app-version">v{{ appVersion }}</span>
         <div class="health-indicator" @click.stop="togglePopover">
           <div class="health-dots">
             <span class="health-dot" :class="dotColor('net')" title="Network"></span>

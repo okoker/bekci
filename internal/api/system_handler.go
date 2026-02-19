@@ -31,9 +31,10 @@ type cpuHealth struct {
 
 func (s *Server) handleSystemHealth(w http.ResponseWriter, r *http.Request) {
 	result := map[string]any{
-		"net":  checkNet(),
-		"disk": checkDisk(s.dbPath),
-		"cpu":  checkCPU(),
+		"version": s.version,
+		"net":     checkNet(),
+		"disk":    checkDisk(s.dbPath),
+		"cpu":     checkCPU(),
 	}
 	writeJSON(w, http.StatusOK, result)
 }
