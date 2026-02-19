@@ -139,6 +139,7 @@ async function loadTargetDetail(id) {
 // Save
 async function saveTarget() {
   error.value = ''
+  success.value = ''
   try {
     const payload = {
       name: form.value.name,
@@ -193,6 +194,8 @@ function deleteTarget(id) {
 
 async function confirmDelete() {
   showDeleteConfirm.value = false
+  error.value = ''
+  success.value = ''
   const id = pendingDeleteId.value
   pendingDeleteId.value = null
   try {
@@ -271,6 +274,8 @@ async function reloadChecks(targetId) {
 }
 
 async function runCheckNow(checkId) {
+  error.value = ''
+  success.value = ''
   try {
     await api.post(`/checks/${checkId}/run`)
     success.value = 'Check queued for immediate run'

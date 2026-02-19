@@ -123,8 +123,7 @@ func (s *Store) migration001() error {
 
 	INSERT INTO settings (key, value) VALUES ('session_timeout_hours', '24');
 	INSERT INTO settings (key, value) VALUES ('history_days', '90');
-	INSERT INTO settings (key, value) VALUES ('default_check_interval', '300');
-	INSERT INTO settings (key, value) VALUES ('audit_retention_days', '91');
+INSERT INTO settings (key, value) VALUES ('audit_retention_days', '91');
 	`
 	_, err := s.db.Exec(schema)
 	return err

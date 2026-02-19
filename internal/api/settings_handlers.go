@@ -11,7 +11,6 @@ import (
 var knownSettings = map[string]bool{
 	"session_timeout_hours":  true,
 	"history_days":           true,
-	"default_check_interval": true,
 	"audit_retention_days":   true,
 	"soc_public":             true,
 	// Alerting settings
@@ -50,7 +49,6 @@ var zeroAllowedSettings = map[string]bool{
 var maxSettings = map[string]int{
 	"session_timeout_hours":  8760,  // 1 year
 	"history_days":           3650,  // 10 years
-	"default_check_interval": 86400, // 1 day in seconds
 	"audit_retention_days":   3650,  // 10 years
 	"alert_cooldown_s":       86400, // 1 day
 	"alert_realert_s":        86400, // 1 day

@@ -17,7 +17,6 @@ const loading = ref(false)
 const labels = {
   session_timeout_hours: 'Session Timeout (hours)',
   history_days: 'History Retention (days)',
-  default_check_interval: 'Default Check Interval (seconds)',
   audit_retention_days: 'Audit Log Retention (days)',
   soc_public: 'SOC View Public Access',
 }
@@ -485,7 +484,7 @@ onUnmounted(() => {
     </div>
 
     <!-- ── Audit Log Tab ── -->
-    <div v-if="activeTab === 'audit'">
+    <div v-if="activeTab === 'audit' && auth.isOperator">
       <div class="audit-header">
         <span class="text-muted">{{ auditTotal }} entries</span>
       </div>
@@ -533,7 +532,7 @@ onUnmounted(() => {
     </div>
 
     <!-- ── Users Tab ── -->
-    <div v-if="activeTab === 'users'">
+    <div v-if="activeTab === 'users' && auth.isAdmin">
       <div class="users-header">
         <button class="btn btn-primary" @click="userShowCreate = !userShowCreate">
           {{ userShowCreate ? 'Cancel' : 'Create User' }}
@@ -688,7 +687,7 @@ onUnmounted(() => {
     </div>
 
     <!-- ── Backup & Restore Tab ── -->
-    <div v-if="activeTab === 'backup'">
+    <div v-if="activeTab === 'backup' && auth.isAdmin">
       <div v-if="error" class="error-msg">{{ error }}</div>
 
       <div class="card">
@@ -736,7 +735,7 @@ onUnmounted(() => {
     </div>
 
     <!-- ── Alerting Tab ── -->
-    <div v-if="activeTab === 'alerting'">
+    <div v-if="activeTab === 'alerting' && auth.isAdmin">
       <div v-if="alertError" class="error-msg">{{ alertError }}</div>
       <div v-if="alertSuccess" class="success-msg" @click="alertSuccess = ''">{{ alertSuccess }}</div>
 
@@ -790,7 +789,7 @@ onUnmounted(() => {
     </div>
 
     <!-- ── Fail2Ban Tab ── -->
-    <div v-if="activeTab === 'fail2ban'">
+    <div v-if="activeTab === 'fail2ban' && auth.isAdmin">
       <div class="card">
         <div class="f2b-header">
           <h3>Fail2Ban Jail Status</h3>
