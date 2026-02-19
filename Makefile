@@ -1,6 +1,6 @@
 .PHONY: build frontend backend run dev clean test
 
-VERSION := 2.0.0
+VERSION := 2.8.0
 BINARY := bekci
 BUILD_DIR := bin
 FRONTEND_DIR := frontend
