@@ -52,7 +52,7 @@ func (s *Server) handleListTargets(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleCreateTarget(w http.ResponseWriter, r *http.Request) {
 	var req targetRequest
-	if err := readJSON(r, &req); err != nil {
+	if err := readJSON(w, r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
@@ -176,7 +176,7 @@ func (s *Server) handleGetTarget(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleUpdateTarget(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var req targetRequest
-	if err := readJSON(r, &req); err != nil {
+	if err := readJSON(w, r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}

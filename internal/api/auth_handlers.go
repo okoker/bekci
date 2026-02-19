@@ -13,7 +13,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		Username string `json:"username"`
 		Password string `json:"password"`
 	}
-	if err := readJSON(r, &req); err != nil {
+	if err := readJSON(w, r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
@@ -90,7 +90,7 @@ func (s *Server) handleUpdateMe(w http.ResponseWriter, r *http.Request) {
 		Email string `json:"email"`
 		Phone string `json:"phone"`
 	}
-	if err := readJSON(r, &req); err != nil {
+	if err := readJSON(w, r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
@@ -124,7 +124,7 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		Current string `json:"current_password"`
 		New     string `json:"new_password"`
 	}
-	if err := readJSON(r, &req); err != nil {
+	if err := readJSON(w, r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}

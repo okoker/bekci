@@ -87,6 +87,19 @@ func (s *Server) socAuth(next http.Handler) http.Handler {
 	})
 }
 
+// recoveryMiddleware catches panics so a single bad request cannot kill the process.
+func recoveryMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if err := recover(); err != nil {
+				slog.Error("Panic recovered", "error", err, "method", r.Method, "path", r.URL.Path)
+				writeError(w, http.StatusInternalServerError, "internal server error")
+			}
+		}()
+		next.ServeHTTP(w, r)
+	})
+}
+
 // loggingMiddleware logs HTTP requests.
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
