@@ -194,6 +194,16 @@ func (s *Store) GetFiringRules() ([]struct {
 	return result, rows.Err()
 }
 
+// PurgeOldAlertHistory deletes alert_history entries older than the given number of days.
+func (s *Store) PurgeOldAlertHistory(days int) (int64, error) {
+	cutoff := time.Now().AddDate(0, 0, -days)
+	res, err := s.db.Exec(`DELETE FROM alert_history WHERE sent_at < ?`, cutoff)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
 // GetTargetIDByRuleID returns the target ID associated with a rule.
 func (s *Store) GetTargetIDByRuleID(ruleID string) (string, error) {
 	var targetID string

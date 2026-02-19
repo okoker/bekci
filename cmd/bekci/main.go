@@ -190,6 +190,13 @@ func main() {
 				} else if purged > 0 {
 					slog.Info("Purged old audit entries", "count", purged, "older_than_days", retentionDays)
 				}
+
+				// Purge old alert history (reuse audit_retention_days)
+				if purged, err := db.PurgeOldAlertHistory(retentionDays); err != nil {
+					slog.Error("Alert history cleanup error", "error", err)
+				} else if purged > 0 {
+					slog.Info("Purged old alert history", "count", purged, "older_than_days", retentionDays)
+				}
 			}
 		}
 	}()
