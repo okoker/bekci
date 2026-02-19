@@ -62,6 +62,7 @@ async function saveSettings() {
 // ── Backup & Restore state ──
 const restoreFile = ref(null)
 const restoring = ref(false)
+const showRestoreConfirm = ref(false)
 
 async function downloadBackup() {
   error.value = ''
@@ -87,10 +88,13 @@ function onFileSelected(e) {
   restoreFile.value = e.target.files[0] || null
 }
 
-async function restoreBackup() {
+function confirmRestore() {
   if (!restoreFile.value) return
-  if (!confirm('This will WIPE all current data and replace it with the backup. All users will be logged out. Continue?')) return
+  showRestoreConfirm.value = true
+}
 
+async function executeRestore() {
+  showRestoreConfirm.value = false
   error.value = ''
   restoring.value = true
   try {
@@ -711,10 +715,22 @@ onUnmounted(() => {
             v-if="restoreFile"
             class="btn btn-danger"
             :disabled="restoring"
-            @click="restoreBackup"
+            @click="confirmRestore"
           >
             {{ restoring ? 'Restoring...' : 'Restore Now' }}
           </button>
+        </div>
+      </div>
+
+      <!-- Restore confirmation modal -->
+      <div v-if="showRestoreConfirm" class="modal-overlay" @click.self="showRestoreConfirm = false">
+        <div class="modal-card">
+          <h3>Restore Backup</h3>
+          <p>This will <strong>WIPE all current data</strong> and replace it with the backup. All users will be logged out. This cannot be undone.</p>
+          <div class="form-actions">
+            <button class="btn btn-danger" @click="executeRestore">Restore</button>
+            <button class="btn" @click="showRestoreConfirm = false">Cancel</button>
+          </div>
         </div>
       </div>
     </div>
@@ -924,6 +940,28 @@ onUnmounted(() => {
 .btn-danger:hover {
   background: #b91c1c;
 }
+
+/* ── Restore confirmation modal ── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  z-index: 100;
+  overflow-y: auto;
+  padding: 2rem 1rem;
+}
+.modal-card {
+  background: #fff;
+  border-radius: 8px;
+  padding: 1.5rem;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+}
+.modal-card h3 { margin-bottom: 1rem; }
 
 /* ── SLA tab ── */
 .sla-tab-card {

@@ -2,20 +2,23 @@ package alerter
 
 import (
 	"fmt"
+	"html"
 	"strings"
 	"time"
 )
 
 // RenderEmailAlert renders an HTML email for a firing or recovery alert.
-func RenderEmailAlert(targetName, targetHost, state string, checks []string, ts time.Time) (subject, html string) {
+func RenderEmailAlert(targetName, targetHost, state string, checks []string, ts time.Time) (subject, body string) {
+	targetName = html.EscapeString(targetName)
+	targetHost = html.EscapeString(targetHost)
 	timestamp := ts.UTC().Format("02/01/2006 15:04 UTC")
 
 	if state == "unhealthy" {
 		subject = fmt.Sprintf("[ALERT] %s is DOWN", targetName)
-		html = renderEmailHTML(targetName, targetHost, "DOWN", "#dc2626", checks, timestamp)
+		body = renderEmailHTML(targetName, targetHost, "DOWN", "#dc2626", checks, timestamp)
 	} else {
 		subject = fmt.Sprintf("[RECOVERED] %s is UP", targetName)
-		html = renderEmailHTML(targetName, targetHost, "RECOVERED", "#16a34a", checks, timestamp)
+		body = renderEmailHTML(targetName, targetHost, "RECOVERED", "#16a34a", checks, timestamp)
 	}
 	return
 }
@@ -25,7 +28,7 @@ func renderEmailHTML(targetName, targetHost, stateLabel, color string, checks []
 	if len(checks) > 0 {
 		var items []string
 		for _, c := range checks {
-			items = append(items, fmt.Sprintf("<li>%s</li>", c))
+			items = append(items, fmt.Sprintf("<li>%s</li>", html.EscapeString(c)))
 		}
 		checksHTML = fmt.Sprintf(`<p style="margin:0 0 12px"><strong>Affected checks:</strong></p>
 		<ul style="margin:0 0 16px;padding-left:20px">%s</ul>`, strings.Join(items, ""))

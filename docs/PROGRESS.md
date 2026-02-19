@@ -1,14 +1,13 @@
 # Bekci v2 — Progress
 
-## Session Handover — 18/02/2026
+## Session Handover — 19/02/2026
 
-1. **What was done** — SLA page with Chart.js daily uptime trend charts per category. Backend `GET /api/sla/history`, frontend `SlaView.vue`, route + nav link.
-2. **Decisions made** — Chart.js + vue-chartjs + annotation plugin. 90-day padded daily data, 2-col grid, Y-axis auto-scales to lowest data point. Single API call, no auto-refresh.
-3. **Server state** — Production deployed v2.8.0 (19/02/2026).
-4. **What's next** — Test with real Resend API key. Signal gateway (Phase 4c, deferred).
+1. **What was done** — A-H6 through A-H10 security/data fixes from codebase audit.
+2. **Server state** — Production on v2.8.0. Not yet redeployed with these fixes.
+3. **What's next** — Deploy v2.9.0. Test with real Resend API key. Signal gateway (Phase 4c, deferred).
 
 ## Current Status
-**Phase**: Phase 4 complete + SLA compliance + SLA page. Deployed v2.8.0.
+**Phase**: Phase 4 complete + SLA compliance + SLA page + audit fixes. Deployed v2.8.0.
 
 ## Design Documents
 - `docs/REQUIREMENTS.md` — Current spec: architecture, API, decisions
@@ -191,6 +190,15 @@
 | Settings tab reorder: General, SLA, Alerting, Users, Backup & Restore, Audit Log, Fail2Ban | done |
 | Target edit: preferred_check_type dropdown (shown with 2+ conditions) | done |
 | Backend: preferred_check_type passed through create/update API to store | done |
+
+### Codebase Audit Fixes — 19/02/2026 (DONE)
+| Task | Status |
+|------|--------|
+| A-H6: Validate X-Real-IP header with net.ParseIP() — spoofed values fall through to RemoteAddr | done |
+| A-H7: HTML-escape targetName, targetHost, check names in email templates (XSS prevention) | done |
+| A-H8: Replace native confirm() with custom modal for backup restore (SettingsView.vue) | done |
+| A-H9: Add phone field to GET /api/me response | done |
+| A-H10: Add phone to backup/restore (BackupUser struct, export query/scan, restore INSERT) | done |
 
 ### SLA Page — Daily Uptime Charts (DONE)
 | Task | Status |
