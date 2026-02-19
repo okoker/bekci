@@ -124,7 +124,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("/", s.spaHandler())
 
 	// Wrap everything with CORS + logging
-	return loggingMiddleware(corsMiddleware(s.corsOrigin)(mux))
+	return recoveryMiddleware(loggingMiddleware(corsMiddleware(s.corsOrigin)(mux)))
 }
 
 // spaHandler serves the embedded Vue SPA with index.html fallback.

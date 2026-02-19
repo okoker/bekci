@@ -2,7 +2,7 @@
 
 ## Session Handover — 19/02/2026
 
-1. **What was done** — A-H6 through A-H10 security/data fixes from codebase audit.
+1. **What was done** — A-C1 (nil ResponseWriter in readJSON) and A-C2 (panic recovery middleware) fixed.
 2. **Server state** — Production on v2.8.0. Not yet redeployed with these fixes.
 3. **What's next** — Deploy v2.9.0. Test with real Resend API key. Signal gateway (Phase 4c, deferred).
 
@@ -208,6 +208,12 @@
 | Chart features: dotted SLA threshold line, hover tooltip, auto-scaling Y-axis, 20-color palette | done |
 | Route `/sla` + navbar link between Dashboard and Targets | done |
 | Dependencies: chart.js, vue-chartjs, chartjs-plugin-annotation | done |
+
+### Critical Security Fixes — 19/02/2026 (DONE)
+| Task | Status |
+|------|--------|
+| A-C1: Fix nil ResponseWriter in readJSON — pass `w` to MaxBytesReader across all 11 callers | done |
+| A-C2: Add panic recovery middleware — outermost `recover()` wrapper catches panics, logs, returns 500 | done |
 
 ### Phase 5 — Polish
 | Task | Status |
