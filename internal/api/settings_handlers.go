@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -43,6 +44,16 @@ var stringSettings = map[string]bool{
 var zeroAllowedSettings = map[string]bool{
 	"alert_cooldown_s": true,
 	"alert_realert_s":  true,
+}
+
+// Upper bounds for integer settings.
+var maxSettings = map[string]int{
+	"session_timeout_hours":  8760,  // 1 year
+	"history_days":           3650,  // 10 years
+	"default_check_interval": 86400, // 1 day in seconds
+	"audit_retention_days":   3650,  // 10 years
+	"alert_cooldown_s":       86400, // 1 day
+	"alert_realert_s":        86400, // 1 day
 }
 
 // Float settings validated as 0–100 range (SLA thresholds).
@@ -101,10 +112,18 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusBadRequest, "setting "+key+" must be a non-negative integer")
 				return
 			}
+			if mx, ok := maxSettings[key]; ok && n > mx {
+				writeError(w, http.StatusBadRequest, fmt.Sprintf("setting %s must be at most %d", key, mx))
+				return
+			}
 		} else {
 			n, err := strconv.Atoi(val)
 			if err != nil || n < 1 {
 				writeError(w, http.StatusBadRequest, "setting "+key+" must be a positive integer")
+				return
+			}
+			if mx, ok := maxSettings[key]; ok && n > mx {
+				writeError(w, http.StatusBadRequest, fmt.Sprintf("setting %s must be at most %d", key, mx))
 				return
 			}
 		}

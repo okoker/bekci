@@ -17,6 +17,7 @@ func runPageHash(host string, config map[string]any) *Result {
 	port := configInt(config, "port", 0)
 	endpoint := configStr(config, "endpoint", "/")
 	baselineHash := configStr(config, "baseline_hash", "")
+	skipTLS := configBool(config, "skip_tls_verify", false)
 	timeoutS := configInt(config, "timeout_s", 10)
 
 	// Build URL (bracket IPv6 addresses)
@@ -32,9 +33,11 @@ func runPageHash(host string, config map[string]any) *Result {
 
 	client := &http.Client{
 		Timeout: time.Duration(timeoutS) * time.Second,
-		Transport: &http.Transport{
+	}
+	if skipTLS {
+		client.Transport = &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		},
+		}
 	}
 
 	start := time.Now()

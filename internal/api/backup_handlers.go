@@ -92,7 +92,7 @@ func (s *Server) handleRestore(w http.ResponseWriter, r *http.Request) {
 	// Perform restore
 	if err := s.store.RestoreBackup(&data); err != nil {
 		slog.Error("Backup restore failed", "error", err)
-		writeError(w, http.StatusInternalServerError, "restore failed: "+err.Error())
+		writeError(w, http.StatusInternalServerError, "restore failed")
 		return
 	}
 
