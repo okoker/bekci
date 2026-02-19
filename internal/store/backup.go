@@ -33,6 +33,7 @@ type BackupUser struct {
 	ID           string    `json:"id"`
 	Username     string    `json:"username"`
 	Email        string    `json:"email"`
+	Phone        string    `json:"phone"`
 	PasswordHash string    `json:"password_hash"`
 	Role         string    `json:"role"`
 	Status       string    `json:"status"`
@@ -95,14 +96,14 @@ func (s *Store) ExportBackup(appVersion string) (*BackupData, error) {
 	}
 
 	// Users (with password_hash)
-	rows, err := s.db.Query(`SELECT id, username, email, password_hash, role, status, created_at, updated_at FROM users ORDER BY created_at ASC`)
+	rows, err := s.db.Query(`SELECT id, username, email, phone, password_hash, role, status, created_at, updated_at FROM users ORDER BY created_at ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("exporting users: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var u BackupUser
-		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.Role, &u.Status, &u.CreatedAt, &u.UpdatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.Phone, &u.PasswordHash, &u.Role, &u.Status, &u.CreatedAt, &u.UpdatedAt); err != nil {
 			return nil, err
 		}
 		data.Users = append(data.Users, u)
@@ -291,13 +292,13 @@ func (s *Store) RestoreBackup(data *BackupData) error {
 
 	// Users
 	if len(data.Users) > 0 {
-		stmt, err := tx.Prepare(`INSERT INTO users (id, username, email, password_hash, role, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+		stmt, err := tx.Prepare(`INSERT INTO users (id, username, email, phone, password_hash, role, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 		if err != nil {
 			return fmt.Errorf("prepare users insert: %w", err)
 		}
 		defer stmt.Close()
 		for _, u := range data.Users {
-			if _, err := stmt.Exec(u.ID, u.Username, u.Email, u.PasswordHash, u.Role, u.Status, u.CreatedAt, u.UpdatedAt); err != nil {
+			if _, err := stmt.Exec(u.ID, u.Username, u.Email, u.Phone, u.PasswordHash, u.Role, u.Status, u.CreatedAt, u.UpdatedAt); err != nil {
 				return fmt.Errorf("inserting user %s: %w", u.Username, err)
 			}
 		}

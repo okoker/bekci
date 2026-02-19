@@ -21,7 +21,9 @@ func clientIP(r *http.Request) string {
 	ip := net.ParseIP(host)
 	if ip != nil && ip.IsLoopback() {
 		if real := r.Header.Get("X-Real-IP"); real != "" {
-			return real
+			if parsed := net.ParseIP(real); parsed != nil {
+				return parsed.String()
+			}
 		}
 	}
 	return host

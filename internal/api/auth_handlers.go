@@ -78,6 +78,7 @@ func (s *Server) handleGetMe(w http.ResponseWriter, r *http.Request) {
 		"id":       user.ID,
 		"username": user.Username,
 		"email":    user.Email,
+		"phone":    user.Phone,
 		"role":     user.Role,
 		"status":   user.Status,
 	})
