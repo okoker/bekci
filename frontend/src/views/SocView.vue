@@ -1,9 +1,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
-import axios from 'axios'
-import { useAuthStore } from '../stores/auth'
-
-const auth = useAuthStore()
+import api from '../api'
 
 const dashboardData = ref([])
 const historyData = ref({})
@@ -17,22 +14,9 @@ let refreshTimer = null
 const empty90d = Array.from({ length: 90 }, () => ({ date: '', uptime_pct: -1, total_checks: 0 }))
 const empty4h = Array.from({ length: 48 }, () => ({ status: 'none', response_ms: 0, checked_at: '' }))
 
-// Use raw axios for SOC endpoints — may be unauthenticated
-const socApi = axios.create({
-  baseURL: '/api',
-  headers: { 'Content-Type': 'application/json' },
-})
-// Attach token if available (for soc_public=false case)
-socApi.interceptors.request.use((config) => {
-  if (auth.token) {
-    config.headers.Authorization = `Bearer ${auth.token}`
-  }
-  return config
-})
-
 async function loadDashboard() {
   try {
-    const { data } = await socApi.get('/soc/status')
+    const { data } = await api.get('/soc/status')
     dashboardData.value = data
     lastUpdated.value = new Date()
     error.value = ''
@@ -58,8 +42,8 @@ async function loadDashboard() {
 async function loadHistory(checkId) {
   try {
     const [res90d, res4h] = await Promise.all([
-      socApi.get(`/soc/history/${checkId}?range=90d`),
-      socApi.get(`/soc/history/${checkId}?range=4h`),
+      api.get(`/soc/history/${checkId}?range=90d`),
+      api.get(`/soc/history/${checkId}?range=4h`),
     ])
     historyData.value[checkId] = {
       bar90d: pad90dBars(res90d.data),

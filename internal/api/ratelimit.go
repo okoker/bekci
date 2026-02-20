@@ -21,14 +21,21 @@ type ipRecord struct {
 type loginLimiter struct {
 	mu       sync.Mutex
 	attempts map[string]*ipRecord
+	stopCh   chan struct{}
 }
 
 func newLoginLimiter() *loginLimiter {
 	l := &loginLimiter{
 		attempts: make(map[string]*ipRecord),
+		stopCh:   make(chan struct{}),
 	}
 	go l.cleanupLoop()
 	return l
+}
+
+// Stop terminates the cleanup goroutine.
+func (l *loginLimiter) Stop() {
+	close(l.stopCh)
 }
 
 // allow returns true if the IP is permitted to attempt login.
@@ -94,16 +101,21 @@ func (l *loginLimiter) resetSuccess(ip string) {
 func (l *loginLimiter) cleanupLoop() {
 	ticker := time.NewTicker(cleanupInterval)
 	defer ticker.Stop()
-	for range ticker.C {
-		l.mu.Lock()
-		now := time.Now()
-		for ip, rec := range l.attempts {
-			windowExpired := now.Sub(rec.windowStart) > loginWindow
-			lockExpired := rec.lockedUntil.IsZero() || now.After(rec.lockedUntil)
-			if windowExpired && lockExpired {
-				delete(l.attempts, ip)
+	for {
+		select {
+		case <-l.stopCh:
+			return
+		case <-ticker.C:
+			l.mu.Lock()
+			now := time.Now()
+			for ip, rec := range l.attempts {
+				windowExpired := now.Sub(rec.windowStart) > loginWindow
+				lockExpired := rec.lockedUntil.IsZero() || now.After(rec.lockedUntil)
+				if windowExpired && lockExpired {
+					delete(l.attempts, ip)
+				}
 			}
+			l.mu.Unlock()
 		}
-		l.mu.Unlock()
 	}
 }

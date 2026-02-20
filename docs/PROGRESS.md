@@ -1,13 +1,13 @@
 # Bekci v2 — Progress
 
-## Session Handover — 19/02/2026
+## Session Handover — 20/02/2026
 
-1. **What was done** — A-C1/C2, A-H6-H10, A-M17-M19/M24 (previous session). Then A-M21/A-L18/A-L9/A-L19 (dead setting, stale messages, round2, tab guards).
-2. **Server state** — Production on v2.8.0. Not yet redeployed with these fixes.
-3. **What's next** — Deploy v2.9.0. Test with real Resend API key. Signal gateway (Phase 4c, deferred).
+1. **What was done** — A-M20 (rate limiter stop channel), A-M23 (SocView shared api), A-M25 (soc_public cache 30s TTL).
+2. **Server state** — Local dev only. Production still on v2.9.0.
+3. **What's next** — Deploy to production. Test with real Resend API key. Signal gateway (Phase 4c, deferred).
 
 ## Current Status
-**Phase**: Phase 4 complete + SLA compliance + SLA page + audit fixes. Deployed v2.8.0.
+**Phase**: Phase 4 complete + SLA compliance + SLA page + audit fixes. Deployed v2.9.0.
 
 ## Design Documents
 - `docs/REQUIREMENTS.md` — Current spec: architecture, API, decisions
@@ -231,6 +231,13 @@
 | A-L9: `round2()` uses `math.Round` instead of int truncation | done |
 | A-L19: Add role guards to Settings tab content panels (defense-in-depth, API already enforces) | done |
 
+### Debt Fixes — 20/02/2026 (DONE)
+| Task | Status |
+|------|--------|
+| A-M23: SocView uses shared `api` instead of duplicate axios instance | done |
+| A-M20: Rate limiter stop channel — `cleanupLoop` exits on `Server.Close()`, no goroutine leak | done |
+| A-M25: `soc_public` setting cached (30s TTL) in SOC middleware, invalidated on settings update | done |
+
 ### Phase 5 — Polish
 | Task | Status |
 |------|--------|
@@ -248,7 +255,7 @@
 ### Production Server
 - **Host**: `cl@dias-bekci` (10.0.9.20), Ubuntu 22.04, x86_64
 - **Access**: `https://10.0.9.20` (self-signed cert), `https://bekci.home` when DNS ready
-- **Binary**: `/opt/bekci/bekci` v2.8.0, runs as `bekci` system user
+- **Binary**: `/opt/bekci/bekci` v2.9.0, runs as `bekci` system user
 - **Config**: `/etc/bekci/config.yaml` (640 root:bekci), `/etc/bekci/env` (600 root:root — JWT secret)
 - **DB**: `/var/lib/bekci/bekci.db`
 - **Logs**: `/var/log/bekci/bekci.log` + `journalctl -u bekci`

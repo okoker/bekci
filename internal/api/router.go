@@ -3,6 +3,8 @@ package api
 import (
 	"io/fs"
 	"net/http"
+	"sync"
+	"time"
 
 	"github.com/bekci/internal/alerter"
 	"github.com/bekci/internal/auth"
@@ -10,16 +12,23 @@ import (
 	"github.com/bekci/internal/store"
 )
 
+type cachedSetting struct {
+	mu    sync.Mutex
+	value string
+	until time.Time
+}
+
 type Server struct {
-	store        *store.Store
-	auth         *auth.Service
-	scheduler    *scheduler.Scheduler
-	alerter      *alerter.AlertService
-	version      string
-	spa          fs.FS // embedded frontend/dist
-	corsOrigin   string
-	dbPath       string
-	loginLimiter *loginLimiter
+	store          *store.Store
+	auth           *auth.Service
+	scheduler      *scheduler.Scheduler
+	alerter        *alerter.AlertService
+	version        string
+	spa            fs.FS // embedded frontend/dist
+	corsOrigin     string
+	dbPath         string
+	loginLimiter   *loginLimiter
+	socPublicCache cachedSetting
 }
 
 // New creates a new API server.
@@ -35,6 +44,31 @@ func New(st *store.Store, authSvc *auth.Service, sched *scheduler.Scheduler, ale
 		dbPath:       dbPath,
 		loginLimiter: newLoginLimiter(),
 	}
+}
+
+// Close releases resources held by the server (e.g. background goroutines).
+func (s *Server) Close() {
+	s.loginLimiter.Stop()
+}
+
+// cachedSocPublic returns the soc_public setting value, using a 30s cache.
+func (s *Server) cachedSocPublic() string {
+	s.socPublicCache.mu.Lock()
+	defer s.socPublicCache.mu.Unlock()
+	if time.Now().Before(s.socPublicCache.until) {
+		return s.socPublicCache.value
+	}
+	val, _ := s.store.GetSetting("soc_public")
+	s.socPublicCache.value = val
+	s.socPublicCache.until = time.Now().Add(30 * time.Second)
+	return val
+}
+
+// invalidateSocPublicCache forces the next socAuth call to re-read from DB.
+func (s *Server) invalidateSocPublicCache() {
+	s.socPublicCache.mu.Lock()
+	s.socPublicCache.until = time.Time{}
+	s.socPublicCache.mu.Unlock()
 }
 
 // Handler returns the root HTTP handler with all routes registered.
