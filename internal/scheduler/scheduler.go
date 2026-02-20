@@ -88,6 +88,7 @@ func (s *Scheduler) Stop() {
 		t.Stop()
 		delete(s.timers, id)
 		delete(s.intervals, id)
+		delete(s.checkMu, id)
 	}
 	slog.Info("Scheduler stopped")
 }
