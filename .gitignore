@@ -13,8 +13,10 @@ bin/
 config.yaml
 config.example.yaml
 
-# Internal docs
-docs/
+# Internal docs (keep reference/ and README tracked)
+docs/*
+!docs/reference/
+!docs/README.md
 
 # Claude Code
 CLAUDE.md
