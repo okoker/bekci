@@ -542,6 +542,102 @@ Returns raw check results from the last 24 hours.
 
 ---
 
+## Check Type Configuration
+
+The `config` field in target conditions is a JSON string with check-type-specific fields. All fields are optional — sensible defaults are applied. Config is parsed at runtime using helpers that return defaults for missing keys.
+
+### http
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `scheme` | string | `"https"` | `http` or `https` |
+| `port` | int | `0` | Port (0 = scheme default: 80/443) |
+| `endpoint` | string | `"/"` | URL path |
+| `expect_status` | int | `200` | Expected HTTP status code |
+| `skip_tls_verify` | bool | `false` | Skip TLS cert verification |
+| `timeout_s` | int | `10` | Request timeout (seconds) |
+
+```json
+{ "scheme": "https", "port": 8443, "endpoint": "/health", "expect_status": 200 }
+```
+
+Metrics: `status_code`, `url`. Status "down" if response code != `expect_status`.
+
+### tcp
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `port` | int | `80` | Destination port |
+| `timeout_s` | int | `5` | Connection timeout (seconds) |
+
+```json
+{ "port": 443, "timeout_s": 10 }
+```
+
+Metrics: `addr`. Simple connect-then-close test.
+
+### ping
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `count` | int | `3` | ICMP packets to send |
+| `timeout_s` | int | `5` | Timeout for entire sequence (seconds) |
+
+```json
+{ "count": 5, "timeout_s": 10 }
+```
+
+Metrics: `packet_loss`, `avg_rtt_ms`, `packets_sent`, `packets_recv`. Status "down" only on 100% packet loss. Requires `NET_RAW` capability or runs in unprivileged UDP mode.
+
+### dns
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `query` | string | target host | Domain to resolve |
+| `record_type` | string | `"A"` | `A`, `AAAA`, `MX`, or `CNAME` |
+| `expect_value` | string | `""` | Expected value (empty = any resolution is "up") |
+| `nameserver` | string | `""` | Custom nameserver (empty = system resolver) |
+| `timeout_s` | int | `5` | Query timeout (seconds) |
+
+```json
+{ "query": "www.example.com", "record_type": "A", "expect_value": "93.184.216.34", "nameserver": "8.8.8.8" }
+```
+
+Metrics: `query`, `record_type`, `resolved` (array). Trailing dots stripped for CNAME comparison.
+
+### page_hash
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `scheme` | string | `"https"` | `http` or `https` |
+| `port` | int | `0` | Port (0 = scheme default) |
+| `endpoint` | string | `"/"` | URL path to fetch |
+| `baseline_hash` | string | `""` | SHA256 of expected body (empty = capture mode) |
+| `skip_tls_verify` | bool | `false` | Skip TLS cert verification |
+| `timeout_s` | int | `10` | Request timeout (seconds) |
+
+```json
+{ "endpoint": "/index.html", "baseline_hash": "e3b0c44298fc1c14..." }
+```
+
+Metrics: `hash`, `baseline_hash`, `url`, `baseline_captured`. On first run (empty `baseline_hash`), returns "up" with `baseline_captured: true` and the computed hash. Subsequent runs compare against baseline — "down" on mismatch. Body limited to 10MB.
+
+### tls_cert
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `port` | int | `443` | TLS port |
+| `warn_days` | int | `30` | Days before expiry to flag "down" |
+| `timeout_s` | int | `10` | Connection timeout (seconds) |
+
+```json
+{ "port": 443, "warn_days": 14 }
+```
+
+Metrics: `days_left`, `issuer`, `subject`, `not_after`, `not_before`. Uses SNI for hostname matching. Connects with `InsecureSkipVerify` to inspect even invalid certs. Status "down" if cert expires within `warn_days` or already expired.
+
+---
+
 ## Dashboard
 
 | Method | Path | Auth | Description |
