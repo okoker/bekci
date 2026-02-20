@@ -60,6 +60,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.auth.Logout(claims.SessionID); err != nil {
+		slog.Error("logout failed", "session_id", claims.SessionID, "error", err)
 		writeError(w, http.StatusInternalServerError, "logout failed")
 		return
 	}
@@ -111,6 +112,7 @@ func (s *Server) handleUpdateMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.store.UpdateUser(user.ID, email, phone, user.Role); err != nil {
+		slog.Error("update profile failed", "user_id", user.ID, "error", err)
 		writeError(w, http.StatusInternalServerError, "update failed")
 		return
 	}

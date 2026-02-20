@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"log/slog"
 	"time"
 )
 
@@ -125,7 +126,9 @@ type AlertHistoryItem struct {
 // ListAlertHistory returns paginated alert history with target and recipient names.
 func (s *Store) ListAlertHistory(limit, offset int) ([]AlertHistoryItem, int, error) {
 	var total int
-	s.db.QueryRow(`SELECT COUNT(*) FROM alert_history WHERE target_id != ''`).Scan(&total)
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM alert_history WHERE target_id != ''`).Scan(&total); err != nil {
+		slog.Error("alert history count failed", "error", err)
+	}
 
 	rows, err := s.db.Query(`
 		SELECT ah.id, ah.rule_id, ah.target_id,
