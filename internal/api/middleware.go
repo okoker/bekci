@@ -77,8 +77,7 @@ func requireRole(roles ...string) func(http.Handler) http.Handler {
 // If soc_public is "true", allow anonymous access; otherwise require Bearer token.
 func (s *Server) socAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		val, err := s.store.GetSetting("soc_public")
-		if err == nil && val == "true" {
+		if s.cachedSocPublic() == "true" {
 			next.ServeHTTP(w, r)
 			return
 		}

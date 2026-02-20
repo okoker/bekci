@@ -231,6 +231,7 @@ func main() {
 
 	slog.Warn("Shutting down...")
 	sched.Stop()
+	apiServer.Close()
 	cancel()
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
