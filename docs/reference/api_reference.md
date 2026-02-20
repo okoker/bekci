@@ -78,6 +78,7 @@ Rate limited: 5 attempts/5min per IP, 15min lockout.
   "id": "uuid",
   "username": "admin",
   "email": "admin@example.com",
+  "phone": "+1234567890",
   "role": "admin",
   "status": "active"
 }
@@ -85,7 +86,7 @@ Rate limited: 5 attempts/5min per IP, 15min lockout.
 
 ### PUT /api/me
 
-**Request:**
+**Request:** (all fields optional, empty = keep current)
 ```json
 {
   "email": "new@example.com",
@@ -286,7 +287,7 @@ Returns summary list (no full conditions, includes condition count and state).
     "rule_id": "uuid",
     "created_at": "2026-01-15T10:00:00Z",
     "updated_at": "2026-01-15T10:00:00Z",
-    "condition_count": 2,
+    "condition_count": 2,  // number of checks for this target
     "state": {
       "rule_id": "uuid",
       "current_state": "healthy",
@@ -334,6 +335,7 @@ Creates target, checks, rule, and rule conditions in one transaction. Creator is
 | Error | Code |
 |-------|------|
 | Missing name/host | 400 |
+| No conditions provided | 400 |
 | Invalid operator | 400 |
 | Invalid category | 400 |
 | Invalid check_type | 400 |
@@ -412,6 +414,7 @@ Conditions can include `check_id` to update existing checks:
 | Error | Code |
 |-------|------|
 | Missing name/host | 400 |
+| No conditions provided | 400 |
 | Invalid operator/category/check_type | 400 |
 | Target not found | 404 |
 | Duplicate target name | 409 |
@@ -732,8 +735,7 @@ Returns all settings as key-value map. Sensitive values (e.g. `resend_api_key`) 
 {
   "session_timeout_hours": "24",
   "history_days": "90",
-  "default_check_interval": "300",
-  "audit_retention_days": "90",
+  "audit_retention_days": "91",
   "soc_public": "false",
   "alert_method": "email",
   "resend_api_key": "••••••••",
@@ -766,7 +768,6 @@ Update one or more settings. Only known keys are accepted. Sending masked API ke
 |-----|------|------------|
 | `session_timeout_hours` | positive integer | >= 1 |
 | `history_days` | positive integer | >= 1 |
-| `default_check_interval` | positive integer | >= 1 |
 | `audit_retention_days` | positive integer | >= 1 |
 | `soc_public` | boolean string | `"true"` or `"false"` |
 | `alert_method` | string | any string |
@@ -927,6 +928,7 @@ Returns network connectivity (ICMP ping to 1.1.1.1), disk usage, and CPU load.
 **Response (200):**
 ```json
 {
+  "version": "2.8.0",
   "net": {
     "status": "ok",
     "latency_ms": 12
