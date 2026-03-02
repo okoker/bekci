@@ -180,14 +180,14 @@ func (s *Store) ExportBackup(appVersion string) (*BackupData, error) {
 	}
 
 	// Rule conditions
-	rcRows, err := s.db.Query(`SELECT id, rule_id, check_id, field, comparator, value, fail_count, fail_window, sort_order FROM rule_conditions ORDER BY rule_id, sort_order ASC`)
+	rcRows, err := s.db.Query(`SELECT id, rule_id, check_id, field, comparator, value, fail_count, fail_window, sort_order, condition_group, group_operator FROM rule_conditions ORDER BY rule_id, condition_group, sort_order ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("exporting rule_conditions: %w", err)
 	}
 	defer rcRows.Close()
 	for rcRows.Next() {
 		var rc RuleCondition
-		if err := rcRows.Scan(&rc.ID, &rc.RuleID, &rc.CheckID, &rc.Field, &rc.Comparator, &rc.Value, &rc.FailCount, &rc.FailWindow, &rc.SortOrder); err != nil {
+		if err := rcRows.Scan(&rc.ID, &rc.RuleID, &rc.CheckID, &rc.Field, &rc.Comparator, &rc.Value, &rc.FailCount, &rc.FailWindow, &rc.SortOrder, &rc.ConditionGroup, &rc.GroupOperator); err != nil {
 			return nil, err
 		}
 		data.RuleConditions = append(data.RuleConditions, rc)
@@ -392,13 +392,18 @@ func (s *Store) RestoreBackup(data *BackupData) error {
 
 	// Rule conditions
 	if len(data.RuleConditions) > 0 {
-		stmt, err := tx.Prepare(`INSERT INTO rule_conditions (id, rule_id, check_id, field, comparator, value, fail_count, fail_window, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+		stmt, err := tx.Prepare(`INSERT INTO rule_conditions (id, rule_id, check_id, field, comparator, value, fail_count, fail_window, sort_order, condition_group, group_operator) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 		if err != nil {
 			return fmt.Errorf("prepare rule_conditions insert: %w", err)
 		}
 		defer stmt.Close()
 		for _, rc := range data.RuleConditions {
-			if _, err := stmt.Exec(rc.ID, rc.RuleID, rc.CheckID, rc.Field, rc.Comparator, rc.Value, rc.FailCount, rc.FailWindow, rc.SortOrder); err != nil {
+			// Handle old backups missing new fields
+			groupOp := rc.GroupOperator
+			if groupOp == "" {
+				groupOp = "AND"
+			}
+			if _, err := stmt.Exec(rc.ID, rc.RuleID, rc.CheckID, rc.Field, rc.Comparator, rc.Value, rc.FailCount, rc.FailWindow, rc.SortOrder, rc.ConditionGroup, groupOp); err != nil {
 				return fmt.Errorf("inserting rule_condition %s: %w", rc.ID, err)
 			}
 		}

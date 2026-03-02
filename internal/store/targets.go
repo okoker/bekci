@@ -24,16 +24,18 @@ type Target struct {
 
 // TargetCondition is the unified check+condition for the target API.
 type TargetCondition struct {
-	CheckID    string `json:"check_id,omitempty"`
-	CheckType  string `json:"check_type"`
-	CheckName  string `json:"check_name"`
-	Config     string `json:"config"`
-	IntervalS  int    `json:"interval_s"`
-	Field      string `json:"field"`
-	Comparator string `json:"comparator"`
-	Value      string `json:"value"`
-	FailCount  int    `json:"fail_count"`
-	FailWindow int    `json:"fail_window"`
+	CheckID        string `json:"check_id,omitempty"`
+	CheckType      string `json:"check_type"`
+	CheckName      string `json:"check_name"`
+	Config         string `json:"config"`
+	IntervalS      int    `json:"interval_s"`
+	Field          string `json:"field"`
+	Comparator     string `json:"comparator"`
+	Value          string `json:"value"`
+	FailCount      int    `json:"fail_count"`
+	FailWindow     int    `json:"fail_window"`
+	ConditionGroup int    `json:"condition_group"`
+	GroupOperator  string `json:"group_operator"`
 }
 
 // TargetDetail is a target with its conditions, rule state, and alert recipients.
@@ -212,10 +214,14 @@ func (s *Store) CreateTargetWithConditions(t *Target, conds []TargetCondition, c
 		if failCount <= 0 {
 			failCount = 1
 		}
+		groupOp := c.GroupOperator
+		if groupOp == "" {
+			groupOp = "AND"
+		}
 		_, err = tx.Exec(`
-			INSERT INTO rule_conditions (id, rule_id, check_id, field, comparator, value, fail_count, fail_window, sort_order)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`, condID, ruleID, checkID, field, comparator, c.Value, failCount, c.FailWindow, i)
+			INSERT INTO rule_conditions (id, rule_id, check_id, field, comparator, value, fail_count, fail_window, sort_order, condition_group, group_operator)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, condID, ruleID, checkID, field, comparator, c.Value, failCount, c.FailWindow, i, c.ConditionGroup, groupOp)
 		if err != nil {
 			return err
 		}
@@ -398,10 +404,14 @@ func (s *Store) UpdateTargetWithConditions(id, name, host, description string, e
 		if failCount <= 0 {
 			failCount = 1
 		}
+		groupOp := c.GroupOperator
+		if groupOp == "" {
+			groupOp = "AND"
+		}
 		_, err = tx.Exec(`
-			INSERT INTO rule_conditions (id, rule_id, check_id, field, comparator, value, fail_count, fail_window, sort_order)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`, condID, rid, checkID, field, comparator, c.Value, failCount, c.FailWindow, i)
+			INSERT INTO rule_conditions (id, rule_id, check_id, field, comparator, value, fail_count, fail_window, sort_order, condition_group, group_operator)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, condID, rid, checkID, field, comparator, c.Value, failCount, c.FailWindow, i, c.ConditionGroup, groupOp)
 		if err != nil {
 			return err
 		}
@@ -440,18 +450,20 @@ func (s *Store) GetTargetDetail(id string) (*TargetDetail, error) {
 	if t.RuleID != nil {
 		rows, err := s.db.Query(`
 			SELECT c.id, c.type, c.name, c.config, c.interval_s,
-			       rc.field, rc.comparator, rc.value, rc.fail_count, rc.fail_window
+			       rc.field, rc.comparator, rc.value, rc.fail_count, rc.fail_window,
+			       rc.condition_group, rc.group_operator
 			FROM checks c
 			JOIN rule_conditions rc ON rc.check_id = c.id AND rc.rule_id = ?
 			WHERE c.target_id = ?
-			ORDER BY rc.sort_order ASC
+			ORDER BY rc.condition_group ASC, rc.sort_order ASC
 		`, *t.RuleID, id)
 		if err == nil {
 			defer rows.Close()
 			for rows.Next() {
 				var tc TargetCondition
 				if err := rows.Scan(&tc.CheckID, &tc.CheckType, &tc.CheckName, &tc.Config, &tc.IntervalS,
-					&tc.Field, &tc.Comparator, &tc.Value, &tc.FailCount, &tc.FailWindow); err != nil {
+					&tc.Field, &tc.Comparator, &tc.Value, &tc.FailCount, &tc.FailWindow,
+					&tc.ConditionGroup, &tc.GroupOperator); err != nil {
 					return nil, fmt.Errorf("scanning target condition: %w", err)
 				}
 				td.Conditions = append(td.Conditions, tc)

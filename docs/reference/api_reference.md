@@ -311,7 +311,7 @@ Creates target, checks, rule, and rule conditions in one transaction. Creator is
   "host": "string (required)",
   "description": "string",
   "enabled": true,
-  "operator": "AND | OR (default: AND)",
+  "operator": "AND (kept for backward compat, ignored by engine)",
   "category": "Network | Security | Physical Security | Key Services | Other (default: Other)",
   "preferred_check_type": "string (optional, must match a condition's check_type; defaults to first condition's type)",
   "conditions": [
@@ -324,11 +324,17 @@ Creates target, checks, rule, and rule conditions in one transaction. Creator is
       "comparator": "string (default: eq)",
       "value": "string (default: down)",
       "fail_count": 1,
-      "fail_window": 0
+      "fail_window": 0,
+      "condition_group": 0,
+      "group_operator": "AND | OR (default: AND)"
     }
   ]
 }
 ```
+
+**Condition groups:** Conditions are grouped by `condition_group` (integer). Within a group, conditions are combined using `group_operator` (AND/OR). Across groups, the logic is always OR — any group triggering means the target is unhealthy. Example: `(TCP AND HTTP) OR PING` = group 0 with AND (TCP, HTTP), group 1 with AND (PING).
+
+If `group_operator` is omitted, it defaults to the top-level `operator` value for backward compatibility.
 
 **Response (201):** Full TargetDetail object (see GET /api/targets/{id}).
 
@@ -340,6 +346,7 @@ Creates target, checks, rule, and rule conditions in one transaction. Creator is
 | Invalid category | 400 |
 | Invalid check_type | 400 |
 | Missing check_name | 400 |
+| Invalid group_operator | 400 |
 | Duplicate target name | 409 |
 
 ### GET /api/targets/{id}
@@ -371,7 +378,9 @@ Returns full target detail with conditions, state, and recipient IDs.
       "comparator": "eq",
       "value": "down",
       "fail_count": 3,
-      "fail_window": 600
+      "fail_window": 600,
+      "condition_group": 0,
+      "group_operator": "AND"
     }
   ],
   "state": {

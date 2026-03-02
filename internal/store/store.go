@@ -69,6 +69,7 @@ func (s *Store) migrate() error {
 		s.migration011,
 		s.migration012,
 		s.migration013,
+		s.migration014,
 	}
 
 	for i := current; i < len(migrations); i++ {
@@ -497,6 +498,24 @@ func (s *Store) migration013() error {
 		INSERT OR IGNORE INTO settings (key, value) VALUES ('sla_physical_security', '99.9');
 		INSERT OR IGNORE INTO settings (key, value) VALUES ('sla_key_services', '99.9');
 		INSERT OR IGNORE INTO settings (key, value) VALUES ('sla_other', '99.9');
+	`)
+	return err
+}
+
+// migration014 adds condition_group and group_operator to rule_conditions for grouped condition logic.
+func (s *Store) migration014() error {
+	_, err := s.db.Exec(`
+		ALTER TABLE rule_conditions ADD COLUMN condition_group INTEGER NOT NULL DEFAULT 0;
+		ALTER TABLE rule_conditions ADD COLUMN group_operator TEXT NOT NULL DEFAULT 'AND';
+	`)
+	if err != nil {
+		return err
+	}
+	// Backfill: inherit current rule-level operator so existing behavior doesn't change
+	_, err = s.db.Exec(`
+		UPDATE rule_conditions SET group_operator = (
+			SELECT r.operator FROM rules r WHERE r.id = rule_conditions.rule_id
+		)
 	`)
 	return err
 }

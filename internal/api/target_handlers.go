@@ -29,16 +29,18 @@ type targetRequest struct {
 }
 
 type targetConditionRequest struct {
-	CheckID    string `json:"check_id"`
-	CheckType  string `json:"check_type"`
-	CheckName  string `json:"check_name"`
-	Config     string `json:"config"`
-	IntervalS  int    `json:"interval_s"`
-	Field      string `json:"field"`
-	Comparator string `json:"comparator"`
-	Value      string `json:"value"`
-	FailCount  int    `json:"fail_count"`
-	FailWindow int    `json:"fail_window"`
+	CheckID        string `json:"check_id"`
+	CheckType      string `json:"check_type"`
+	CheckName      string `json:"check_name"`
+	Config         string `json:"config"`
+	IntervalS      int    `json:"interval_s"`
+	Field          string `json:"field"`
+	Comparator     string `json:"comparator"`
+	Value          string `json:"value"`
+	FailCount      int    `json:"fail_count"`
+	FailWindow     int    `json:"fail_window"`
+	ConditionGroup int    `json:"condition_group"`
+	GroupOperator  string `json:"group_operator"`
 }
 
 func (s *Server) handleListTargets(w http.ResponseWriter, r *http.Request) {
@@ -106,17 +108,27 @@ func (s *Server) handleCreateTarget(w http.ResponseWriter, r *http.Request) {
 		if c.Value == "" {
 			c.Value = "down"
 		}
+		groupOp := c.GroupOperator
+		if groupOp == "" {
+			groupOp = req.Operator // backward compat: inherit target-level operator
+		}
+		if !validOperators[groupOp] {
+			writeError(w, http.StatusBadRequest, "group_operator must be AND or OR")
+			return
+		}
 		conds = append(conds, store.TargetCondition{
-			CheckID:    c.CheckID,
-			CheckType:  c.CheckType,
-			CheckName:  c.CheckName,
-			Config:     c.Config,
-			IntervalS:  c.IntervalS,
-			Field:      c.Field,
-			Comparator: c.Comparator,
-			Value:      c.Value,
-			FailCount:  c.FailCount,
-			FailWindow: c.FailWindow,
+			CheckID:        c.CheckID,
+			CheckType:      c.CheckType,
+			CheckName:      c.CheckName,
+			Config:         c.Config,
+			IntervalS:      c.IntervalS,
+			Field:          c.Field,
+			Comparator:     c.Comparator,
+			Value:          c.Value,
+			FailCount:      c.FailCount,
+			FailWindow:     c.FailWindow,
+			ConditionGroup: c.ConditionGroup,
+			GroupOperator:  groupOp,
 		})
 	}
 
@@ -230,17 +242,27 @@ func (s *Server) handleUpdateTarget(w http.ResponseWriter, r *http.Request) {
 		if c.Value == "" {
 			c.Value = "down"
 		}
+		groupOp := c.GroupOperator
+		if groupOp == "" {
+			groupOp = req.Operator
+		}
+		if !validOperators[groupOp] {
+			writeError(w, http.StatusBadRequest, "group_operator must be AND or OR")
+			return
+		}
 		conds = append(conds, store.TargetCondition{
-			CheckID:    c.CheckID,
-			CheckType:  c.CheckType,
-			CheckName:  c.CheckName,
-			Config:     c.Config,
-			IntervalS:  c.IntervalS,
-			Field:      c.Field,
-			Comparator: c.Comparator,
-			Value:      c.Value,
-			FailCount:  c.FailCount,
-			FailWindow: c.FailWindow,
+			CheckID:        c.CheckID,
+			CheckType:      c.CheckType,
+			CheckName:      c.CheckName,
+			Config:         c.Config,
+			IntervalS:      c.IntervalS,
+			Field:          c.Field,
+			Comparator:     c.Comparator,
+			Value:          c.Value,
+			FailCount:      c.FailCount,
+			FailWindow:     c.FailWindow,
+			ConditionGroup: c.ConditionGroup,
+			GroupOperator:  groupOp,
 		})
 	}
 

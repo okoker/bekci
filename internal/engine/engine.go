@@ -56,33 +56,48 @@ func (e *Engine) evaluateRule(rule store.Rule) {
 		return
 	}
 
-	// Evaluate each condition
-	results := make([]bool, len(conds))
-	for i, cond := range conds {
-		results[i] = e.evaluateCondition(cond)
+	// Group conditions by ConditionGroup
+	groups := map[int][]store.RuleCondition{}
+	groupOps := map[int]string{}
+	for _, cond := range conds {
+		groups[cond.ConditionGroup] = append(groups[cond.ConditionGroup], cond)
+		groupOps[cond.ConditionGroup] = cond.GroupOperator
 	}
 
-	// Combine: AND = all true, OR = any true
-	var combined bool
-	if rule.Operator == "OR" {
-		for _, r := range results {
-			if r {
-				combined = true
-				break
+	// Evaluate each group, then OR across groups
+	anyGroupTriggered := false
+	for gIdx, gConds := range groups {
+		op := groupOps[gIdx]
+		if op == "" {
+			op = "AND"
+		}
+
+		var groupResult bool
+		if op == "OR" {
+			for _, cond := range gConds {
+				if e.evaluateCondition(cond) {
+					groupResult = true
+					break
+				}
+			}
+		} else { // AND
+			groupResult = true
+			for _, cond := range gConds {
+				if !e.evaluateCondition(cond) {
+					groupResult = false
+					break
+				}
 			}
 		}
-	} else { // AND
-		combined = true
-		for _, r := range results {
-			if !r {
-				combined = false
-				break
-			}
+
+		if groupResult {
+			anyGroupTriggered = true
+			break
 		}
 	}
 
 	newState := "healthy"
-	if combined {
+	if anyGroupTriggered {
 		newState = "unhealthy"
 	}
 

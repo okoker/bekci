@@ -1,6 +1,6 @@
 # Database Schema Reference
 
-**Current schema version:** 13
+**Current schema version:** 14
 **Engine:** SQLite 3 with WAL journal mode
 **Driver:** `github.com/mattn/go-sqlite3` (CGO required)
 
@@ -158,19 +158,21 @@ Hidden rules auto-managed by the target CRUD layer. One rule per target (1:1 via
 
 ### rule_conditions
 
-Each condition links a rule to a check with evaluation criteria.
+Each condition links a rule to a check with evaluation criteria. Conditions are grouped by `condition_group`; within a group, `group_operator` (AND/OR) decides how conditions combine. Groups are always OR'd together by the engine.
 
-| Column      | Type    | Constraints                                   |
-|-------------|---------|-----------------------------------------------|
-| id          | TEXT    | **PK**                                        |
-| rule_id     | TEXT    | NOT NULL, FK -> rules(id) ON DELETE CASCADE   |
-| check_id    | TEXT    | NOT NULL, FK -> checks(id) ON DELETE CASCADE  |
-| field       | TEXT    | NOT NULL DEFAULT 'status'                     |
-| comparator  | TEXT    | NOT NULL DEFAULT 'eq'                         |
-| value       | TEXT    | NOT NULL                                      |
-| fail_count  | INTEGER | NOT NULL DEFAULT 1                            |
-| fail_window | INTEGER | NOT NULL DEFAULT 0                            |
-| sort_order  | INTEGER | NOT NULL DEFAULT 0                            |
+| Column          | Type    | Constraints                                   |
+|-----------------|---------|-----------------------------------------------|
+| id              | TEXT    | **PK**                                        |
+| rule_id         | TEXT    | NOT NULL, FK -> rules(id) ON DELETE CASCADE   |
+| check_id        | TEXT    | NOT NULL, FK -> checks(id) ON DELETE CASCADE  |
+| field           | TEXT    | NOT NULL DEFAULT 'status'                     |
+| comparator      | TEXT    | NOT NULL DEFAULT 'eq'                         |
+| value           | TEXT    | NOT NULL                                      |
+| fail_count      | INTEGER | NOT NULL DEFAULT 1                            |
+| fail_window     | INTEGER | NOT NULL DEFAULT 0                            |
+| sort_order      | INTEGER | NOT NULL DEFAULT 0                            |
+| condition_group | INTEGER | NOT NULL DEFAULT 0 *(migration014)*           |
+| group_operator  | TEXT    | NOT NULL DEFAULT 'AND' *(migration014)*       |
 
 ### rule_states
 
@@ -270,8 +272,9 @@ Append-only audit trail. Purged by `PurgeOldAuditEntries(days)`.
 | 011 | migration011   | Create `target_alert_recipients`. Add `phone` to users. Add `target_id`, `recipient_id` to alert_history. Drop `rule_alerts`, `alert_channels`. Seed alerting settings. |
 | 012 | migration012   | Backfill rules for targets that have checks but no rule_id. |
 | 013 | migration013   | Seed 5 SLA threshold settings (`sla_network`, `sla_security`, `sla_physical_security`, `sla_key_services`, `sla_other`), all default `99.9`. |
+| 014 | migration014   | Add `condition_group` (INTEGER DEFAULT 0) and `group_operator` (TEXT DEFAULT 'AND') to `rule_conditions`. Backfill `group_operator` from parent rule's `operator`. |
 
-**Note:** Function declarations appear out of order in the source file (e.g. migration005 before migration004, migration008 before migration007), but the `migrations` slice defines the correct sequential execution order: 001 through 013, strictly in order.
+**Note:** Function declarations appear out of order in the source file (e.g. migration005 before migration004, migration008 before migration007), but the `migrations` slice defines the correct sequential execution order: 001 through 014, strictly in order.
 
 ---
 
@@ -314,8 +317,9 @@ The system uses a "unified target model" where:
 1. A **target** has 0..1 **rule** (linked via `targets.rule_id`)
 2. A **target** has 0..N **checks** (via `checks.target_id` FK)
 3. Each **check** has a corresponding **rule_condition** (via `rule_conditions.check_id`) that belongs to the target's rule
-4. The rule's **operator** (AND/OR) defines how conditions combine
+4. Each condition's **group_operator** (AND/OR) and **condition_group** define how conditions combine — within a group by `group_operator`, across groups by OR
 5. **rule_states** tracks whether the rule is `healthy` or `unhealthy`
+6. The rule's **operator** column is kept for backward compat but unused by the engine
 
 ```
 Target (rule_id) ----1:1----> Rule (id)

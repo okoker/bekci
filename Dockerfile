@@ -15,7 +15,8 @@ RUN go mod download
 COPY . .
 # Copy built frontend into embed directory
 COPY --from=frontend /app/frontend/dist cmd/bekci/frontend_dist/
-RUN CGO_ENABLED=1 go build -ldflags "-X main.version=2.0.0" -o /bekci ./cmd/bekci
+ARG VERSION=0.0.0
+RUN CGO_ENABLED=1 go build -ldflags "-X main.version=${VERSION}" -o /bekci ./cmd/bekci
 RUN setcap cap_net_raw+ep /bekci
 
 # Stage 3: Runtime

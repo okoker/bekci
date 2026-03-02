@@ -41,7 +41,7 @@ const checkTypes = [
 function getEmptyForm() {
   return {
     name: '', host: '', description: '', enabled: true,
-    operator: 'AND', category: '', preferred_check_type: '',
+    category: '', preferred_check_type: '',
     conditions: []
   }
 }
@@ -58,7 +58,7 @@ function getDefaultConfig(type_) {
   }
 }
 
-function getDefaultCondition() {
+function getDefaultCondition(conditionGroup = 0, groupOperator = 'AND') {
   return {
     check_id: '',
     check_type: 'ping',
@@ -70,7 +70,53 @@ function getDefaultCondition() {
     value: 'down',
     fail_count: 1,
     fail_window: 0,
+    condition_group: conditionGroup,
+    group_operator: groupOperator,
   }
+}
+
+// Computed: group conditions by condition_group for display
+const conditionGroups = computed(() => {
+  const groups = {}
+  for (const cond of form.value.conditions) {
+    const g = cond.condition_group ?? 0
+    if (!groups[g]) groups[g] = { operator: cond.group_operator || 'AND', conditions: [] }
+    groups[g].conditions.push(cond)
+  }
+  // Return sorted array of { groupIdx, operator, conditions }
+  return Object.keys(groups)
+    .map(Number)
+    .sort((a, b) => a - b)
+    .map(idx => ({ groupIdx: idx, operator: groups[idx].operator, conditions: groups[idx].conditions }))
+})
+
+function addGroup() {
+  const maxGroup = form.value.conditions.reduce((max, c) => Math.max(max, c.condition_group ?? 0), -1)
+  form.value.conditions.push(getDefaultCondition(maxGroup + 1, 'AND'))
+}
+
+function addConditionToGroup(groupIdx) {
+  // Find the operator used by existing conditions in this group
+  const existing = form.value.conditions.find(c => c.condition_group === groupIdx)
+  const op = existing?.group_operator || 'AND'
+  form.value.conditions.push(getDefaultCondition(groupIdx, op))
+}
+
+function setGroupOperator(groupIdx, op) {
+  for (const cond of form.value.conditions) {
+    if (cond.condition_group === groupIdx) {
+      cond.group_operator = op
+    }
+  }
+}
+
+function removeCondition(cond) {
+  const idx = form.value.conditions.indexOf(cond)
+  if (idx >= 0) form.value.conditions.splice(idx, 1)
+}
+
+function removeGroup(groupIdx) {
+  form.value.conditions = form.value.conditions.filter(c => c.condition_group !== groupIdx)
 }
 
 // Load
@@ -109,7 +155,6 @@ async function loadTargetDetail(id) {
       host: data.host,
       description: data.description,
       enabled: data.enabled,
-      operator: data.operator || 'AND',
       category: data.category || 'Other',
       preferred_check_type: data.preferred_check_type || '',
       conditions: (data.conditions || []).map(c => {
@@ -126,6 +171,8 @@ async function loadTargetDetail(id) {
           value: c.value || 'down',
           fail_count: c.fail_count || 1,
           fail_window: c.fail_window || 0,
+          condition_group: c.condition_group ?? 0,
+          group_operator: c.group_operator || 'AND',
         }
       })
     }
@@ -146,7 +193,7 @@ async function saveTarget() {
       host: form.value.host,
       description: form.value.description,
       enabled: form.value.enabled,
-      operator: form.value.operator,
+      operator: 'AND', // kept for backward compat
       category: form.value.category,
       preferred_check_type: form.value.preferred_check_type,
       conditions: form.value.conditions.map(c => ({
@@ -160,6 +207,8 @@ async function saveTarget() {
         value: c.value || 'down',
         fail_count: Number(c.fail_count) || 1,
         fail_window: Number(c.fail_window) || 0,
+        condition_group: c.condition_group ?? 0,
+        group_operator: c.group_operator || 'AND',
       }))
     }
 
@@ -207,17 +256,7 @@ async function confirmDelete() {
   }
 }
 
-// Conditions management
-function addCondition() {
-  form.value.conditions.push(getDefaultCondition())
-}
-
-function removeCondition(index) {
-  form.value.conditions.splice(index, 1)
-}
-
-function onConditionTypeChange(index) {
-  const cond = form.value.conditions[index]
+function onConditionTypeChange(cond) {
   // Only reset config if it's a new condition (no check_id)
   if (!cond.check_id) {
     cond.config = getDefaultConfig(cond.check_type)
@@ -437,25 +476,16 @@ onMounted(() => loadTargets())
             <label>Description</label>
             <input v-model="form.description" placeholder="Optional description" />
           </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label>Operator</label>
-              <select v-model="form.operator">
-                <option value="AND">AND (all conditions must fail)</option>
-                <option value="OR">OR (any condition fails)</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Category</label>
-              <select v-model="form.category" required>
-                <option value="" disabled>Select category</option>
-                <option value="Network">Network</option>
-                <option value="Security">Security</option>
-                <option value="Physical Security">Physical Security</option>
-                <option value="Key Services">Key Services</option>
-                <option value="Other">Other</option>
-              </select>
-            </div>
+          <div class="form-group">
+            <label>Category</label>
+            <select v-model="form.category" required>
+              <option value="" disabled>Select category</option>
+              <option value="Network">Network</option>
+              <option value="Security">Security</option>
+              <option value="Physical Security">Physical Security</option>
+              <option value="Key Services">Key Services</option>
+              <option value="Other">Other</option>
+            </select>
           </div>
           <div v-if="form.conditions.length > 1" class="form-group">
             <label>Preferred Check (for SLA &amp; dashboard)</label>
@@ -469,193 +499,216 @@ onMounted(() => loadTargets())
             <label class="checkbox-label"><input type="checkbox" v-model="form.enabled" /> Enabled</label>
           </div>
 
-          <!-- Conditions section -->
+          <!-- Condition Groups section -->
           <div class="conditions-section">
             <div class="conditions-header">
-              <strong>Conditions</strong>
-              <button type="button" class="btn btn-sm btn-primary" @click="addCondition">+ Add Condition</button>
+              <strong>Condition Groups</strong>
+              <button type="button" class="btn btn-sm btn-primary" @click="addGroup">+ Add Group</button>
             </div>
 
             <div v-if="form.conditions.length === 0" class="validation-warning">
-              At least one condition is required.
+              At least one condition is required. Add a group to get started.
             </div>
 
-            <div v-for="(cond, idx) in form.conditions" :key="idx" class="condition-card">
-              <div class="condition-card-header">
-                <span class="condition-num">#{{ idx + 1 }}</span>
-                <button type="button" class="btn btn-sm btn-danger" @click="removeCondition(idx)">Remove</button>
+            <template v-for="(group, gIdx) in conditionGroups" :key="group.groupIdx">
+              <!-- OR divider between groups -->
+              <div v-if="gIdx > 0" class="or-divider"><span class="or-pill">OR</span></div>
+
+              <div class="group-card">
+                <div class="group-header">
+                  <span class="group-label">Group {{ gIdx + 1 }}</span>
+                  <div v-if="group.conditions.length > 1" class="operator-toggle">
+                    <button type="button" :class="['op-btn', { active: group.operator === 'AND' }]" @click="setGroupOperator(group.groupIdx, 'AND')">AND</button>
+                    <button type="button" :class="['op-btn', { active: group.operator === 'OR' }]" @click="setGroupOperator(group.groupIdx, 'OR')">OR</button>
+                  </div>
+                  <button type="button" class="btn btn-sm btn-danger" @click="removeGroup(group.groupIdx)">Remove Group</button>
+                </div>
+
+                <template v-for="(cond, cIdx) in group.conditions" :key="cond.check_id || cIdx">
+                  <!-- Within-group operator label -->
+                  <div v-if="cIdx > 0" class="intra-group-op">{{ group.operator }}</div>
+
+                  <div class="condition-card">
+                    <div class="condition-card-header">
+                      <span class="condition-num">{{ cond.check_type.toUpperCase() }}</span>
+                      <button type="button" class="btn btn-sm btn-danger" @click="removeCondition(cond)">Remove</button>
+                    </div>
+
+                    <!-- Check fields -->
+                    <div class="form-row">
+                      <div class="form-group">
+                        <label>Check Type</label>
+                        <select v-model="cond.check_type" @change="onConditionTypeChange(cond)" :disabled="!!cond.check_id">
+                          <option v-for="t in checkTypes" :key="t.value" :value="t.value">{{ t.label }}</option>
+                        </select>
+                      </div>
+                      <div class="form-group">
+                        <label>Check Name</label>
+                        <input v-model="cond.check_name" required placeholder="e.g. HTTPS Check" />
+                      </div>
+                    </div>
+                    <div class="form-group">
+                      <label>Interval (seconds)</label>
+                      <input type="number" v-model.number="cond.interval_s" min="10" style="max-width: 120px;" />
+                    </div>
+
+                    <!-- Type-specific config -->
+                    <template v-if="cond.check_type === 'http'">
+                      <div class="form-row">
+                        <div class="form-group">
+                          <label>Scheme</label>
+                          <select v-model="cond.config.scheme">
+                            <option value="http">HTTP</option>
+                            <option value="https">HTTPS</option>
+                          </select>
+                        </div>
+                        <div class="form-group">
+                          <label>Port (0 = default)</label>
+                          <input type="number" v-model.number="cond.config.port" min="0" max="65535" />
+                        </div>
+                      </div>
+                      <div class="form-row">
+                        <div class="form-group">
+                          <label>Endpoint</label>
+                          <input v-model="cond.config.endpoint" placeholder="/" />
+                        </div>
+                        <div class="form-group">
+                          <label>Expected Status</label>
+                          <input type="number" v-model.number="cond.config.expect_status" />
+                        </div>
+                      </div>
+                      <div class="form-row">
+                        <div class="form-group">
+                          <label>Timeout (s)</label>
+                          <input type="number" v-model.number="cond.config.timeout_s" min="1" max="60" />
+                        </div>
+                        <div class="form-group checkbox-group">
+                          <label class="checkbox-label"><input type="checkbox" v-model="cond.config.skip_tls_verify" /> Skip TLS Verify</label>
+                        </div>
+                      </div>
+                    </template>
+
+                    <template v-if="cond.check_type === 'tcp'">
+                      <div class="form-row">
+                        <div class="form-group">
+                          <label>Port</label>
+                          <input type="number" v-model.number="cond.config.port" min="1" max="65535" required />
+                        </div>
+                        <div class="form-group">
+                          <label>Timeout (s)</label>
+                          <input type="number" v-model.number="cond.config.timeout_s" min="1" max="60" />
+                        </div>
+                      </div>
+                    </template>
+
+                    <template v-if="cond.check_type === 'ping'">
+                      <div class="form-row">
+                        <div class="form-group">
+                          <label>Ping Count</label>
+                          <input type="number" v-model.number="cond.config.count" min="1" max="10" />
+                        </div>
+                        <div class="form-group">
+                          <label>Timeout (s)</label>
+                          <input type="number" v-model.number="cond.config.timeout_s" min="1" max="30" />
+                        </div>
+                      </div>
+                    </template>
+
+                    <template v-if="cond.check_type === 'dns'">
+                      <div class="form-row">
+                        <div class="form-group">
+                          <label>Query (empty = target host)</label>
+                          <input v-model="cond.config.query" placeholder="Leave empty for target host" />
+                        </div>
+                        <div class="form-group">
+                          <label>Record Type</label>
+                          <select v-model="cond.config.record_type">
+                            <option value="A">A</option>
+                            <option value="AAAA">AAAA</option>
+                            <option value="MX">MX</option>
+                            <option value="CNAME">CNAME</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div class="form-row">
+                        <div class="form-group">
+                          <label>Expected Value (optional)</label>
+                          <input v-model="cond.config.expect_value" placeholder="e.g. 1.2.3.4" />
+                        </div>
+                        <div class="form-group">
+                          <label>Nameserver (optional)</label>
+                          <input v-model="cond.config.nameserver" placeholder="e.g. 8.8.8.8" />
+                        </div>
+                      </div>
+                    </template>
+
+                    <template v-if="cond.check_type === 'page_hash'">
+                      <div class="form-row">
+                        <div class="form-group">
+                          <label>Scheme</label>
+                          <select v-model="cond.config.scheme">
+                            <option value="http">HTTP</option>
+                            <option value="https">HTTPS</option>
+                          </select>
+                        </div>
+                        <div class="form-group">
+                          <label>Endpoint</label>
+                          <input v-model="cond.config.endpoint" placeholder="/" />
+                        </div>
+                      </div>
+                      <div class="form-group">
+                        <label>Baseline Hash (empty = auto-capture)</label>
+                        <input v-model="cond.config.baseline_hash" placeholder="Leave empty to auto-capture" />
+                      </div>
+                    </template>
+
+                    <template v-if="cond.check_type === 'tls_cert'">
+                      <div class="form-row">
+                        <div class="form-group">
+                          <label>Port</label>
+                          <input type="number" v-model.number="cond.config.port" min="1" max="65535" />
+                        </div>
+                        <div class="form-group">
+                          <label>Warning Days</label>
+                          <input type="number" v-model.number="cond.config.warn_days" min="1" />
+                        </div>
+                      </div>
+                    </template>
+
+                    <!-- Alert criteria divider -->
+                    <div class="alert-divider">Alert when...</div>
+                    <div class="form-row form-row-4">
+                      <div class="form-group">
+                        <label>Field</label>
+                        <select v-model="cond.field">
+                          <option value="status">Status</option>
+                          <option value="response_ms">Response (ms)</option>
+                        </select>
+                      </div>
+                      <div class="form-group">
+                        <label>Comparator</label>
+                        <select v-model="cond.comparator">
+                          <option value="eq">equals</option>
+                          <option value="neq">not equals</option>
+                          <option value="gt">greater than</option>
+                          <option value="lt">less than</option>
+                        </select>
+                      </div>
+                      <div class="form-group">
+                        <label>Value</label>
+                        <input v-model="cond.value" placeholder="down" />
+                      </div>
+                      <div class="form-group">
+                        <label>Fail Count</label>
+                        <input type="number" v-model.number="cond.fail_count" min="1" />
+                      </div>
+                    </div>
+                  </div>
+                </template>
+
+                <button type="button" class="btn btn-sm btn-add-cond" @click="addConditionToGroup(group.groupIdx)">+ Add condition to group</button>
               </div>
-
-              <!-- Check fields -->
-              <div class="form-row">
-                <div class="form-group">
-                  <label>Check Type</label>
-                  <select v-model="cond.check_type" @change="onConditionTypeChange(idx)" :disabled="!!cond.check_id">
-                    <option v-for="t in checkTypes" :key="t.value" :value="t.value">{{ t.label }}</option>
-                  </select>
-                </div>
-                <div class="form-group">
-                  <label>Check Name</label>
-                  <input v-model="cond.check_name" required placeholder="e.g. HTTPS Check" />
-                </div>
-              </div>
-              <div class="form-group">
-                <label>Interval (seconds)</label>
-                <input type="number" v-model.number="cond.interval_s" min="10" style="max-width: 120px;" />
-              </div>
-
-              <!-- Type-specific config -->
-              <template v-if="cond.check_type === 'http'">
-                <div class="form-row">
-                  <div class="form-group">
-                    <label>Scheme</label>
-                    <select v-model="cond.config.scheme">
-                      <option value="http">HTTP</option>
-                      <option value="https">HTTPS</option>
-                    </select>
-                  </div>
-                  <div class="form-group">
-                    <label>Port (0 = default)</label>
-                    <input type="number" v-model.number="cond.config.port" min="0" max="65535" />
-                  </div>
-                </div>
-                <div class="form-row">
-                  <div class="form-group">
-                    <label>Endpoint</label>
-                    <input v-model="cond.config.endpoint" placeholder="/" />
-                  </div>
-                  <div class="form-group">
-                    <label>Expected Status</label>
-                    <input type="number" v-model.number="cond.config.expect_status" />
-                  </div>
-                </div>
-                <div class="form-row">
-                  <div class="form-group">
-                    <label>Timeout (s)</label>
-                    <input type="number" v-model.number="cond.config.timeout_s" min="1" max="60" />
-                  </div>
-                  <div class="form-group checkbox-group">
-                    <label class="checkbox-label"><input type="checkbox" v-model="cond.config.skip_tls_verify" /> Skip TLS Verify</label>
-                  </div>
-                </div>
-              </template>
-
-              <template v-if="cond.check_type === 'tcp'">
-                <div class="form-row">
-                  <div class="form-group">
-                    <label>Port</label>
-                    <input type="number" v-model.number="cond.config.port" min="1" max="65535" required />
-                  </div>
-                  <div class="form-group">
-                    <label>Timeout (s)</label>
-                    <input type="number" v-model.number="cond.config.timeout_s" min="1" max="60" />
-                  </div>
-                </div>
-              </template>
-
-              <template v-if="cond.check_type === 'ping'">
-                <div class="form-row">
-                  <div class="form-group">
-                    <label>Ping Count</label>
-                    <input type="number" v-model.number="cond.config.count" min="1" max="10" />
-                  </div>
-                  <div class="form-group">
-                    <label>Timeout (s)</label>
-                    <input type="number" v-model.number="cond.config.timeout_s" min="1" max="30" />
-                  </div>
-                </div>
-              </template>
-
-              <template v-if="cond.check_type === 'dns'">
-                <div class="form-row">
-                  <div class="form-group">
-                    <label>Query (empty = target host)</label>
-                    <input v-model="cond.config.query" placeholder="Leave empty for target host" />
-                  </div>
-                  <div class="form-group">
-                    <label>Record Type</label>
-                    <select v-model="cond.config.record_type">
-                      <option value="A">A</option>
-                      <option value="AAAA">AAAA</option>
-                      <option value="MX">MX</option>
-                      <option value="CNAME">CNAME</option>
-                    </select>
-                  </div>
-                </div>
-                <div class="form-row">
-                  <div class="form-group">
-                    <label>Expected Value (optional)</label>
-                    <input v-model="cond.config.expect_value" placeholder="e.g. 1.2.3.4" />
-                  </div>
-                  <div class="form-group">
-                    <label>Nameserver (optional)</label>
-                    <input v-model="cond.config.nameserver" placeholder="e.g. 8.8.8.8" />
-                  </div>
-                </div>
-              </template>
-
-              <template v-if="cond.check_type === 'page_hash'">
-                <div class="form-row">
-                  <div class="form-group">
-                    <label>Scheme</label>
-                    <select v-model="cond.config.scheme">
-                      <option value="http">HTTP</option>
-                      <option value="https">HTTPS</option>
-                    </select>
-                  </div>
-                  <div class="form-group">
-                    <label>Endpoint</label>
-                    <input v-model="cond.config.endpoint" placeholder="/" />
-                  </div>
-                </div>
-                <div class="form-group">
-                  <label>Baseline Hash (empty = auto-capture)</label>
-                  <input v-model="cond.config.baseline_hash" placeholder="Leave empty to auto-capture" />
-                </div>
-              </template>
-
-              <template v-if="cond.check_type === 'tls_cert'">
-                <div class="form-row">
-                  <div class="form-group">
-                    <label>Port</label>
-                    <input type="number" v-model.number="cond.config.port" min="1" max="65535" />
-                  </div>
-                  <div class="form-group">
-                    <label>Warning Days</label>
-                    <input type="number" v-model.number="cond.config.warn_days" min="1" />
-                  </div>
-                </div>
-              </template>
-
-              <!-- Alert criteria divider -->
-              <div class="alert-divider">Alert when...</div>
-              <div class="form-row form-row-4">
-                <div class="form-group">
-                  <label>Field</label>
-                  <select v-model="cond.field">
-                    <option value="status">Status</option>
-                    <option value="response_ms">Response (ms)</option>
-                  </select>
-                </div>
-                <div class="form-group">
-                  <label>Comparator</label>
-                  <select v-model="cond.comparator">
-                    <option value="eq">equals</option>
-                    <option value="neq">not equals</option>
-                    <option value="gt">greater than</option>
-                    <option value="lt">less than</option>
-                  </select>
-                </div>
-                <div class="form-group">
-                  <label>Value</label>
-                  <input v-model="cond.value" placeholder="down" />
-                </div>
-                <div class="form-group">
-                  <label>Fail Count</label>
-                  <input type="number" v-model.number="cond.fail_count" min="1" />
-                </div>
-              </div>
-            </div>
+            </template>
           </div>
 
           <!-- Alert recipients -->
@@ -850,12 +903,93 @@ onMounted(() => loadTargets())
   margin-bottom: 0.5rem;
 }
 
-.condition-card {
+/* Group card */
+.group-card {
+  border: 1px solid #cbd5e1;
+  border-left: 4px solid #3b82f6;
+  border-radius: 6px;
+  padding: 0.75rem;
   background: #f8fafc;
+}
+.group-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+.group-label {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: #1e40af;
+}
+.group-header .btn-danger {
+  margin-left: auto;
+}
+
+/* AND/OR toggle */
+.operator-toggle {
+  display: inline-flex;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.op-btn {
+  padding: 0.2rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: none;
+  background: #fff;
+  color: #64748b;
+  cursor: pointer;
+}
+.op-btn.active {
+  background: #3b82f6;
+  color: #fff;
+}
+.op-btn:not(:last-child) {
+  border-right: 1px solid #cbd5e1;
+}
+
+/* OR divider between groups */
+.or-divider {
+  text-align: center;
+  margin: 0.75rem 0;
+}
+.or-pill {
+  display: inline-block;
+  background: #ea580c;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.75rem;
+  border-radius: 12px;
+  letter-spacing: 0.05em;
+}
+
+/* Intra-group operator label */
+.intra-group-op {
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #94a3b8;
+  margin: 0.25rem 0;
+}
+
+/* Add condition to group button */
+.btn-add-cond {
+  margin-top: 0.5rem;
+  color: #3b82f6;
+  border-color: #bfdbfe;
+}
+.btn-add-cond:hover {
+  background: #eff6ff;
+}
+
+.condition-card {
+  background: #fff;
   border: 1px solid #e2e8f0;
   border-radius: 6px;
   padding: 0.75rem;
-  margin-bottom: 0.75rem;
 }
 .condition-card-header {
   display: flex;
@@ -866,7 +1000,11 @@ onMounted(() => loadTargets())
 .condition-num {
   font-weight: 600;
   color: #64748b;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
+  background: #e0e7ff;
+  color: #3730a3;
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
 }
 
 .alert-divider {

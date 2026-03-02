@@ -17,15 +17,17 @@ type Rule struct {
 }
 
 type RuleCondition struct {
-	ID         string `json:"id"`
-	RuleID     string `json:"rule_id"`
-	CheckID    string `json:"check_id"`
-	Field      string `json:"field"`
-	Comparator string `json:"comparator"`
-	Value      string `json:"value"`
-	FailCount  int    `json:"fail_count"`
-	FailWindow int    `json:"fail_window"`
-	SortOrder  int    `json:"sort_order"`
+	ID             string `json:"id"`
+	RuleID         string `json:"rule_id"`
+	CheckID        string `json:"check_id"`
+	Field          string `json:"field"`
+	Comparator     string `json:"comparator"`
+	Value          string `json:"value"`
+	FailCount      int    `json:"fail_count"`
+	FailWindow     int    `json:"fail_window"`
+	SortOrder      int    `json:"sort_order"`
+	ConditionGroup int    `json:"condition_group"`
+	GroupOperator  string `json:"group_operator"`
 }
 
 type RuleState struct {
@@ -39,8 +41,9 @@ type RuleState struct {
 
 func (s *Store) ListRuleConditions(ruleID string) ([]RuleCondition, error) {
 	rows, err := s.db.Query(`
-		SELECT id, rule_id, check_id, field, comparator, value, fail_count, fail_window, sort_order
-		FROM rule_conditions WHERE rule_id = ? ORDER BY sort_order ASC
+		SELECT id, rule_id, check_id, field, comparator, value, fail_count, fail_window, sort_order,
+		       condition_group, group_operator
+		FROM rule_conditions WHERE rule_id = ? ORDER BY condition_group ASC, sort_order ASC
 	`, ruleID)
 	if err != nil {
 		return nil, err
@@ -50,7 +53,8 @@ func (s *Store) ListRuleConditions(ruleID string) ([]RuleCondition, error) {
 	var conds []RuleCondition
 	for rows.Next() {
 		var c RuleCondition
-		if err := rows.Scan(&c.ID, &c.RuleID, &c.CheckID, &c.Field, &c.Comparator, &c.Value, &c.FailCount, &c.FailWindow, &c.SortOrder); err != nil {
+		if err := rows.Scan(&c.ID, &c.RuleID, &c.CheckID, &c.Field, &c.Comparator, &c.Value,
+			&c.FailCount, &c.FailWindow, &c.SortOrder, &c.ConditionGroup, &c.GroupOperator); err != nil {
 			return nil, err
 		}
 		conds = append(conds, c)

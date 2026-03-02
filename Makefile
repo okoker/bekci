@@ -1,4 +1,4 @@
-.PHONY: build frontend backend run dev clean test
+.PHONY: build frontend backend run dev clean test docker
 
 VERSION := 2.8.0
 BINARY := bekci
@@ -37,3 +37,7 @@ clean:
 
 test:
 	go test -v ./...
+
+docker:
+	docker compose build --build-arg VERSION=$(VERSION)
+	docker compose up -d
