@@ -323,6 +323,29 @@ async function runCheckNow(checkId) {
   }
 }
 
+async function runAllChecks(targetId) {
+  error.value = ''
+  success.value = ''
+  try {
+    let checks = targetChecks.value[targetId]
+    if (!checks) {
+      const { data } = await api.get(`/targets/${targetId}/checks`)
+      checks = data || []
+      targetChecks.value[targetId] = checks
+    }
+    if (checks.length === 0) {
+      error.value = 'No checks configured for this target'
+      return
+    }
+    for (const c of checks) {
+      await api.post(`/checks/${c.id}/run`)
+    }
+    success.value = `${checks.length} check(s) queued for immediate run`
+  } catch (e) {
+    error.value = e.response?.data?.error || 'Failed to run checks'
+  }
+}
+
 function formatInterval(s) {
   if (s >= 3600) return `${Math.floor(s / 3600)}h`
   if (s >= 60) return `${Math.floor(s / 60)}m`
@@ -414,6 +437,7 @@ onMounted(() => loadTargets())
               <td>{{ t.condition_count || 0 }}</td>
               <td><span :class="['badge', t.enabled ? 'badge-active' : 'badge-suspended']">{{ t.enabled ? 'yes' : 'no' }}</span></td>
               <td class="actions" @click.stop>
+                <button v-if="auth.isOperator" class="btn btn-sm" @click="runAllChecks(t.id)">Run Now</button>
                 <button v-if="auth.isOperator" class="btn btn-sm" @click="openForm(t)">Edit</button>
                 <button v-if="auth.isOperator" class="btn btn-sm btn-danger" @click="deleteTarget(t.id)">Delete</button>
               </td>
@@ -434,7 +458,6 @@ onMounted(() => loadTargets())
                       <th>Type</th>
                       <th>Interval</th>
                       <th>Enabled</th>
-                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -443,9 +466,6 @@ onMounted(() => loadTargets())
                       <td><span class="badge badge-type">{{ c.type }}</span></td>
                       <td>{{ formatInterval(c.interval_s) }}</td>
                       <td><span :class="['badge', c.enabled ? 'badge-active' : 'badge-suspended']">{{ c.enabled ? 'yes' : 'no' }}</span></td>
-                      <td class="actions">
-                        <button v-if="auth.isOperator" class="btn btn-sm" @click="runCheckNow(c.id)">Run now</button>
-                      </td>
                     </tr>
                   </tbody>
                 </table>
@@ -457,7 +477,7 @@ onMounted(() => loadTargets())
     </div>
 
     <!-- Unified target + conditions form modal -->
-    <div v-if="showForm" class="modal-overlay" @click.self="showForm = false">
+    <div v-if="showForm" class="modal-overlay">
       <div class="modal-card modal-wide">
         <h3>{{ editingTarget ? 'Edit Target' : 'New Target' }}</h3>
         <form @submit.prevent="saveTarget">
@@ -503,7 +523,7 @@ onMounted(() => loadTargets())
           <div class="conditions-section">
             <div class="conditions-header">
               <strong>Condition Groups</strong>
-              <button type="button" class="btn btn-sm btn-primary" @click="addGroup">+ Add Group</button>
+              <button type="button" class="btn btn-sm btn-primary" @click="addGroup">+ Add Group or Condition</button>
             </div>
 
             <div v-if="form.conditions.length === 0" class="validation-warning">
@@ -782,7 +802,7 @@ onMounted(() => loadTargets())
   opacity: 0.7;
 }
 
-.row-expanded > td { background: #f8fafc; }
+.row-expanded > td { background: #e8ecf1; }
 
 .expand-icon {
   display: inline-block;
@@ -792,8 +812,9 @@ onMounted(() => loadTargets())
 }
 
 .checks-panel {
-  background: #f8fafc;
-  padding: 0.75rem 1rem;
+  background: #eef2ff;
+  padding: 0.75rem 1rem 0.75rem 4rem;
+  border-left: 3px solid #6366f1;
 }
 .checks-header {
   display: flex;
@@ -802,9 +823,9 @@ onMounted(() => loadTargets())
   margin-bottom: 0.5rem;
 }
 .checks-table {
-  font-size: 0.85rem;
+  font-size: 0.8rem;
 }
-.checks-table th { font-size: 0.75rem; }
+.checks-table th { font-size: 0.7rem; }
 
 .badge-type {
   background: #e0e7ff;
@@ -908,7 +929,7 @@ onMounted(() => loadTargets())
   border: 1px solid #cbd5e1;
   border-left: 4px solid #3b82f6;
   border-radius: 6px;
-  padding: 0.75rem;
+  padding: 0.5rem 0.75rem;
   background: #f8fafc;
 }
 .group-header {
@@ -989,13 +1010,21 @@ onMounted(() => loadTargets())
   background: #fff;
   border: 1px solid #e2e8f0;
   border-radius: 6px;
-  padding: 0.75rem;
+  padding: 0.5rem;
+  margin-left: 0.75rem;
+  font-size: 0.85rem;
+}
+.condition-card .form-row {
+  gap: 0.5rem;
+}
+.condition-card .form-group label {
+  font-size: 0.78rem;
 }
 .condition-card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.35rem;
 }
 .condition-num {
   font-weight: 600;
