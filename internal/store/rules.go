@@ -107,16 +107,22 @@ func (s *Store) GetRuleState(ruleID string) (*RuleState, error) {
 
 func (s *Store) UpdateRuleState(ruleID, newState string) error {
 	_, err := s.db.Exec(`
-		UPDATE rule_states SET current_state = ?, last_change = CURRENT_TIMESTAMP, last_evaluated = CURRENT_TIMESTAMP
-		WHERE rule_id = ?
-	`, newState, ruleID)
+		INSERT INTO rule_states (rule_id, current_state, last_change, last_evaluated)
+		VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		ON CONFLICT(rule_id) DO UPDATE SET
+			current_state = excluded.current_state,
+			last_change = excluded.last_change,
+			last_evaluated = excluded.last_evaluated
+	`, ruleID, newState)
 	return err
 }
 
 func (s *Store) TouchRuleEvaluated(ruleID string) error {
 	_, err := s.db.Exec(`
-		UPDATE rule_states SET last_evaluated = CURRENT_TIMESTAMP
-		WHERE rule_id = ?
+		INSERT INTO rule_states (rule_id, current_state, last_change, last_evaluated)
+		VALUES (?, 'healthy', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		ON CONFLICT(rule_id) DO UPDATE SET
+			last_evaluated = excluded.last_evaluated
 	`, ruleID)
 	return err
 }
