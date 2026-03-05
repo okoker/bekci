@@ -153,7 +153,7 @@ function isTargetDown(target) {
   if (target.state === 'paused') return false
   if (target.state === 'unhealthy') return true
   if (target.state === 'healthy') return false
-  return target.checks?.some(c => c.last_status === 'down')
+  return false
 }
 
 function isTargetPaused(target) {
@@ -164,8 +164,6 @@ function targetStateLabel(target) {
   if (isTargetPaused(target)) return 'PAUSED'
   if (target.state === 'unhealthy') return 'DOWN'
   if (target.state === 'healthy') return 'UP'
-  if (target.checks?.some(c => c.last_status === 'down')) return 'DOWN'
-  if (target.checks?.some(c => c.last_status === 'up')) return 'UP'
   return ''
 }
 
