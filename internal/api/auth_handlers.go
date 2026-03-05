@@ -31,7 +31,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, user, err := s.auth.Login(req.Username, req.Password, ip)
+	token, user, duration, err := s.auth.Login(req.Username, req.Password, ip)
 	if err != nil {
 		slog.Warn("Login failed", "username", req.Username, "ip", ip)
 		s.auditLogin(r, "", req.Username, "login_failed", err.Error(), "failure")
@@ -42,8 +42,18 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	s.loginLimiter.resetSuccess(ip)
 	s.auditLogin(r, user.ID, user.Username, "login", "", "success")
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "token",
+		Value:    token,
+		Path:     "/",
+		MaxAge:   int(duration.Seconds()),
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+	})
+
 	writeJSON(w, http.StatusOK, map[string]any{
-		"token": token,
 		"user": map[string]any{
 			"id":       user.ID,
 			"username": user.Username,
@@ -64,6 +74,16 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "logout failed")
 		return
 	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     "token",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+	})
+
 	s.audit(r, "logout", "session", "", "", "success")
 	writeJSON(w, http.StatusOK, map[string]string{"message": "logged out"})
 }

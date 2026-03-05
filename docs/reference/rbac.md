@@ -23,7 +23,7 @@ Valid roles enforced at user creation and update: `admin`, `operator`, `viewer`.
    - Read `session_timeout_hours` setting (default: 24h)
    - Create session record in DB (UUID, user_id, expires_at, ip_address)
    - Sign JWT (HS256) with claims: `sub` (user_id), `sid` (session_id), `role`, `exp`, `iat`
-4. On success: reset rate limiter for IP, return token + user info
+4. On success: reset rate limiter for IP, set HttpOnly cookie (`token`; Secure; SameSite=Strict; MaxAge=session duration), return user info in JSON body
 5. On failure: record failure in rate limiter, audit log entry
 
 ### Token Structure (JWT HS256)
@@ -47,7 +47,7 @@ Valid roles enforced at user creation and update: `admin`, `operator`, `viewer`.
 
 ### Request Auth (`requireAuth` middleware)
 
-1. Extract `Bearer <token>` from `Authorization` header
+1. Extract JWT from `token` HttpOnly cookie
 2. Call `ValidateToken` (JWT + session check)
 3. Fetch user from DB by `claims.Subject` (user ID)
 4. Verify user status is `active` (catches mid-session suspensions)
@@ -62,7 +62,7 @@ Request
     -> loggingMiddleware (method, path, status, duration)
       -> corsMiddleware (CORS headers if origin configured)
         -> route match
-          -> [requireAuth] (JWT + session + active user check)
+          -> [requireAuth] (cookie JWT + session + active user check)
             -> [requireRole("admin", ...)] (role whitelist check)
               -> handler
 ```
@@ -147,7 +147,7 @@ Request
 | `/api/soc/status` | GET | socAuth | Y | Y | Y | Conditional auth (see below) |
 | `/api/soc/history/{checkId}` | GET | socAuth | Y | Y | Y | Conditional auth (see below) |
 
-**SOC conditional auth**: When `soc_public` setting is `"true"`, these endpoints are fully public (no token required). Otherwise, standard `requireAuth` applies (any authenticated role).
+**SOC conditional auth**: When `soc_public` setting is `"true"`, these endpoints are fully public (no cookie required). Otherwise, standard `requireAuth` applies (any authenticated role).
 
 ### Settings
 

@@ -88,19 +88,19 @@ func (svc *Service) ValidateToken(tokenString string) (*Claims, error) {
 }
 
 // Login authenticates a user and creates a session + JWT.
-func (svc *Service) Login(username, password, ipAddress string) (string, *store.User, error) {
+func (svc *Service) Login(username, password, ipAddress string) (string, *store.User, time.Duration, error) {
 	user, err := svc.store.GetUserByUsername(username)
 	if err != nil {
-		return "", nil, fmt.Errorf("database error: %w", err)
+		return "", nil, 0, fmt.Errorf("database error: %w", err)
 	}
 	if user == nil {
-		return "", nil, fmt.Errorf("invalid credentials")
+		return "", nil, 0, fmt.Errorf("invalid credentials")
 	}
 	if user.Status != "active" {
-		return "", nil, fmt.Errorf("account suspended")
+		return "", nil, 0, fmt.Errorf("account suspended")
 	}
 	if !CheckPassword(user.PasswordHash, password) {
-		return "", nil, fmt.Errorf("invalid credentials")
+		return "", nil, 0, fmt.Errorf("invalid credentials")
 	}
 
 	// Get session timeout from settings
@@ -123,15 +123,15 @@ func (svc *Service) Login(username, password, ipAddress string) (string, *store.
 		CreatedAt: time.Now(),
 	}
 	if err := svc.store.CreateSession(sess); err != nil {
-		return "", nil, fmt.Errorf("creating session: %w", err)
+		return "", nil, 0, fmt.Errorf("creating session: %w", err)
 	}
 
 	token, err := svc.CreateToken(user.ID, sessionID, user.Role, duration)
 	if err != nil {
-		return "", nil, fmt.Errorf("creating token: %w", err)
+		return "", nil, 0, fmt.Errorf("creating token: %w", err)
 	}
 
-	return token, user, nil
+	return token, user, duration, nil
 }
 
 // Logout deletes a session.

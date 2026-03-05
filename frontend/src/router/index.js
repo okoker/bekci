@@ -28,11 +28,14 @@ const router = createRouter({
   routes,
 })
 
+let initialFetchDone = false
+
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
 
-  // If logged in but no user loaded yet, fetch profile
-  if (auth.token && !auth.user) {
+  // On first navigation, try to restore session from cookie
+  if (!initialFetchDone) {
+    initialFetchDone = true
     await auth.fetchMe()
   }
 

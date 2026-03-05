@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/bekci/internal/auth"
@@ -24,15 +23,15 @@ func getClaims(r *http.Request) *auth.Claims {
 	return nil
 }
 
-// requireAuth validates the JWT Bearer token and adds claims to context.
+// requireAuth validates the JWT from the HttpOnly cookie and adds claims to context.
 func (s *Server) requireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		header := r.Header.Get("Authorization")
-		if !strings.HasPrefix(header, "Bearer ") {
-			writeError(w, http.StatusUnauthorized, "missing or invalid authorization header")
+		cookie, err := r.Cookie("token")
+		if err != nil || cookie.Value == "" {
+			writeError(w, http.StatusUnauthorized, "not authenticated")
 			return
 		}
-		tokenStr := strings.TrimPrefix(header, "Bearer ")
+		tokenStr := cookie.Value
 
 		claims, err := s.auth.ValidateToken(tokenStr)
 		if err != nil {
@@ -134,7 +133,8 @@ func corsMiddleware(origin string) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
 
 			if r.Method == http.MethodOptions {
 				w.WriteHeader(http.StatusNoContent)

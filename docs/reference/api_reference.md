@@ -6,7 +6,7 @@ All request/response bodies are JSON (`Content-Type: application/json`) unless n
 
 ## Authentication
 
-All authenticated endpoints require `Authorization: Bearer <token>` header.
+Auth uses HttpOnly cookies. On successful login, the server sets a `token` cookie (HttpOnly, Secure, SameSite=Strict). All authenticated endpoints read the JWT from this cookie automatically — no `Authorization` header needed.
 
 **Roles** (hierarchical for RBAC checks):
 - `admin` -- full access
@@ -45,9 +45,11 @@ Rate limited: 5 attempts/5min per IP, 15min lockout.
 ```
 
 **Response (200):**
+
+Sets `Set-Cookie: token=<jwt>; Path=/; MaxAge=<session_timeout>; HttpOnly; Secure; SameSite=Strict`
+
 ```json
 {
-  "token": "jwt-string",
   "user": {
     "id": "uuid",
     "username": "admin",
@@ -794,7 +796,7 @@ Returns all categories with per-target daily uptime arrays for the preferred che
 
 ## SOC (Status Page)
 
-SOC endpoints return the same data as Dashboard but with conditional auth: if the `soc_public` setting is `"true"`, these endpoints are publicly accessible without authentication. Otherwise, standard Bearer auth is required.
+SOC endpoints return the same data as Dashboard but with conditional auth: if the `soc_public` setting is `"true"`, these endpoints are publicly accessible without authentication. Otherwise, standard cookie-based auth is required.
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
@@ -1121,7 +1123,7 @@ Requires `fail2ban-client` available via `sudo` on the server. Returns status of
 ## Global Middleware
 
 ### CORS
-Enabled only when `cors_origin` is configured (development). Allows methods: `GET, POST, PUT, DELETE, OPTIONS`. Allows headers: `Content-Type, Authorization`. `OPTIONS` requests return `204 No Content`.
+Enabled only when `cors_origin` is configured (development). Allows methods: `GET, POST, PUT, DELETE, OPTIONS`. Allows headers: `Content-Type`. Sets `Access-Control-Allow-Credentials: true` for cookie-based auth. `OPTIONS` requests return `204 No Content`.
 
 ### Request Body Limits
 - General endpoints: 1MB max (`readJSON` helper)

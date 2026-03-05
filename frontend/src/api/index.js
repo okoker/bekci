@@ -5,15 +5,7 @@ import router from '../router'
 const api = axios.create({
   baseURL: '/api',
   headers: { 'Content-Type': 'application/json' },
-})
-
-// Attach JWT token to every request
-api.interceptors.request.use((config) => {
-  const auth = useAuthStore()
-  if (auth.token) {
-    config.headers.Authorization = `Bearer ${auth.token}`
-  }
-  return config
+  withCredentials: true,
 })
 
 // On 401, force logout

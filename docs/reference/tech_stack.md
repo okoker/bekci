@@ -7,7 +7,7 @@
 | Backend | Go 1.24, net/http (stdlib router), SQLite WAL |
 | Database | SQLite 3 via go-sqlite3 (CGO), WAL mode, auto-migrate |
 | Frontend | Vue 3, Vite 7, Vue Router, Pinia, Axios, Chart.js |
-| Auth | JWT HS256 (golang-jwt/v5), bcrypt cost 12 |
+| Auth | JWT HS256 (golang-jwt/v5) in HttpOnly cookie, bcrypt cost 12 |
 | Email | Resend API |
 | Network | ICMP ping via pro-bing (NET_RAW capability) |
 | Config | YAML base + env var overrides + auto-generated defaults |
@@ -78,7 +78,7 @@ No npm on server — `cmd/bekci/frontend_dist/` is committed to git. Go binary e
 | vite | ^7.3.1 | Build tool |
 | vue-router | ^4.6.4 | Client-side routing |
 | pinia | ^3.0.4 | State management |
-| axios | ^1.13.5 | HTTP client (JWT interceptor) |
+| axios | ^1.13.5 | HTTP client (withCredentials for cookie auth) |
 | chart.js | ^4.5.1 | Charts (SLA page) |
 | vue-chartjs | ^5.3.3 | Vue Chart.js wrapper |
 

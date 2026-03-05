@@ -3,18 +3,15 @@ import { defineStore } from 'pinia'
 import api from '../api'
 
 export const useAuthStore = defineStore('auth', () => {
-  const token = ref(localStorage.getItem('token') || '')
   const user = ref(null)
 
-  const isLoggedIn = computed(() => !!token.value)
+  const isLoggedIn = computed(() => !!user.value)
   const isAdmin = computed(() => user.value?.role === 'admin')
   const isOperator = computed(() => user.value?.role === 'operator' || isAdmin.value)
 
   async function login(username, password) {
     const { data } = await api.post('/login', { username, password })
-    token.value = data.token
     user.value = data.user
-    localStorage.setItem('token', data.token)
   }
 
   async function fetchMe() {
@@ -22,7 +19,7 @@ export const useAuthStore = defineStore('auth', () => {
       const { data } = await api.get('/me')
       user.value = data
     } catch {
-      clearAuth()
+      user.value = null
     }
   }
 
@@ -32,14 +29,12 @@ export const useAuthStore = defineStore('auth', () => {
     } catch {
       // ignore
     }
-    clearAuth()
+    user.value = null
   }
 
   function clearAuth() {
-    token.value = ''
     user.value = null
-    localStorage.removeItem('token')
   }
 
-  return { token, user, isLoggedIn, isAdmin, isOperator, login, fetchMe, logout, clearAuth }
+  return { user, isLoggedIn, isAdmin, isOperator, login, fetchMe, logout, clearAuth }
 })
