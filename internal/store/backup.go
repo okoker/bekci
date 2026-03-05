@@ -8,18 +8,28 @@ import (
 
 // BackupData is the top-level structure for a Bekci config backup.
 type BackupData struct {
-	Version        int               `json:"version"`
-	SchemaVersion  int               `json:"schema_version"`
-	CreatedAt      string            `json:"created_at"`
-	AppVersion     string            `json:"app_version"`
-	Users          []BackupUser      `json:"users"`
-	Settings       map[string]string `json:"settings"`
-	Rules          []BackupRule      `json:"rules"`
-	Targets        []BackupTarget    `json:"targets"`
-	Checks         []BackupCheck     `json:"checks"`
-	RuleConditions []RuleCondition   `json:"rule_conditions"`
-	RuleStates     []RuleState       `json:"rule_states"`
-	Recipients     []BackupRecipient `json:"recipients"`
+	Version        int                  `json:"version"`
+	SchemaVersion  int                  `json:"schema_version"`
+	CreatedAt      string               `json:"created_at"`
+	AppVersion     string               `json:"app_version"`
+	Users          []BackupUser         `json:"users"`
+	Settings       map[string]string    `json:"settings"`
+	Rules          []BackupRule         `json:"rules"`
+	Targets        []BackupTarget       `json:"targets"`
+	Checks         []BackupCheck        `json:"checks"`
+	RuleConditions []RuleCondition      `json:"rule_conditions"`
+	RuleStates     []RuleState          `json:"rule_states"`
+	Recipients     []BackupRecipient    `json:"recipients"`
+	PauseHistory   []BackupPauseHistory `json:"pause_history"`
+}
+
+// BackupPauseHistory mirrors target_pause_history table for backup.
+type BackupPauseHistory struct {
+	ID        int        `json:"id"`
+	TargetID  string     `json:"target_id"`
+	PausedAt  time.Time  `json:"paused_at"`
+	ResumedAt *time.Time `json:"resumed_at"`
+	Reason    string     `json:"reason"`
 }
 
 // BackupRecipient captures a target→user alert recipient mapping.
@@ -55,17 +65,18 @@ type BackupRule struct {
 
 // BackupTarget mirrors Target for backup.
 type BackupTarget struct {
-	ID                 string    `json:"id"`
-	Name               string    `json:"name"`
-	Host               string    `json:"host"`
-	Description        string    `json:"description"`
-	Enabled            bool      `json:"enabled"`
-	PreferredCheckType string    `json:"preferred_check_type"`
-	Operator           string    `json:"operator"`
-	Category           string    `json:"category"`
-	RuleID             *string   `json:"rule_id"`
-	CreatedAt          time.Time `json:"created_at"`
-	UpdatedAt          time.Time `json:"updated_at"`
+	ID                 string     `json:"id"`
+	Name               string     `json:"name"`
+	Host               string     `json:"host"`
+	Description        string     `json:"description"`
+	Enabled            bool       `json:"enabled"`
+	PreferredCheckType string     `json:"preferred_check_type"`
+	Operator           string     `json:"operator"`
+	Category           string     `json:"category"`
+	RuleID             *string    `json:"rule_id"`
+	PausedAt           *time.Time `json:"paused_at"`
+	CreatedAt          time.Time  `json:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at"`
 }
 
 // BackupCheck mirrors Check for backup.
@@ -138,7 +149,7 @@ func (s *Store) ExportBackup(appVersion string) (*BackupData, error) {
 	}
 
 	// Targets
-	tRows, err := s.db.Query(`SELECT id, name, host, description, enabled, preferred_check_type, operator, category, rule_id, created_at, updated_at FROM targets ORDER BY name ASC`)
+	tRows, err := s.db.Query(`SELECT id, name, host, description, enabled, preferred_check_type, operator, category, rule_id, paused_at, created_at, updated_at FROM targets ORDER BY name ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("exporting targets: %w", err)
 	}
@@ -147,12 +158,16 @@ func (s *Store) ExportBackup(appVersion string) (*BackupData, error) {
 		var t BackupTarget
 		var enabled int
 		var ruleID sql.NullString
-		if err := tRows.Scan(&t.ID, &t.Name, &t.Host, &t.Description, &enabled, &t.PreferredCheckType, &t.Operator, &t.Category, &ruleID, &t.CreatedAt, &t.UpdatedAt); err != nil {
+		var pausedAt sql.NullTime
+		if err := tRows.Scan(&t.ID, &t.Name, &t.Host, &t.Description, &enabled, &t.PreferredCheckType, &t.Operator, &t.Category, &ruleID, &pausedAt, &t.CreatedAt, &t.UpdatedAt); err != nil {
 			return nil, err
 		}
 		t.Enabled = enabled == 1
 		if ruleID.Valid {
 			t.RuleID = &ruleID.String
+		}
+		if pausedAt.Valid {
+			t.PausedAt = &pausedAt.Time
 		}
 		data.Targets = append(data.Targets, t)
 	}
@@ -230,6 +245,27 @@ func (s *Store) ExportBackup(appVersion string) (*BackupData, error) {
 		return nil, err
 	}
 
+	// Pause history
+	phRows, err := s.db.Query(`SELECT id, target_id, paused_at, resumed_at, reason FROM target_pause_history ORDER BY id ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("exporting target_pause_history: %w", err)
+	}
+	defer phRows.Close()
+	for phRows.Next() {
+		var ph BackupPauseHistory
+		var resumedAt sql.NullTime
+		if err := phRows.Scan(&ph.ID, &ph.TargetID, &ph.PausedAt, &resumedAt, &ph.Reason); err != nil {
+			return nil, err
+		}
+		if resumedAt.Valid {
+			ph.ResumedAt = &resumedAt.Time
+		}
+		data.PauseHistory = append(data.PauseHistory, ph)
+	}
+	if err := phRows.Err(); err != nil {
+		return nil, err
+	}
+
 	// Ensure nil slices become empty arrays in JSON
 	if data.Users == nil {
 		data.Users = []BackupUser{}
@@ -251,6 +287,9 @@ func (s *Store) ExportBackup(appVersion string) (*BackupData, error) {
 	}
 	if data.Recipients == nil {
 		data.Recipients = []BackupRecipient{}
+	}
+	if data.PauseHistory == nil {
+		data.PauseHistory = []BackupPauseHistory{}
 	}
 
 	return data, nil
@@ -274,6 +313,7 @@ func (s *Store) RestoreBackup(data *BackupData) error {
 		"rule_states",
 		"alert_history",
 		"target_alert_recipients",
+		"target_pause_history",
 		"check_results",
 		"checks",
 		"targets",
@@ -338,7 +378,7 @@ func (s *Store) RestoreBackup(data *BackupData) error {
 
 	// Targets
 	if len(data.Targets) > 0 {
-		stmt, err := tx.Prepare(`INSERT INTO targets (id, name, host, description, enabled, preferred_check_type, operator, category, rule_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+		stmt, err := tx.Prepare(`INSERT INTO targets (id, name, host, description, enabled, preferred_check_type, operator, category, rule_id, paused_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 		if err != nil {
 			return fmt.Errorf("prepare targets insert: %w", err)
 		}
@@ -352,7 +392,11 @@ func (s *Store) RestoreBackup(data *BackupData) error {
 			if t.RuleID != nil {
 				ruleID = *t.RuleID
 			}
-			if _, err := stmt.Exec(t.ID, t.Name, t.Host, t.Description, enabled, t.PreferredCheckType, t.Operator, t.Category, ruleID, t.CreatedAt, t.UpdatedAt); err != nil {
+			var pausedAt any
+			if t.PausedAt != nil {
+				pausedAt = *t.PausedAt
+			}
+			if _, err := stmt.Exec(t.ID, t.Name, t.Host, t.Description, enabled, t.PreferredCheckType, t.Operator, t.Category, ruleID, pausedAt, t.CreatedAt, t.UpdatedAt); err != nil {
 				return fmt.Errorf("inserting target %s: %w", t.Name, err)
 			}
 		}
@@ -419,6 +463,24 @@ func (s *Store) RestoreBackup(data *BackupData) error {
 		for _, rs := range data.RuleStates {
 			if _, err := stmt.Exec(rs.RuleID, rs.CurrentState, rs.LastChange, rs.LastEvaluated); err != nil {
 				return fmt.Errorf("inserting rule_state %s: %w", rs.RuleID, err)
+			}
+		}
+	}
+
+	// Pause history (depends on targets)
+	if len(data.PauseHistory) > 0 {
+		stmt, err := tx.Prepare(`INSERT INTO target_pause_history (id, target_id, paused_at, resumed_at, reason) VALUES (?, ?, ?, ?, ?)`)
+		if err != nil {
+			return fmt.Errorf("prepare target_pause_history insert: %w", err)
+		}
+		defer stmt.Close()
+		for _, ph := range data.PauseHistory {
+			var resumedAt any
+			if ph.ResumedAt != nil {
+				resumedAt = *ph.ResumedAt
+			}
+			if _, err := stmt.Exec(ph.ID, ph.TargetID, ph.PausedAt, resumedAt, ph.Reason); err != nil {
+				return fmt.Errorf("inserting pause_history %d: %w", ph.ID, err)
 			}
 		}
 	}
