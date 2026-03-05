@@ -38,7 +38,11 @@ func (s *Server) handleSLAHistory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Load SLA thresholds
-	allSettings, _ := s.store.GetAllSettings()
+	allSettings, err := s.store.GetAllSettings()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load settings")
+		return
+	}
 	slaThresholds := make(map[string]float64)
 	for cat, key := range categoryToSLAKey {
 		if v, ok := allSettings[key]; ok {

@@ -103,9 +103,13 @@ func (s *Store) ListTargets() ([]Target, error) {
 func (s *Store) DeleteTarget(id string) error {
 	// Delete linked rule first to prevent orphans
 	var ruleID sql.NullString
-	s.db.QueryRow(`SELECT rule_id FROM targets WHERE id = ?`, id).Scan(&ruleID)
+	if err := s.db.QueryRow(`SELECT rule_id FROM targets WHERE id = ?`, id).Scan(&ruleID); err != nil && err != sql.ErrNoRows {
+		return fmt.Errorf("lookup rule for target: %w", err)
+	}
 	if ruleID.Valid {
-		s.db.Exec(`DELETE FROM rules WHERE id = ?`, ruleID.String)
+		if _, err := s.db.Exec(`DELETE FROM rules WHERE id = ?`, ruleID.String); err != nil {
+			return fmt.Errorf("delete linked rule: %w", err)
+		}
 	}
 
 	res, err := s.db.Exec(`DELETE FROM targets WHERE id = ?`, id)

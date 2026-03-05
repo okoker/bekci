@@ -326,7 +326,11 @@ func (s *Server) handleUpdateTarget(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handlePauseTarget(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if err := s.store.PauseTarget(id); err != nil {
-		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "already paused") {
+		if strings.Contains(err.Error(), "not found") {
+			writeError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		if strings.Contains(err.Error(), "already paused") {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
@@ -343,7 +347,11 @@ func (s *Server) handlePauseTarget(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleUnpauseTarget(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if err := s.store.UnpauseTarget(id); err != nil {
-		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "not paused") {
+		if strings.Contains(err.Error(), "not found") {
+			writeError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		if strings.Contains(err.Error(), "not paused") {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}

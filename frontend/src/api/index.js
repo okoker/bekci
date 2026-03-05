@@ -8,14 +8,17 @@ const api = axios.create({
   withCredentials: true,
 })
 
-// On 401, force logout
+// On 401, force logout — but skip for session probe (/me) and public SOC endpoints
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      const auth = useAuthStore()
-      auth.clearAuth()
-      router.push('/login')
+      const url = error.config?.url || ''
+      if (url !== '/me' && !url.startsWith('/soc/')) {
+        const auth = useAuthStore()
+        auth.clearAuth()
+        router.push('/login')
+      }
     }
     return Promise.reject(error)
   }

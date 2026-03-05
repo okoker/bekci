@@ -191,7 +191,7 @@ One row per rule. Tracks current health state for the rule engine.
 
 ### alert_history
 
-Append-only log of sent alerts. Not purged automatically.
+Append-only log of sent alerts. Purged daily by `PurgeOldAlertHistory(days)` using `audit_retention_days` setting (default 91).
 
 | Column          | Type     | Constraints                        |
 |-----------------|----------|------------------------------------|
@@ -258,21 +258,6 @@ Append-only audit trail. Purged by `PurgeOldAuditEntries(days)`.
 
 **Indexes:**
 - `idx_audit_created` ON audit_logs(created_at DESC)
-
-### target_pause_history
-
-Tracks pause/unpause events for targets. `resumed_at` is NULL while the target is still paused.
-
-| Column     | Type     | Constraints                                   |
-|------------|----------|-----------------------------------------------|
-| id         | INTEGER  | **PK AUTOINCREMENT**                          |
-| target_id  | TEXT     | NOT NULL, FK -> targets(id) ON DELETE CASCADE |
-| paused_at  | DATETIME | NOT NULL                                      |
-| resumed_at | DATETIME | nullable                                      |
-| reason     | TEXT     | NOT NULL DEFAULT ''                           |
-
-**Indexes:**
-- `idx_pause_history_target` ON target_pause_history(target_id)
 
 ---
 

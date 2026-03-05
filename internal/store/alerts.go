@@ -2,7 +2,7 @@ package store
 
 import (
 	"database/sql"
-	"log/slog"
+	"fmt"
 	"time"
 )
 
@@ -127,7 +127,7 @@ type AlertHistoryItem struct {
 func (s *Store) ListAlertHistory(limit, offset int) ([]AlertHistoryItem, int, error) {
 	var total int
 	if err := s.db.QueryRow(`SELECT COUNT(*) FROM alert_history WHERE target_id != ''`).Scan(&total); err != nil {
-		slog.Error("alert history count failed", "error", err)
+		return nil, 0, fmt.Errorf("alert history count: %w", err)
 	}
 
 	rows, err := s.db.Query(`

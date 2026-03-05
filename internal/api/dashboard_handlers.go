@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -48,7 +49,10 @@ func (s *Server) buildDashboardTargets() ([]dashboardTarget, error) {
 	}
 
 	// Load SLA thresholds once
-	allSettings, _ := s.store.GetAllSettings()
+	allSettings, err := s.store.GetAllSettings()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load settings: %w", err)
+	}
 	slaThresholds := make(map[string]float64)
 	for cat, key := range categoryToSLAKey {
 		if v, ok := allSettings[key]; ok {

@@ -202,7 +202,7 @@ Login endpoint only. Per-IP tracking.
 Any authenticated user (including viewer) can:
 - `GET /api/me` -- view own profile
 - `PUT /api/me` -- update own email and phone (not role, not username)
-- `PUT /api/me/password` -- change own password (must provide current password, min 8 chars)
+- `PUT /api/me/password` -- change own password (must provide current password, min 15 chars)
 
 Password change invalidates all other sessions for the same user (`DeleteUserSessionsExcept`).
 

@@ -109,7 +109,7 @@ Invalidates all other sessions on success.
 ```json
 {
   "current_password": "string",
-  "new_password": "string (min 8 chars)"
+  "new_password": "string (min 15 chars)"
 }
 ```
 
@@ -120,7 +120,7 @@ Invalidates all other sessions on success.
 
 | Error | Code |
 |-------|------|
-| Password too short (<8) | 400 |
+| Password too short (<15) | 400 |
 | Wrong current password | 401 |
 
 ---
@@ -161,7 +161,7 @@ Invalidates all other sessions on success.
 {
   "username": "string (required)",
   "email": "string",
-  "password": "string (required, min 8 chars)",
+  "password": "string (required, min 15 chars)",
   "role": "admin | operator | viewer (required)"
 }
 ```
@@ -180,7 +180,7 @@ Invalidates all other sessions on success.
 | Error | Code |
 |-------|------|
 | Missing required fields | 400 |
-| Password too short (<8) | 400 |
+| Password too short (<15) | 400 |
 | Invalid role | 400 |
 | Username exists | 409 |
 
@@ -249,7 +249,7 @@ Kills all sessions for the user, forcing re-login.
 **Request:**
 ```json
 {
-  "password": "string (min 8 chars)"
+  "password": "string (min 15 chars)"
 }
 ```
 
@@ -463,6 +463,7 @@ Pauses the target and stops all its checks from running. Records pause event in 
 | Error | Code |
 |-------|------|
 | Target not found | 404 |
+| Already paused | 400 |
 
 ### POST /api/targets/{id}/unpause
 
@@ -476,6 +477,7 @@ Unpauses the target and immediately triggers RunNow on all its checks.
 | Error | Code |
 |-------|------|
 | Target not found | 404 |
+| Not paused | 400 |
 
 ---
 
@@ -916,7 +918,7 @@ Update one or more settings. Only known keys are accepted. Sending masked API ke
 | `history_days` | positive integer | >= 1 |
 | `audit_retention_days` | positive integer | >= 1 |
 | `soc_public` | boolean string | `"true"` or `"false"` |
-| `alert_method` | string | any string |
+| `alert_method` | string | `""`, `"email"`, or `"email+signal"` |
 | `resend_api_key` | string | any string (empty to clear) |
 | `alert_from_email` | string | any string |
 | `alert_cooldown_s` | non-negative integer | >= 0 |

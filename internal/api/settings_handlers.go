@@ -107,6 +107,11 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusBadRequest, "setting "+key+" must be a number between 0 and 100")
 				return
 			}
+		} else if key == "alert_method" {
+			if val != "" && val != "email" && val != "email+signal" {
+				writeError(w, http.StatusBadRequest, "alert_method must be '', 'email', or 'email+signal'")
+				return
+			}
 		} else if stringSettings[key] {
 			// Accept any string (including empty for clearing API keys)
 			continue
