@@ -80,8 +80,8 @@ async function changePassword() {
           <input v-model="pwForm.current_password" type="password" required />
         </div>
         <div class="form-group">
-          <label>New Password (min 8 chars)</label>
-          <input v-model="pwForm.new_password" type="password" required minlength="8" />
+          <label>New Password (min 15 chars)</label>
+          <input v-model="pwForm.new_password" type="password" required minlength="15" />
         </div>
         <div v-if="pwErr" class="error-msg">{{ pwErr }}</div>
         <div v-if="pwMsg" class="success-msg" @click="pwMsg = ''">{{ pwMsg }}</div>

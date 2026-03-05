@@ -44,8 +44,8 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "username, password, and role are required")
 		return
 	}
-	if len(req.Password) < 8 {
-		writeError(w, http.StatusBadRequest, "password must be at least 8 characters")
+	if len(req.Password) < 15 {
+		writeError(w, http.StatusBadRequest, "password must be at least 15 characters")
 		return
 	}
 	if req.Role != "admin" && req.Role != "operator" && req.Role != "viewer" {
@@ -229,8 +229,8 @@ func (s *Server) handleResetPassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if len(req.Password) < 8 {
-		writeError(w, http.StatusBadRequest, "password must be at least 8 characters")
+	if len(req.Password) < 15 {
+		writeError(w, http.StatusBadRequest, "password must be at least 15 characters")
 		return
 	}
 

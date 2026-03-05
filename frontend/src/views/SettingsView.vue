@@ -48,7 +48,10 @@ async function saveSettings() {
   loading.value = true
   try {
     const payload = {}
-    for (const [k, v] of Object.entries(settings.value)) payload[k] = String(v)
+    const knownKeys = new Set([...generalKeys, ...slaKeys.map(s => s.key)])
+    for (const [k, v] of Object.entries(settings.value)) {
+      if (knownKeys.has(k)) payload[k] = String(v)
+    }
     await api.put('/settings', payload)
     success.value = 'Settings saved'
   } catch (e) {
@@ -411,24 +414,26 @@ onUnmounted(() => {
 
       <div class="card">
         <form @submit.prevent="saveSettings">
-          <div v-for="(value, key) in settings" :key="key" v-show="generalKeys.has(key)" class="form-group">
-            <label>{{ labels[key] || key }}</label>
-            <select
-              v-if="boolSettings.has(key)"
-              v-model="settings[key]"
-              :disabled="!auth.isAdmin"
-            >
-              <option value="true">Yes</option>
-              <option value="false">No</option>
-            </select>
-            <input
-              v-else
-              v-model="settings[key]"
-              type="number"
-              min="1"
-              :disabled="!auth.isAdmin"
-            />
-          </div>
+          <template v-for="(value, key) in settings" :key="key">
+            <div v-if="generalKeys.has(key)" class="form-group">
+              <label>{{ labels[key] || key }}</label>
+              <select
+                v-if="boolSettings.has(key)"
+                v-model="settings[key]"
+                :disabled="!auth.isAdmin"
+              >
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+              </select>
+              <input
+                v-else
+                v-model="settings[key]"
+                type="number"
+                min="1"
+                :disabled="!auth.isAdmin"
+              />
+            </div>
+          </template>
           <button v-if="auth.isAdmin" type="submit" class="btn btn-primary" :disabled="loading">
             {{ loading ? 'Saving...' : 'Save' }}
           </button>
@@ -557,8 +562,8 @@ onUnmounted(() => {
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label>Password (min 8 chars)</label>
-              <input v-model="userForm.password" type="password" required minlength="8" />
+              <label>Password (min 15 chars)</label>
+              <input v-model="userForm.password" type="password" required minlength="15" />
             </div>
             <div class="form-group">
               <label>Role</label>
@@ -600,7 +605,7 @@ onUnmounted(() => {
                   Reset PW
                 </button>
                 <div v-if="userShowResetPw === u.id" class="inline-form">
-                  <input v-model="resetPwForm.password" type="password" placeholder="New password" minlength="8" />
+                  <input v-model="resetPwForm.password" type="password" placeholder="New password" minlength="15" />
                   <button class="btn btn-sm btn-primary" @click="resetPassword(u.id)">Set</button>
                 </div>
               </td>
@@ -615,9 +620,9 @@ onUnmounted(() => {
           <thead>
             <tr>
               <th>Action</th>
-              <th>Viewer</th>
-              <th>Operator</th>
-              <th>Admin</th>
+              <th><span class="badge badge-viewer">viewer</span></th>
+              <th><span class="badge badge-operator">operator</span></th>
+              <th><span class="badge badge-admin">admin</span></th>
             </tr>
           </thead>
           <tbody>

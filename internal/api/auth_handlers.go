@@ -150,8 +150,8 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if len(req.New) < 8 {
-		writeError(w, http.StatusBadRequest, "password must be at least 8 characters")
+	if len(req.New) < 15 {
+		writeError(w, http.StatusBadRequest, "password must be at least 15 characters")
 		return
 	}
 

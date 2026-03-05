@@ -69,6 +69,12 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to load settings")
 		return
 	}
+	// Strip stale/unknown keys so frontend never sees them
+	for key := range settings {
+		if !knownSettings[key] {
+			delete(settings, key)
+		}
+	}
 	// Mask sensitive values — show "configured" or empty
 	if v, ok := settings["resend_api_key"]; ok && v != "" {
 		settings["resend_api_key"] = "••••••••"

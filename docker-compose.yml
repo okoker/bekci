@@ -1,6 +1,9 @@
 services:
   bekci:
-    build: .
+    build:
+      context: .
+      args:
+        VERSION: 2.8.0
     container_name: bekci
     ports:
       - "65000:65000"
