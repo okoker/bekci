@@ -7,6 +7,25 @@ import (
 	"github.com/bekci/internal/store"
 )
 
+// normalizeFailWindow auto-sets fail_window when fail_count > 1 and validates bounds.
+func normalizeFailWindow(failCount, failWindow, intervalS int) int {
+	if failCount <= 1 {
+		return failWindow // no change needed for single-check mode
+	}
+	// If fail_count > 1 but no fail_window, default to interval_s
+	if failWindow <= 0 {
+		failWindow = intervalS
+	}
+	// Clamp: min = interval_s, max = 1800
+	if failWindow < intervalS {
+		failWindow = intervalS
+	}
+	if failWindow > 1800 {
+		failWindow = 1800
+	}
+	return failWindow
+}
+
 var validOperators = map[string]bool{"AND": true, "OR": true}
 var validCategories = map[string]bool{
 	"Network": true, "Security": true, "Physical Security": true,
@@ -116,6 +135,11 @@ func (s *Server) handleCreateTarget(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "group_operator must be AND or OR")
 			return
 		}
+		failCount := c.FailCount
+		if failCount <= 0 {
+			failCount = 1
+		}
+		failWindow := normalizeFailWindow(failCount, c.FailWindow, c.IntervalS)
 		conds = append(conds, store.TargetCondition{
 			CheckID:        c.CheckID,
 			CheckType:      c.CheckType,
@@ -125,8 +149,8 @@ func (s *Server) handleCreateTarget(w http.ResponseWriter, r *http.Request) {
 			Field:          c.Field,
 			Comparator:     c.Comparator,
 			Value:          c.Value,
-			FailCount:      c.FailCount,
-			FailWindow:     c.FailWindow,
+			FailCount:      failCount,
+			FailWindow:     failWindow,
 			ConditionGroup: c.ConditionGroup,
 			GroupOperator:  groupOp,
 		})
@@ -250,6 +274,11 @@ func (s *Server) handleUpdateTarget(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "group_operator must be AND or OR")
 			return
 		}
+		failCount := c.FailCount
+		if failCount <= 0 {
+			failCount = 1
+		}
+		failWindow := normalizeFailWindow(failCount, c.FailWindow, c.IntervalS)
 		conds = append(conds, store.TargetCondition{
 			CheckID:        c.CheckID,
 			CheckType:      c.CheckType,
@@ -259,8 +288,8 @@ func (s *Server) handleUpdateTarget(w http.ResponseWriter, r *http.Request) {
 			Field:          c.Field,
 			Comparator:     c.Comparator,
 			Value:          c.Value,
-			FailCount:      c.FailCount,
-			FailWindow:     c.FailWindow,
+			FailCount:      failCount,
+			FailWindow:     failWindow,
 			ConditionGroup: c.ConditionGroup,
 			GroupOperator:  groupOp,
 		})
@@ -292,6 +321,47 @@ func (s *Server) handleUpdateTarget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, detail)
+}
+
+func (s *Server) handlePauseTarget(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if err := s.store.PauseTarget(id); err != nil {
+		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "already paused") {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to pause target")
+		return
+	}
+	if s.scheduler != nil {
+		s.scheduler.Reload()
+	}
+	s.audit(r, "pause_target", "target", id, "", "success")
+	writeJSON(w, http.StatusOK, map[string]string{"status": "paused"})
+}
+
+func (s *Server) handleUnpauseTarget(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if err := s.store.UnpauseTarget(id); err != nil {
+		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "not paused") {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to unpause target")
+		return
+	}
+	if s.scheduler != nil {
+		s.scheduler.Reload()
+	}
+	// Run all checks immediately after unpause
+	checks, err := s.store.ListChecksByTarget(id)
+	if err == nil && s.scheduler != nil {
+		for _, c := range checks {
+			s.scheduler.RunNow(c.ID)
+		}
+	}
+	s.audit(r, "unpause_target", "target", id, "", "success")
+	writeJSON(w, http.StatusOK, map[string]string{"status": "unpaused"})
 }
 
 func (s *Server) handleDeleteTarget(w http.ResponseWriter, r *http.Request) {

@@ -133,23 +133,27 @@ func (e *Engine) evaluateRule(rule store.Rule) {
 // evaluateCondition checks whether a single condition is "triggered" (unhealthy).
 func (e *Engine) evaluateCondition(cond store.RuleCondition) bool {
 	if cond.FailWindow > 0 {
-		// Window-based: count matching results within the window
+		// Window-based: count longest consecutive matching streak from newest
 		results, err := e.store.GetRecentResultsByWindow(cond.CheckID, cond.FailWindow)
 		if err != nil {
 			slog.Error("Engine: failed to get results by window", "check_id", cond.CheckID, "error", err)
 			return false
 		}
-		matchCount := 0
+		// Results are ordered by checked_at DESC (newest first).
+		// Count consecutive matches from the start; any non-match breaks the streak.
+		streak := 0
 		for _, r := range results {
 			actual := extractField(r, cond.Field)
 			if compare(actual, cond.Comparator, cond.Value) {
-				matchCount++
+				streak++
+			} else {
+				break
 			}
 		}
-		return matchCount >= cond.FailCount
+		return streak >= cond.FailCount
 	}
 
-	// Single-result check
+	// Single-result check (fail_window=0: "Once" mode, fail_count ignored)
 	last, err := e.store.GetLastResult(cond.CheckID)
 	if err != nil || last == nil {
 		return false

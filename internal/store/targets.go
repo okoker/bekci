@@ -9,17 +9,18 @@ import (
 )
 
 type Target struct {
-	ID                 string    `json:"id"`
-	Name               string    `json:"name"`
-	Host               string    `json:"host"`
-	Description        string    `json:"description"`
-	Enabled            bool      `json:"enabled"`
-	PreferredCheckType string    `json:"preferred_check_type"`
-	Operator           string    `json:"operator"`
-	Category           string    `json:"category"`
-	RuleID             *string   `json:"rule_id"`
-	CreatedAt          time.Time `json:"created_at"`
-	UpdatedAt          time.Time `json:"updated_at"`
+	ID                 string     `json:"id"`
+	Name               string     `json:"name"`
+	Host               string     `json:"host"`
+	Description        string     `json:"description"`
+	Enabled            bool       `json:"enabled"`
+	PreferredCheckType string     `json:"preferred_check_type"`
+	Operator           string     `json:"operator"`
+	Category           string     `json:"category"`
+	RuleID             *string    `json:"rule_id"`
+	PausedAt           *time.Time `json:"paused_at"`
+	CreatedAt          time.Time  `json:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at"`
 }
 
 // TargetCondition is the unified check+condition for the target API.
@@ -50,8 +51,9 @@ func scanTarget(row interface{ Scan(...any) error }) (*Target, error) {
 	t := &Target{}
 	var enabled int
 	var ruleID sql.NullString
+	var pausedAt sql.NullTime
 	err := row.Scan(&t.ID, &t.Name, &t.Host, &t.Description, &enabled,
-		&t.PreferredCheckType, &t.Operator, &t.Category, &ruleID,
+		&t.PreferredCheckType, &t.Operator, &t.Category, &ruleID, &pausedAt,
 		&t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
 		return nil, err
@@ -60,10 +62,13 @@ func scanTarget(row interface{ Scan(...any) error }) (*Target, error) {
 	if ruleID.Valid {
 		t.RuleID = &ruleID.String
 	}
+	if pausedAt.Valid {
+		t.PausedAt = &pausedAt.Time
+	}
 	return t, nil
 }
 
-const targetCols = `id, name, host, description, enabled, preferred_check_type, operator, category, rule_id, created_at, updated_at`
+const targetCols = `id, name, host, description, enabled, preferred_check_type, operator, category, rule_id, paused_at, created_at, updated_at`
 
 func (s *Store) GetTarget(id string) (*Target, error) {
 	row := s.db.QueryRow(`SELECT `+targetCols+` FROM targets WHERE id = ?`, id)
@@ -535,4 +540,69 @@ func (s *Store) ListTargetSummaries() ([]TargetListItem, error) {
 		result = []TargetListItem{}
 	}
 	return result, nil
+}
+
+// PauseTarget sets paused_at = NOW and inserts a pause_history record.
+func (s *Store) PauseTarget(id string) error {
+	now := time.Now()
+	res, err := s.db.Exec(`UPDATE targets SET paused_at = ? WHERE id = ? AND paused_at IS NULL`, now, id)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("target not found or already paused")
+	}
+	_, err = s.db.Exec(`INSERT INTO target_pause_history (target_id, paused_at) VALUES (?, ?)`, id, now)
+	return err
+}
+
+// UnpauseTarget clears paused_at and updates the open pause_history record.
+func (s *Store) UnpauseTarget(id string) error {
+	now := time.Now()
+	res, err := s.db.Exec(`UPDATE targets SET paused_at = NULL WHERE id = ? AND paused_at IS NOT NULL`, id)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("target not found or not paused")
+	}
+	_, err = s.db.Exec(`UPDATE target_pause_history SET resumed_at = ? WHERE target_id = ? AND resumed_at IS NULL`, now, id)
+	return err
+}
+
+// PausePeriod represents a pause/resume interval.
+type PausePeriod struct {
+	PausedAt  time.Time  `json:"paused_at"`
+	ResumedAt *time.Time `json:"resumed_at"`
+}
+
+// GetPauseHistory returns pause periods for a target, ordered newest first.
+func (s *Store) GetPauseHistory(targetID string) ([]PausePeriod, error) {
+	rows, err := s.db.Query(`
+		SELECT paused_at, resumed_at FROM target_pause_history
+		WHERE target_id = ? ORDER BY paused_at DESC
+	`, targetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var periods []PausePeriod
+	for rows.Next() {
+		var p PausePeriod
+		var resumed sql.NullTime
+		if err := rows.Scan(&p.PausedAt, &resumed); err != nil {
+			return nil, err
+		}
+		if resumed.Valid {
+			p.ResumedAt = &resumed.Time
+		}
+		periods = append(periods, p)
+	}
+	if periods == nil {
+		periods = []PausePeriod{}
+	}
+	return periods, rows.Err()
 }

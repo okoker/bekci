@@ -256,6 +256,15 @@ async function confirmDelete() {
   }
 }
 
+function onFailCountChange(cond) {
+  if (cond.fail_count > 1 && (!cond.fail_window || cond.fail_window < cond.interval_s)) {
+    cond.fail_window = cond.interval_s
+  }
+  if (cond.fail_count <= 1) {
+    cond.fail_window = 0
+  }
+}
+
 function onConditionTypeChange(cond) {
   // Only reset config if it's a new condition (no check_id)
   if (!cond.check_id) {
@@ -346,6 +355,55 @@ async function runAllChecks(targetId) {
   }
 }
 
+// Pause / Unpause
+const showPauseConfirm = ref(false)
+const showUnpauseConfirm = ref(false)
+const pendingPauseId = ref(null)
+
+function pauseTarget(id) {
+  pendingPauseId.value = id
+  showPauseConfirm.value = true
+}
+
+async function confirmPause() {
+  showPauseConfirm.value = false
+  const id = pendingPauseId.value
+  pendingPauseId.value = null
+  error.value = ''
+  success.value = ''
+  try {
+    await api.post(`/targets/${id}/pause`)
+    await loadTargets()
+    success.value = 'Target paused'
+  } catch (e) {
+    error.value = e.response?.data?.error || 'Failed to pause target'
+  }
+}
+
+function unpauseTarget(id) {
+  pendingPauseId.value = id
+  showUnpauseConfirm.value = true
+}
+
+async function confirmUnpause() {
+  showUnpauseConfirm.value = false
+  const id = pendingPauseId.value
+  pendingPauseId.value = null
+  error.value = ''
+  success.value = ''
+  try {
+    await api.post(`/targets/${id}/unpause`)
+    await loadTargets()
+    success.value = 'Target unpaused — checks running now'
+  } catch (e) {
+    error.value = e.response?.data?.error || 'Failed to unpause target'
+  }
+}
+
+function isTargetPaused(t) {
+  return t.paused_at != null
+}
+
 function formatInterval(s) {
   if (s >= 3600) return `${Math.floor(s / 3600)}h`
   if (s >= 60) return `${Math.floor(s / 60)}m`
@@ -355,6 +413,7 @@ function formatInterval(s) {
 function stateClass(state) {
   if (state === 'healthy') return 'badge-active'
   if (state === 'unhealthy') return 'badge-suspended'
+  if (state === 'paused') return 'badge-paused'
   return 'badge-unknown'
 }
 
@@ -421,25 +480,33 @@ onMounted(() => loadTargets())
         </thead>
         <tbody>
           <template v-for="t in filteredTargets" :key="t.id">
-            <tr :class="{ 'row-expanded': expandedTargetId === t.id }" @click="toggleTarget(t.id)" style="cursor: pointer;">
+            <tr :class="{ 'row-expanded': expandedTargetId === t.id, 'row-disabled': !t.enabled }" @click="toggleTarget(t.id)" style="cursor: pointer;">
               <td>
                 <span class="expand-icon">{{ expandedTargetId === t.id ? '&#9660;' : '&#9654;' }}</span>
                 {{ t.name }}
               </td>
               <td>{{ t.host }}</td>
               <td>
-                <span v-if="t.state" :class="['badge', stateClass(t.state?.current_state)]">
+                <span v-if="isTargetPaused(t)" class="badge badge-paused">paused</span>
+                <span v-else-if="t.state" :class="['badge', stateClass(t.state?.current_state)]">
                   {{ t.state?.current_state || '—' }}
                 </span>
                 <span v-else class="text-muted">—</span>
               </td>
               <td><span :class="['badge', categoryClass(t.category)]">{{ t.category }}</span></td>
               <td>{{ t.condition_count || 0 }}</td>
-              <td><span :class="['badge', t.enabled ? 'badge-active' : 'badge-suspended']">{{ t.enabled ? 'yes' : 'no' }}</span></td>
+              <td>
+                <span :class="['badge', t.enabled ? 'badge-active' : 'badge-suspended']">{{ t.enabled ? 'yes' : 'no' }}</span>
+                <span v-if="!t.enabled" class="badge badge-disabled">DISABLED</span>
+              </td>
               <td class="actions" @click.stop>
-                <button v-if="auth.isOperator" class="btn btn-sm" @click="runAllChecks(t.id)">Run Now</button>
-                <button v-if="auth.isOperator" class="btn btn-sm" @click="openForm(t)">Edit</button>
-                <button v-if="auth.isOperator" class="btn btn-sm btn-danger" @click="deleteTarget(t.id)">Delete</button>
+                <template v-if="auth.isOperator">
+                  <button v-if="isTargetPaused(t)" class="btn btn-sm btn-unpause" @click="unpauseTarget(t.id)">Unpause</button>
+                  <button v-else class="btn btn-sm btn-pause" @click="pauseTarget(t.id)">Pause</button>
+                  <button class="btn btn-sm" @click="runAllChecks(t.id)">Run Now</button>
+                  <button class="btn btn-sm" @click="openForm(t)">Edit</button>
+                  <button class="btn btn-sm btn-danger" @click="deleteTarget(t.id)">Delete</button>
+                </template>
               </td>
             </tr>
             <!-- Expanded: checks list -->
@@ -697,7 +764,7 @@ onMounted(() => loadTargets())
 
                     <!-- Alert criteria divider -->
                     <div class="alert-divider">Alert when...</div>
-                    <div class="form-row form-row-4">
+                    <div class="form-row form-row-5">
                       <div class="form-group">
                         <label>Field</label>
                         <select v-model="cond.field">
@@ -720,7 +787,15 @@ onMounted(() => loadTargets())
                       </div>
                       <div class="form-group">
                         <label>Fail Count</label>
-                        <input type="number" v-model.number="cond.fail_count" min="1" />
+                        <input type="number" v-model.number="cond.fail_count" min="1"
+                          @change="onFailCountChange(cond)" />
+                      </div>
+                      <div class="form-group">
+                        <label>Window (s)</label>
+                        <input type="number" v-model.number="cond.fail_window"
+                          :min="cond.interval_s" max="1800"
+                          :disabled="cond.fail_count <= 1"
+                          :title="cond.fail_count <= 1 ? 'Set Fail Count > 1 to enable window' : 'Time window for consecutive failures'" />
                       </div>
                     </div>
                   </div>
@@ -762,6 +837,30 @@ onMounted(() => loadTargets())
         <div class="form-actions">
           <button class="btn btn-danger" @click="confirmDelete">Delete</button>
           <button class="btn" @click="showDeleteConfirm = false">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pause confirmation modal -->
+    <div v-if="showPauseConfirm" class="modal-overlay" @click.self="showPauseConfirm = false">
+      <div class="modal-card">
+        <h3>Pause Target</h3>
+        <p>Testing will stop for this target. SLA will not be affected during pause. Are you sure?</p>
+        <div class="form-actions">
+          <button class="btn btn-pause" @click="confirmPause">Pause</button>
+          <button class="btn" @click="showPauseConfirm = false">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Unpause confirmation modal -->
+    <div v-if="showUnpauseConfirm" class="modal-overlay" @click.self="showUnpauseConfirm = false">
+      <div class="modal-card">
+        <h3>Unpause Target</h3>
+        <p>Testing will resume immediately for all checks. Continue?</p>
+        <div class="form-actions">
+          <button class="btn btn-primary" @click="confirmUnpause">Unpause</button>
+          <button class="btn" @click="showUnpauseConfirm = false">Cancel</button>
         </div>
       </div>
     </div>
@@ -838,6 +937,29 @@ onMounted(() => loadTargets())
   background: #f1f5f9;
   color: #64748b;
 }
+.badge-paused {
+  background: #e0e7ff;
+  color: #4338ca;
+}
+.badge-disabled {
+  background: #f1f5f9;
+  color: #94a3b8;
+  font-size: 0.65rem;
+  margin-left: 0.25rem;
+}
+.row-disabled > td {
+  opacity: 0.5;
+}
+.btn-pause {
+  color: #4338ca;
+  border-color: #c7d2fe;
+}
+.btn-pause:hover { background: #e0e7ff; }
+.btn-unpause {
+  color: #166534;
+  border-color: #bbf7d0;
+}
+.btn-unpause:hover { background: #dcfce7; }
 
 .badge-cat-security {
   background: #ede9fe;
@@ -1047,6 +1169,9 @@ onMounted(() => loadTargets())
 
 .form-row-4 {
   grid-template-columns: 1fr 1fr 1fr 1fr;
+}
+.form-row-5 {
+  grid-template-columns: 1fr 1fr 1fr 0.7fr 0.7fr;
 }
 
 /* Recipients */

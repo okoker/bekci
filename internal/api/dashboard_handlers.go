@@ -24,6 +24,8 @@ type dashboardTarget struct {
 	Host               string           `json:"host"`
 	PreferredCheckType string           `json:"preferred_check_type"`
 	State              string           `json:"state"`
+	Paused             bool             `json:"paused"`
+	PausedAt           *string          `json:"paused_at,omitempty"`
 	Category           string           `json:"category"`
 	SLAStatus          string           `json:"sla_status"`
 	SLATarget          float64          `json:"sla_target"`
@@ -58,6 +60,11 @@ func (s *Server) buildDashboardTargets() ([]dashboardTarget, error) {
 
 	var result []dashboardTarget
 	for _, t := range targets {
+		// Hide disabled targets from dashboard/SOC
+		if !t.Enabled {
+			continue
+		}
+
 		dt := dashboardTarget{
 			ID:                 t.ID,
 			Name:               t.Name,
@@ -66,8 +73,14 @@ func (s *Server) buildDashboardTargets() ([]dashboardTarget, error) {
 			Category:           t.Category,
 		}
 
-		// Per-target health from rule_states
-		if t.RuleID != nil {
+		// Paused targets show as "paused" state
+		if t.PausedAt != nil {
+			dt.Paused = true
+			s := t.PausedAt.Format("2006-01-02T15:04:05Z")
+			dt.PausedAt = &s
+			dt.State = "paused"
+		} else if t.RuleID != nil {
+			// Per-target health from rule_states
 			rs, err := s.store.GetRuleState(*t.RuleID)
 			if err == nil && rs != nil {
 				dt.State = rs.CurrentState

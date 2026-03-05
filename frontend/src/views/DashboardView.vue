@@ -121,15 +121,18 @@ function toggleCheck(e, checkId) {
   expandedCheckId.value = expandedCheckId.value === checkId ? null : checkId
 }
 
-// Filter by category, sort: problems first (worst uptime at top), then healthy alphabetically
+// Filter by category, sort: problems first, then SLA unhealthy, then healthy, then paused
 function filteredAndSortedTargets() {
   let list = dashboardData.value
   if (activeCategory.value !== 'All') {
     list = list.filter(t => t.category === activeCategory.value)
   }
   return [...list].sort((a, b) => {
+    const aPaused = isTargetPaused(a)
+    const bPaused = isTargetPaused(b)
     const aDown = isTargetDown(a)
     const bDown = isTargetDown(b)
+    // Down targets first
     if (aDown && !bDown) return -1
     if (!aDown && bDown) return 1
     if (aDown && bDown) return getWorstUptime(a) - getWorstUptime(b)
@@ -138,22 +141,29 @@ function filteredAndSortedTargets() {
     const bUnhealthy = b.sla_status === 'unhealthy'
     if (aUnhealthy && !bUnhealthy) return -1
     if (!aUnhealthy && bUnhealthy) return 1
+    // Paused targets after healthy
+    if (aPaused && !bPaused) return 1
+    if (!aPaused && bPaused) return -1
     const diff = getWorstUptime(a) - getWorstUptime(b)
     return diff !== 0 ? diff : a.name.localeCompare(b.name)
   })
 }
 
 function isTargetDown(target) {
+  if (target.state === 'paused') return false
   if (target.state === 'unhealthy') return true
   if (target.state === 'healthy') return false
-  // Fallback: no rule state — derive from raw check status
   return target.checks?.some(c => c.last_status === 'down')
 }
 
+function isTargetPaused(target) {
+  return target.paused === true || target.state === 'paused'
+}
+
 function targetStateLabel(target) {
+  if (isTargetPaused(target)) return 'PAUSED'
   if (target.state === 'unhealthy') return 'DOWN'
   if (target.state === 'healthy') return 'UP'
-  // Fallback: no rule state
   if (target.checks?.some(c => c.last_status === 'down')) return 'DOWN'
   if (target.checks?.some(c => c.last_status === 'up')) return 'UP'
   return ''
@@ -161,6 +171,7 @@ function targetStateLabel(target) {
 
 function targetStateClass(target) {
   const label = targetStateLabel(target)
+  if (label === 'PAUSED') return 'badge-paused'
   if (label === 'DOWN') return 'badge-down'
   if (label === 'UP') return 'badge-up'
   return ''
@@ -277,7 +288,7 @@ onUnmounted(() => {
           <div class="target-header-left">
             <span class="expand-icon">{{ expandedTargetId === target.id ? '&#9660;' : '&#9654;' }}</span>
             <span v-if="target.checks.length > 0"
-              :class="['status-dot', isTargetDown(target) ? 'dot-down' : (targetStateLabel(target) === 'UP' ? 'dot-up' : 'dot-unknown')]">
+              :class="['status-dot', isTargetPaused(target) ? 'dot-paused' : (isTargetDown(target) ? 'dot-down' : (targetStateLabel(target) === 'UP' ? 'dot-up' : 'dot-unknown'))]">
             </span>
             <span class="target-name">{{ target.name }}</span>
             <span class="target-host text-muted">{{ target.host }}</span>
@@ -296,8 +307,13 @@ onUnmounted(() => {
             <span :class="['badge', categoryClass(target.category)]" style="font-size: 0.6rem;">
               {{ target.category }}
             </span>
-            <span v-if="slaLabel(target)" :class="['badge', slaClass(target)]">{{ slaLabel(target) }}</span>
-            <span v-if="targetStateLabel(target)" :class="['badge', targetStateClass(target)]">{{ targetStateLabel(target) }}</span>
+            <template v-if="isTargetPaused(target)">
+              <span class="badge badge-paused">PAUSED</span>
+            </template>
+            <template v-else>
+              <span v-if="slaLabel(target)" :class="['badge', slaClass(target)]">{{ slaLabel(target) }}</span>
+              <span v-if="targetStateLabel(target)" :class="['badge', targetStateClass(target)]">{{ targetStateLabel(target) }}</span>
+            </template>
           </div>
         </div>
 
@@ -462,6 +478,7 @@ onUnmounted(() => {
 }
 .dot-up { background: #48bb78; }
 .dot-down { background: #f56565; }
+.dot-paused { background: #6366f1; }
 .dot-unknown { background: #d1d5db; }
 
 .check-name { font-weight: 500; font-size: 0.9rem; }
@@ -488,6 +505,14 @@ onUnmounted(() => {
 .badge-down {
   background: #fee2e2;
   color: #991b1b;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.1rem 0.5rem;
+  border-radius: 10px;
+}
+.badge-paused {
+  background: #e0e7ff;
+  color: #4338ca;
   font-size: 0.7rem;
   font-weight: 600;
   padding: 0.1rem 0.5rem;

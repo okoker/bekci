@@ -95,10 +95,14 @@ function pad4hBars(data) {
 }
 
 function hasDownCheckTarget(target) {
+  if (target.state === 'paused') return false
   if (target.state === 'unhealthy') return true
   if (target.state === 'healthy') return false
-  // Fallback: no rule state — derive from raw check status
   return target.checks?.some(c => c.last_status === 'down')
+}
+
+function isTargetPaused(target) {
+  return target.paused === true || target.state === 'paused'
 }
 
 function categoryCount(cat) {
@@ -142,6 +146,8 @@ function filteredAndSortedTargets() {
     list = list.filter(t => t.category === activeCategory.value)
   }
   return [...list].sort((a, b) => {
+    const aPaused = isTargetPaused(a)
+    const bPaused = isTargetPaused(b)
     const aDown = hasDownCheckTarget(a)
     const bDown = hasDownCheckTarget(b)
     if (aDown && !bDown) return -1
@@ -151,6 +157,9 @@ function filteredAndSortedTargets() {
     const bUnhealthy = b.sla_status === 'unhealthy'
     if (aUnhealthy && !bUnhealthy) return -1
     if (!aUnhealthy && bUnhealthy) return 1
+    // Paused after healthy
+    if (aPaused && !bPaused) return 1
+    if (!aPaused && bPaused) return -1
     const diff = getWorstUptime(a) - getWorstUptime(b)
     return diff !== 0 ? diff : a.name.localeCompare(b.name)
   })
@@ -212,20 +221,23 @@ onUnmounted(() => {
     <div v-if="loading" class="soc-loading">Loading...</div>
 
     <div v-else class="soc-grid">
-      <div v-for="target in filteredAndSortedTargets()" :key="target.id" class="soc-card" :class="{ 'soc-card-down': hasDownCheckTarget(target) }">
+      <div v-for="target in filteredAndSortedTargets()" :key="target.id" class="soc-card" :class="{ 'soc-card-down': hasDownCheckTarget(target), 'soc-card-paused': isTargetPaused(target) }">
         <div class="soc-card-header">
           <span class="soc-target-name">{{ target.name }}</span>
           <span class="soc-host">{{ target.host }}</span>
-          <span v-if="getPreferredCheck(target)?.uptime_90d_pct >= 0" class="soc-uptime"
+          <span v-if="!isTargetPaused(target) && getPreferredCheck(target)?.uptime_90d_pct >= 0" class="soc-uptime"
             :style="{ color: uptimeColor(getPreferredCheck(target)?.uptime_90d_pct) }">
             {{ getPreferredCheck(target)?.uptime_90d_pct.toFixed(1) }}%
           </span>
           <div class="soc-header-badges">
             <span :class="['soc-cat-badge', categoryClass(target.category)]">{{ target.category }}</span>
-            <span v-if="slaLabel(target)" :class="['soc-status-badge', slaClass(target)]">{{ slaLabel(target) }}</span>
-            <span :class="['soc-status-badge', hasDownCheckTarget(target) ? 'soc-badge-down' : 'soc-badge-up']">
-              {{ hasDownCheckTarget(target) ? 'DOWN' : 'UP' }}
-            </span>
+            <span v-if="isTargetPaused(target)" class="soc-status-badge soc-badge-paused">PAUSED</span>
+            <template v-else>
+              <span v-if="slaLabel(target)" :class="['soc-status-badge', slaClass(target)]">{{ slaLabel(target) }}</span>
+              <span :class="['soc-status-badge', hasDownCheckTarget(target) ? 'soc-badge-down' : 'soc-badge-up']">
+                {{ hasDownCheckTarget(target) ? 'DOWN' : 'UP' }}
+              </span>
+            </template>
           </div>
         </div>
         <!-- Compact bars -->
@@ -335,6 +347,14 @@ onUnmounted(() => {
 }
 .soc-card-down {
   border-color: #f56565;
+}
+.soc-card-paused {
+  border-color: #6366f1;
+  opacity: 0.75;
+}
+.soc-badge-paused {
+  background: rgba(99, 102, 241, 0.2);
+  color: #818cf8;
 }
 
 .soc-card-header {

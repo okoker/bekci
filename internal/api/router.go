@@ -129,6 +129,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/targets/{id}", anyAuth(s.handleGetTarget))
 	mux.Handle("PUT /api/targets/{id}", opAuth(s.handleUpdateTarget))
 	mux.Handle("DELETE /api/targets/{id}", opAuth(s.handleDeleteTarget))
+	mux.Handle("POST /api/targets/{id}/pause", opAuth(s.handlePauseTarget))
+	mux.Handle("POST /api/targets/{id}/unpause", opAuth(s.handleUnpauseTarget))
 
 	// Target alert recipients
 	mux.Handle("GET /api/targets/{id}/recipients", anyAuth(s.handleListRecipients))

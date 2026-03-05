@@ -70,7 +70,7 @@ func (s *Store) ListAllEnabledChecks() ([]EnabledCheck, error) {
 		       c.created_at, c.updated_at, t.host
 		FROM checks c
 		JOIN targets t ON c.target_id = t.id
-		WHERE c.enabled = 1 AND t.enabled = 1
+		WHERE c.enabled = 1 AND t.enabled = 1 AND t.paused_at IS NULL
 	`)
 	if err != nil {
 		return nil, err

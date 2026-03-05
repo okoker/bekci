@@ -48,9 +48,12 @@ func (s *Server) handleSLAHistory(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Group targets by category
+	// Group targets by category (skip disabled targets)
 	catTargets := make(map[string][]slaTarget)
 	for _, t := range targets {
+		if !t.Enabled {
+			continue
+		}
 		// Find preferred check
 		checks, err := s.store.ListChecksByTarget(t.ID)
 		if err != nil || len(checks) == 0 {

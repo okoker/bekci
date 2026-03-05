@@ -267,6 +267,8 @@ Kills all sessions for the user, forcing re-login.
 | GET | `/api/targets/{id}` | any | Get target detail |
 | PUT | `/api/targets/{id}` | operator+ | Update target with conditions |
 | DELETE | `/api/targets/{id}` | operator+ | Delete target |
+| POST | `/api/targets/{id}/pause` | operator+ | Pause target (stops checks) |
+| POST | `/api/targets/{id}/unpause` | operator+ | Unpause target (resumes checks) |
 
 ### GET /api/targets
 
@@ -335,6 +337,10 @@ Creates target, checks, rule, and rule conditions in one transaction. Creator is
 **Condition groups:** Conditions are grouped by `condition_group` (integer). Within a group, conditions are combined using `group_operator` (AND/OR). Across groups, the logic is always OR — any group triggering means the target is unhealthy. Example: `(TCP AND HTTP) OR PING` = group 0 with AND (TCP, HTTP), group 1 with AND (PING).
 
 If `group_operator` is omitted, it defaults to the top-level `operator` value for backward compatibility.
+
+**Failure evaluation modes:**
+- `fail_window > 0`: Counts consecutive matching results from newest (streak mode). Must reach `fail_count` consecutive failures to trigger the condition.
+- `fail_window = 0`: Single result check ("Once" mode). Triggers on a single matching result; `fail_count` is ignored.
 
 **Response (201):** Full TargetDetail object (see GET /api/targets/{id}).
 
@@ -435,6 +441,32 @@ Deletes target, all linked checks, rule, and conditions. Triggers scheduler relo
 **Response (200):**
 ```json
 { "status": "ok" }
+```
+
+| Error | Code |
+|-------|------|
+| Target not found | 404 |
+
+### POST /api/targets/{id}/pause
+
+Pauses the target and stops all its checks from running. Records pause event in history.
+
+**Response (200):**
+```json
+{ "status": "paused" }
+```
+
+| Error | Code |
+|-------|------|
+| Target not found | 404 |
+
+### POST /api/targets/{id}/unpause
+
+Unpauses the target and immediately triggers RunNow on all its checks.
+
+**Response (200):**
+```json
+{ "status": "unpaused" }
 ```
 
 | Error | Code |
@@ -656,7 +688,7 @@ Metrics: `days_left`, `issuer`, `subject`, `not_after`, `not_before`. Uses SNI f
 
 ### GET /api/dashboard/status
 
-Returns all targets with their checks, last status, response time, and 90-day uptime.
+Returns enabled targets with their checks, last status, response time, and 90-day uptime. Disabled targets (`enabled=false`) are filtered out. Paused targets are included with pause metadata.
 
 **Response (200):**
 ```json
@@ -667,6 +699,8 @@ Returns all targets with their checks, last status, response time, and 90-day up
     "host": "192.168.1.1",
     "preferred_check_type": "http",
     "state": "healthy",
+    "paused": false,
+    "paused_at": null,
     "category": "Network",
     "sla_status": "healthy",
     "sla_target": 99.9,
@@ -687,7 +721,10 @@ Returns all targets with their checks, last status, response time, and 90-day up
 ]
 ```
 
-**Notes:** `sla_status` is `""` (empty) and `sla_target` is `0` when the category's SLA threshold is 0 (disabled) or not configured. `sla_status` is also `""` when no check results exist yet for the preferred check.
+**Notes:**
+- Disabled targets (`enabled=false`) are excluded from the response.
+- Paused targets have `state: "paused"`, `paused: true`, and `paused_at` set to an ISO 8601 timestamp.
+- `sla_status` is `""` (empty) and `sla_target` is `0` when the category's SLA threshold is 0 (disabled) or not configured. `sla_status` is also `""` when no check results exist yet for the preferred check.
 
 ### GET /api/dashboard/history/{checkId}
 
@@ -721,7 +758,7 @@ Returns all targets with their checks, last status, response time, and 90-day up
 
 ### GET /api/sla/history
 
-Returns all categories with per-target daily uptime arrays for the preferred check. Categories are returned in fixed order: Network, Security, Physical Security, Key Services, Other, then any unknown categories appended.
+Returns all categories with per-target daily uptime arrays for the preferred check. Disabled targets (`enabled=false`) are filtered out. Categories are returned in fixed order: Network, Security, Physical Security, Key Services, Other, then any unknown categories appended.
 
 **Response (200):**
 ```json

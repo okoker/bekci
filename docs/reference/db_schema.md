@@ -1,6 +1,6 @@
 # Database Schema Reference
 
-**Current schema version:** 14
+**Current schema version:** 15
 **Engine:** SQLite 3 with WAL journal mode
 **Driver:** `github.com/mattn/go-sqlite3` (CGO required)
 
@@ -96,6 +96,7 @@ Key-value config store.
 | operator             | TEXT     | NOT NULL DEFAULT 'AND' *(migration006)* |
 | category             | TEXT     | NOT NULL DEFAULT 'critical' *(migration006, renamed from severity in migration007)* |
 | rule_id              | TEXT     | DEFAULT NULL *(migration006)*       |
+| paused_at            | DATETIME | DEFAULT NULL *(migration015)*       |
 | created_at           | DATETIME | DEFAULT CURRENT_TIMESTAMP           |
 | updated_at           | DATETIME | DEFAULT CURRENT_TIMESTAMP           |
 
@@ -105,6 +106,7 @@ Key-value config store.
 - `rule_id` is a logical FK to `rules(id)` but not enforced at DDL level (nullable, set by app code).
 - `category` was originally `severity` (renamed in migration007). Values remapped in migration010. DDL default is `'critical'` but app code defaults to `'Other'` when empty.
 - `idx_targets_project_id` index from migration002 is orphaned after migration004 dropped the projects table (harmless but unclean).
+- `paused_at` — when NOT NULL, target is paused: scheduler skips checks, dashboard shows "PAUSED" badge.
 
 ### checks
 
@@ -212,6 +214,20 @@ Append-only log of sent alerts. Not purged automatically.
 - `channel_id` and `acknowledged*` columns are legacy from the old alert_channels system (pre-migration011). Current code only writes `rule_id`, `target_id`, `recipient_id`, `alert_type`, `message`, `sent_at`.
 - `alert_type` values: `firing`, `recovery`, `re-alert`
 
+### target_pause_history
+
+*(migration015)*
+
+| Column    | Type     | Constraints                                   |
+|-----------|----------|-----------------------------------------------|
+| id        | INTEGER  | **PK** AUTOINCREMENT                          |
+| target_id | TEXT     | NOT NULL, FK -> targets(id) ON DELETE CASCADE |
+| paused_at | DATETIME | NOT NULL                                      |
+| resumed_at| DATETIME | NULL (open-ended if still paused)             |
+| reason    | TEXT     | NOT NULL DEFAULT ''                           |
+
+**Indexes:** `idx_pause_history_target(target_id)`
+
 ### target_alert_recipients
 
 Junction table: which users receive alerts for which targets.
@@ -243,6 +259,21 @@ Append-only audit trail. Purged by `PurgeOldAuditEntries(days)`.
 **Indexes:**
 - `idx_audit_created` ON audit_logs(created_at DESC)
 
+### target_pause_history
+
+Tracks pause/unpause events for targets. `resumed_at` is NULL while the target is still paused.
+
+| Column     | Type     | Constraints                                   |
+|------------|----------|-----------------------------------------------|
+| id         | INTEGER  | **PK AUTOINCREMENT**                          |
+| target_id  | TEXT     | NOT NULL, FK -> targets(id) ON DELETE CASCADE |
+| paused_at  | DATETIME | NOT NULL                                      |
+| resumed_at | DATETIME | nullable                                      |
+| reason     | TEXT     | NOT NULL DEFAULT ''                           |
+
+**Indexes:**
+- `idx_pause_history_target` ON target_pause_history(target_id)
+
 ---
 
 ## Dropped Tables
@@ -273,8 +304,9 @@ Append-only audit trail. Purged by `PurgeOldAuditEntries(days)`.
 | 012 | migration012   | Backfill rules for targets that have checks but no rule_id. |
 | 013 | migration013   | Seed 5 SLA threshold settings (`sla_network`, `sla_security`, `sla_physical_security`, `sla_key_services`, `sla_other`), all default `99.9`. |
 | 014 | migration014   | Add `condition_group` (INTEGER DEFAULT 0) and `group_operator` (TEXT DEFAULT 'AND') to `rule_conditions`. Backfill `group_operator` from parent rule's `operator`. |
+| 015 | migration015   | Add `paused_at` (DATETIME DEFAULT NULL) to `targets`. Create `target_pause_history` table with index on `target_id`. |
 
-**Note:** Function declarations appear out of order in the source file (e.g. migration005 before migration004, migration008 before migration007), but the `migrations` slice defines the correct sequential execution order: 001 through 014, strictly in order.
+**Note:** Function declarations appear out of order in the source file (e.g. migration005 before migration004, migration008 before migration007), but the `migrations` slice defines the correct sequential execution order: 001 through 015, strictly in order.
 
 ---
 
@@ -292,6 +324,7 @@ targets
   |
   |--< checks            (target_id FK, CASCADE)
   |--< target_alert_recipients  (target_id FK, CASCADE)
+  |--< target_pause_history     (target_id FK, CASCADE)
   |--- rules              (rule_id, logical 1:1 ref, nullable)
 
 checks
@@ -354,6 +387,7 @@ When a rule transitions to `unhealthy`, the system looks up `target_alert_recipi
 | users      | target_alert_recipients  | CASCADE   |
 | targets    | checks                   | CASCADE   |
 | targets    | target_alert_recipients  | CASCADE   |
+| targets    | target_pause_history     | CASCADE   |
 | checks     | check_results            | CASCADE   |
 | checks     | rule_conditions          | CASCADE   |
 | rules      | rule_conditions          | CASCADE   |

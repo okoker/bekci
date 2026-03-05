@@ -70,6 +70,7 @@ func (s *Store) migrate() error {
 		s.migration012,
 		s.migration013,
 		s.migration014,
+		s.migration015,
 	}
 
 	for i := current; i < len(migrations); i++ {
@@ -516,6 +517,23 @@ func (s *Store) migration014() error {
 		UPDATE rule_conditions SET group_operator = (
 			SELECT r.operator FROM rules r WHERE r.id = rule_conditions.rule_id
 		)
+	`)
+	return err
+}
+
+// migration015 adds paused_at to targets and creates target_pause_history table.
+func (s *Store) migration015() error {
+	_, err := s.db.Exec(`
+		ALTER TABLE targets ADD COLUMN paused_at DATETIME DEFAULT NULL;
+
+		CREATE TABLE target_pause_history (
+			id         INTEGER PRIMARY KEY AUTOINCREMENT,
+			target_id  TEXT NOT NULL REFERENCES targets(id) ON DELETE CASCADE,
+			paused_at  DATETIME NOT NULL,
+			resumed_at DATETIME,
+			reason     TEXT NOT NULL DEFAULT ''
+		);
+		CREATE INDEX idx_pause_history_target ON target_pause_history(target_id);
 	`)
 	return err
 }
