@@ -284,11 +284,7 @@ async function loadAllUsers() {
 }
 
 async function saveRecipients(targetId) {
-  try {
-    await api.put(`/targets/${targetId}/recipients`, { user_ids: selectedRecipients.value })
-  } catch (e) {
-    error.value = e.response?.data?.error || 'Failed to save recipients'
-  }
+  await api.put(`/targets/${targetId}/recipients`, { user_ids: selectedRecipients.value })
 }
 
 function toggleRecipient(userId) {

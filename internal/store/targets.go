@@ -373,6 +373,7 @@ func (s *Store) UpdateTargetWithConditions(id, name, host, description string, e
 		checkID := c.CheckID
 		if checkID != "" {
 			// Update existing check — enforce target ownership
+			// Note: check type is immutable after creation (by design). To change type, delete and re-add.
 			res, err := tx.Exec(`
 				UPDATE checks SET name = ?, config = ?, interval_s = ?, enabled = 1, updated_at = ? WHERE id = ? AND target_id = ?
 			`, c.CheckName, c.Config, c.IntervalS, now, checkID, id)

@@ -52,6 +52,8 @@ func Load(path string) (*Config, error) {
 		}
 		// Config file is optional — env vars can provide everything
 	} else {
+		// Intentionally non-strict: unknown YAML fields are ignored to avoid
+		// breaking existing deployments with stale or forward-looking keys.
 		if err := yaml.Unmarshal(data, cfg); err != nil {
 			return nil, fmt.Errorf("parsing config: %w", err)
 		}
@@ -132,8 +134,8 @@ func loadOrGenerateSecret(dbPath string) string {
 	// Generate random 32-byte secret
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
-		// Fallback — should never happen
-		return "bekci-fallback-secret-change-me"
+		// System RNG broken — cannot generate secure JWT secret, refuse to start
+		panic(fmt.Sprintf("crypto/rand failed: %v — cannot generate JWT secret", err))
 	}
 	secret := hex.EncodeToString(b)
 

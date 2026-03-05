@@ -403,6 +403,8 @@ Returns full target detail with conditions, state, and recipient IDs.
 
 Smart-diffs conditions: existing checks with `check_id` are updated, new conditions (no `check_id`) create new checks, missing checks are deleted.
 
+**Note:** A check's `type` is immutable after creation. To change a check's type (e.g. http to ping), delete the condition and add a new one with the desired type. The `check_type` field in update payloads for existing checks is ignored.
+
 **Request:** Same structure as POST /api/targets.
 
 Conditions can include `check_id` to update existing checks:
