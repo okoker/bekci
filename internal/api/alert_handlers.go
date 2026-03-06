@@ -105,3 +105,38 @@ func (s *Server) handleTestEmail(w http.ResponseWriter, r *http.Request) {
 	s.audit(r, "test_email", "settings", "", "to="+user.Email, "success")
 	writeJSON(w, http.StatusOK, map[string]string{"message": "test email sent to " + user.Email})
 }
+
+func (s *Server) handleTestSignal(w http.ResponseWriter, r *http.Request) {
+	if s.alerter == nil {
+		writeError(w, http.StatusServiceUnavailable, "alerter not initialized")
+		return
+	}
+
+	claims := getClaims(r)
+	if claims == nil {
+		writeError(w, http.StatusUnauthorized, "not authenticated")
+		return
+	}
+
+	var req struct {
+		Phone string `json:"phone"`
+	}
+	if err := readJSON(w, r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.Phone == "" {
+		s.audit(r, "test_signal", "settings", "", "no phone provided", "failure")
+		writeError(w, http.StatusBadRequest, "phone number is required")
+		return
+	}
+
+	if err := s.alerter.SendTestSignal(req.Phone); err != nil {
+		s.audit(r, "test_signal", "settings", "", "to="+req.Phone+" error="+err.Error(), "failure")
+		writeError(w, http.StatusInternalServerError, "failed to send test signal: "+err.Error())
+		return
+	}
+
+	s.audit(r, "test_signal", "settings", "", "to="+req.Phone, "success")
+	writeJSON(w, http.StatusOK, map[string]string{"message": "test signal sent to " + req.Phone})
+}

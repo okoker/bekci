@@ -1,8 +1,10 @@
 package alerter
 
 import (
+	"errors"
 	"log/slog"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/bekci/internal/store"
@@ -106,9 +108,36 @@ func (a *AlertService) Dispatch(ruleID, oldState, newState string) {
 		}
 	}
 
-	// Signal: stub for future
+	// Signal
 	if method == "signal" || method == "email+signal" {
-		slog.Debug("Alerter: signal alerting not yet implemented")
+		sigURL, _ := a.store.GetSetting("signal_api_url")
+		sigNumber, _ := a.store.GetSetting("signal_number")
+		sigUser, _ := a.store.GetSetting("signal_username")
+		sigPass, _ := a.store.GetSetting("signal_password")
+
+		if sigURL == "" || sigUser == "" || sigPass == "" {
+			slog.Warn("Alerter: signal alerting configured but signal settings incomplete")
+		} else {
+			msg := RenderSignalAlert(target.Name, target.Host, newState, nil, now)
+
+			for _, user := range recipients {
+				if user.Phone == "" {
+					continue
+				}
+				err := SendSignal(sigURL, sigUser, sigPass, sigNumber, []string{user.Phone}, msg)
+				if err != nil {
+					slog.Error("Alerter: failed to send signal",
+						"target", target.Name, "recipient", user.Username, "error", err)
+				} else {
+					slog.Info("Alerter: signal sent",
+						"target", target.Name, "recipient", user.Username, "type", alertType)
+				}
+				summary := "[Signal] " + msg[:min(len(msg), 80)]
+				if err := a.store.LogAlert(targetID, ruleID, user.ID, alertType, summary); err != nil {
+					slog.Error("Alerter: failed to log signal alert", "target_id", targetID, "rule_id", ruleID, "error", err)
+				}
+			}
+		}
 	}
 }
 
@@ -175,6 +204,37 @@ func (a *AlertService) CheckRealerts() {
 				}
 			}
 		}
+
+		if method == "signal" || method == "email+signal" {
+			sigURL, _ := a.store.GetSetting("signal_api_url")
+			sigNumber, _ := a.store.GetSetting("signal_number")
+			sigUser, _ := a.store.GetSetting("signal_username")
+			sigPass, _ := a.store.GetSetting("signal_password")
+
+			if sigURL != "" && sigUser != "" && sigPass != "" {
+				msg := RenderSignalAlert(target.Name, target.Host, "unhealthy", nil, now)
+				msg = strings.Replace(msg, "[ALERT]", "[RE-ALERT]", 1)
+				msg = strings.Replace(msg, "\U0001F534", "\U0001F7E0", 1) // red -> orange circle
+
+				for _, user := range recipients {
+					if user.Phone == "" {
+						continue
+					}
+					err := SendSignal(sigURL, sigUser, sigPass, sigNumber, []string{user.Phone}, msg)
+					if err != nil {
+						slog.Error("Alerter: re-alert signal failed",
+							"target", target.Name, "recipient", user.Username, "error", err)
+					} else {
+						slog.Info("Alerter: re-alert signal sent",
+							"target", target.Name, "recipient", user.Username)
+					}
+					summary := "[Signal RE-ALERT] " + target.Name
+					if err := a.store.LogAlert(fr.TargetID, fr.RuleID, user.ID, "re-alert", summary); err != nil {
+						slog.Error("Alerter: failed to log signal re-alert", "target_id", fr.TargetID, "rule_id", fr.RuleID, "error", err)
+					}
+				}
+			}
+		}
 	}
 }
 
@@ -200,4 +260,22 @@ func (a *AlertService) SendTestEmail(toEmail string) error {
 </html>`
 
 	return SendEmail(apiKey, fromEmail, []string{toEmail}, subject, html)
+}
+
+// ErrSignalNotConfigured is returned when Signal alerting settings are incomplete.
+var ErrSignalNotConfigured = errors.New("signal alerting not configured: set signal_api_url, signal_username, and signal_password")
+
+// SendTestSignal sends a test Signal message to verify the configuration.
+func (a *AlertService) SendTestSignal(toPhone string) error {
+	sigURL, _ := a.store.GetSetting("signal_api_url")
+	sigNumber, _ := a.store.GetSetting("signal_number")
+	sigUser, _ := a.store.GetSetting("signal_username")
+	sigPass, _ := a.store.GetSetting("signal_password")
+
+	if sigURL == "" || sigUser == "" || sigPass == "" {
+		return ErrSignalNotConfigured
+	}
+
+	msg := "\u2705 [Bekci] Test Signal message.\nYour Signal alerting is configured correctly."
+	return SendSignal(sigURL, sigUser, sigPass, sigNumber, []string{toPhone}, msg)
 }

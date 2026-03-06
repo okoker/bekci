@@ -64,7 +64,7 @@ async function changePassword() {
         <div class="form-group">
           <label>Phone</label>
           <input v-model="phone" type="tel" placeholder="+1234567890" />
-          <span class="text-muted" style="font-size:0.8rem;">For Signal alerts (coming soon)</span>
+          <span class="text-muted" style="font-size:0.8rem;">For Signal alerts</span>
         </div>
         <div v-if="profileErr" class="error-msg">{{ profileErr }}</div>
         <div v-if="profileMsg" class="success-msg" @click="profileMsg = ''">{{ profileMsg }}</div>

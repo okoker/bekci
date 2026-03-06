@@ -71,6 +71,7 @@ func (s *Store) migrate() error {
 		s.migration013,
 		s.migration014,
 		s.migration015,
+		s.migration016,
 	}
 
 	for i := current; i < len(migrations); i++ {
@@ -534,6 +535,17 @@ func (s *Store) migration015() error {
 			reason     TEXT NOT NULL DEFAULT ''
 		);
 		CREATE INDEX idx_pause_history_target ON target_pause_history(target_id);
+	`)
+	return err
+}
+
+// migration016 adds Signal alerting settings.
+func (s *Store) migration016() error {
+	_, err := s.db.Exec(`
+		INSERT OR IGNORE INTO settings (key, value) VALUES ('signal_api_url',  'http://10.0.9.21:55555/v2/send');
+		INSERT OR IGNORE INTO settings (key, value) VALUES ('signal_number',   '+908502851580');
+		INSERT OR IGNORE INTO settings (key, value) VALUES ('signal_username', '');
+		INSERT OR IGNORE INTO settings (key, value) VALUES ('signal_password', '');
 	`)
 	return err
 }

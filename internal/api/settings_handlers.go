@@ -19,6 +19,11 @@ var knownSettings = map[string]bool{
 	"alert_from_email": true,
 	"alert_cooldown_s": true,
 	"alert_realert_s":  true,
+	// Signal settings
+	"signal_api_url":  true,
+	"signal_number":   true,
+	"signal_username": true,
+	"signal_password": true,
 	// SLA thresholds (per category, float 0–100)
 	"sla_network":           true,
 	"sla_security":          true,
@@ -37,6 +42,10 @@ var stringSettings = map[string]bool{
 	"alert_method":     true,
 	"resend_api_key":   true,
 	"alert_from_email": true,
+	"signal_api_url":   true,
+	"signal_number":    true,
+	"signal_username":  true,
+	"signal_password":  true,
 }
 
 // Zero-allowed integer settings (allow 0 as a valid value, e.g. to disable re-alerting).
@@ -79,6 +88,9 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	if v, ok := settings["resend_api_key"]; ok && v != "" {
 		settings["resend_api_key"] = "••••••••"
 	}
+	if v, ok := settings["signal_password"]; ok && v != "" {
+		settings["signal_password"] = "••••••••"
+	}
 	writeJSON(w, http.StatusOK, settings)
 }
 
@@ -108,8 +120,8 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		} else if key == "alert_method" {
-			if val != "" && val != "email" && val != "email+signal" {
-				writeError(w, http.StatusBadRequest, "alert_method must be '', 'email', or 'email+signal'")
+			if val != "" && val != "email" && val != "signal" && val != "email+signal" {
+				writeError(w, http.StatusBadRequest, "alert_method must be '', 'email', 'signal', or 'email+signal'")
 				return
 			}
 		} else if stringSettings[key] {
@@ -138,9 +150,12 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Don't overwrite API key with the masked value
+	// Don't overwrite masked values
 	if v, ok := req["resend_api_key"]; ok && v == "••••••••" {
 		delete(req, "resend_api_key")
+	}
+	if v, ok := req["signal_password"]; ok && v == "••••••••" {
+		delete(req, "signal_password")
 	}
 
 	if err := s.store.SetSettings(req); err != nil {

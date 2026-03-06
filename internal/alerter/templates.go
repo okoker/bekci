@@ -23,6 +23,33 @@ func RenderEmailAlert(targetName, targetHost, state string, checks []string, ts 
 	return
 }
 
+// RenderSignalAlert renders a plain-text Signal message for a firing or recovery alert.
+func RenderSignalAlert(targetName, targetHost, state string, checks []string, ts time.Time) string {
+	timestamp := ts.UTC().Format("02/01/2006 15:04 UTC")
+
+	var icon, label string
+	if state == "unhealthy" {
+		icon = "\U0001F534" // red circle
+		label = "ALERT"
+	} else {
+		icon = "\U0001F7E2" // green circle
+		label = "RECOVERED"
+	}
+
+	status := "DOWN"
+	if state != "unhealthy" {
+		status = "UP"
+	}
+
+	msg := fmt.Sprintf("%s [%s] %s is %s\nHost: %s\nTime: %s", icon, label, targetName, status, targetHost, timestamp)
+
+	if len(checks) > 0 {
+		msg += "\nChecks: " + strings.Join(checks, ", ")
+	}
+
+	return msg
+}
+
 func renderEmailHTML(targetName, targetHost, stateLabel, color string, checks []string, timestamp string) string {
 	var checksHTML string
 	if len(checks) > 0 {

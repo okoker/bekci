@@ -222,12 +222,19 @@ const alertSuccess = ref('')
 const alertSaving = ref(false)
 const alertTesting = ref(false)
 
+const signalTesting = ref(false)
+const signalTestPhone = ref('')
+
 const alertForm = ref({
   alert_method: 'email',
   resend_api_key: '',
   alert_from_email: '',
   alert_cooldown_s: '1800',
   alert_realert_s: '3600',
+  signal_api_url: '',
+  signal_number: '',
+  signal_username: '',
+  signal_password: '',
 })
 
 function loadAlertSettings() {
@@ -239,6 +246,14 @@ function loadAlertSettings() {
     alert_from_email: s.alert_from_email || '',
     alert_cooldown_s: s.alert_cooldown_s || '1800',
     alert_realert_s: s.alert_realert_s || '3600',
+    signal_api_url: s.signal_api_url || '',
+    signal_number: s.signal_number || '',
+    signal_username: s.signal_username || '',
+    signal_password: s.signal_password || '',
+  }
+  // Pre-populate test phone from logged-in user's profile
+  if (!signalTestPhone.value) {
+    signalTestPhone.value = auth.user?.phone || ''
   }
 }
 
@@ -253,6 +268,10 @@ async function saveAlertSettings() {
       alert_from_email: alertForm.value.alert_from_email,
       alert_cooldown_s: String(alertForm.value.alert_cooldown_s),
       alert_realert_s: String(alertForm.value.alert_realert_s),
+      signal_api_url: alertForm.value.signal_api_url,
+      signal_number: alertForm.value.signal_number,
+      signal_username: alertForm.value.signal_username,
+      signal_password: alertForm.value.signal_password,
     })
     alertSuccess.value = 'Alert settings saved'
     // Reload to get masked API key
@@ -276,6 +295,24 @@ async function sendTestEmail() {
     alertError.value = e.response?.data?.error || 'Failed to send test email'
   } finally {
     alertTesting.value = false
+  }
+}
+
+async function sendTestSignal() {
+  alertError.value = ''
+  alertSuccess.value = ''
+  if (!signalTestPhone.value) {
+    alertError.value = 'Enter a phone number to send the test to'
+    return
+  }
+  signalTesting.value = true
+  try {
+    const { data } = await api.post('/settings/test-signal', { phone: signalTestPhone.value })
+    alertSuccess.value = data.message || 'Test signal sent'
+  } catch (e) {
+    alertError.value = e.response?.data?.error || 'Failed to send test signal'
+  } finally {
+    signalTesting.value = false
   }
 }
 
@@ -744,28 +781,18 @@ onUnmounted(() => {
       <div v-if="alertError" class="error-msg">{{ alertError }}</div>
       <div v-if="alertSuccess" class="success-msg" @click="alertSuccess = ''">{{ alertSuccess }}</div>
 
-      <div class="card">
-        <h3>Email Alerting</h3>
-        <p class="text-muted">Configure alerts sent when targets go down or recover. Uses the Resend API.</p>
-
-        <form @submit.prevent="saveAlertSettings">
+      <form @submit.prevent="saveAlertSettings">
+        <!-- General alerting settings -->
+        <div class="card" style="margin-bottom: 1rem;">
+          <h3>General</h3>
           <div class="form-group">
             <label>Alert Method</label>
             <select v-model="alertForm.alert_method">
+              <option value="">Disabled</option>
               <option value="email">Email</option>
-              <option value="signal">Signal (coming soon)</option>
+              <option value="signal">Signal</option>
               <option value="email+signal">Email + Signal</option>
             </select>
-          </div>
-
-          <div class="form-group">
-            <label>Resend API Key</label>
-            <input v-model="alertForm.resend_api_key" type="password" placeholder="re_..." autocomplete="off" />
-          </div>
-
-          <div class="form-group">
-            <label>From Email Address</label>
-            <input v-model="alertForm.alert_from_email" type="email" placeholder="alerts@yourdomain.com" />
           </div>
 
           <div class="form-row">
@@ -780,17 +807,70 @@ onUnmounted(() => {
               <span class="text-muted input-hint">Repeat alert if still down (0 = disabled)</span>
             </div>
           </div>
+        </div>
+
+        <!-- Email settings -->
+        <div class="card" style="margin-bottom: 1rem;">
+          <h3>Email Alerting</h3>
+          <p class="text-muted">Uses the Resend API. Requires a valid API key and sender address.</p>
+
+          <div class="form-group">
+            <label>Resend API Key</label>
+            <input v-model="alertForm.resend_api_key" type="password" placeholder="re_..." autocomplete="off" />
+          </div>
+
+          <div class="form-group">
+            <label>From Email Address</label>
+            <input v-model="alertForm.alert_from_email" type="email" placeholder="alerts@yourdomain.com" />
+          </div>
 
           <div class="form-actions">
-            <button type="submit" class="btn btn-primary" :disabled="alertSaving">
-              {{ alertSaving ? 'Saving...' : 'Save' }}
-            </button>
             <button type="button" class="btn" :disabled="alertTesting" @click="sendTestEmail">
               {{ alertTesting ? 'Sending...' : 'Send Test Email' }}
             </button>
           </div>
-        </form>
-      </div>
+        </div>
+
+        <!-- Signal settings -->
+        <div class="card" style="margin-bottom: 1rem;">
+          <h3>Signal Alerting</h3>
+          <p class="text-muted">Uses a Signal REST API gateway. Requires gateway URL and credentials.</p>
+
+          <div class="form-group">
+            <label>Send Endpoint URL</label>
+            <input v-model="alertForm.signal_api_url" type="text" placeholder="http://10.0.9.21:55555/v2/send" />
+          </div>
+
+          <div class="form-group">
+            <label>Sender Number</label>
+            <input v-model="alertForm.signal_number" type="text" placeholder="+908502851580" />
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Username</label>
+              <input v-model="alertForm.signal_username" type="text" autocomplete="off" />
+            </div>
+            <div class="form-group">
+              <label>Password</label>
+              <input v-model="alertForm.signal_password" type="password" autocomplete="off" />
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <input v-model="signalTestPhone" type="tel" placeholder="+1234567890" class="test-phone-input" />
+            <button type="button" class="btn" :disabled="signalTesting || !signalTestPhone" @click="sendTestSignal">
+              {{ signalTesting ? 'Sending...' : 'Send Test Signal' }}
+            </button>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary" :disabled="alertSaving">
+            {{ alertSaving ? 'Saving...' : 'Save All' }}
+          </button>
+        </div>
+      </form>
     </div>
 
     <!-- ── Fail2Ban Tab ── -->
@@ -1120,6 +1200,11 @@ onUnmounted(() => {
   display: flex;
   gap: 0.5rem;
   margin-top: 1rem;
+  align-items: center;
+}
+.test-phone-input {
+  width: 180px;
+  flex-shrink: 0;
 }
 
 /* ── Fail2Ban tab ── */
