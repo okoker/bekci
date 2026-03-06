@@ -173,6 +173,7 @@ const userShowResetPw = ref(null)
 const userShowEdit = ref(null)
 const userError = ref('')
 const userSuccess = ref('')
+const showPrivileges = ref(false)
 const userForm = ref({ username: '', email: '', password: '', role: 'operator' })
 const resetPwForm = ref({ password: '' })
 const editUserForm = ref({ email: '', phone: '', role: '' })
@@ -695,8 +696,15 @@ onUnmounted(() => {
         </table>
       </div>
 
-      <div class="card privileges-card">
-        <h3>Role Privileges</h3>
+      <div class="privileges-bar">
+        <button type="button" class="privileges-btn" @click="showPrivileges = !showPrivileges">
+          <span class="privileges-btn-icon">?</span>
+          {{ showPrivileges ? 'Hide privileges' : 'Role privileges' }}
+          <span class="privileges-chevron" :class="{ open: showPrivileges }">&#9662;</span>
+        </button>
+      </div>
+
+      <div v-if="showPrivileges" class="card privileges-card">
         <table class="privileges-table">
           <thead>
             <tr>
@@ -1190,13 +1198,51 @@ onUnmounted(() => {
 .users-header {
   margin-bottom: 0.75rem;
 }
-.privileges-card {
-  margin-top: 1.5rem;
-  opacity: 0.85;
+.privileges-bar {
+  display: flex;
+  justify-content: center;
+  padding: 1rem 0 0.5rem;
 }
-.privileges-card h3 {
-  margin-bottom: 0.75rem;
-  font-size: 0.95rem;
+.privileges-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 1rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 20px;
+  background: #fff;
+  color: #64748b;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.privileges-btn:hover {
+  border-color: #818cf8;
+  color: #4338ca;
+  background: #eef2ff;
+}
+.privileges-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 50%;
+  background: #e0e7ff;
+  color: #4338ca;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+.privileges-chevron {
+  font-size: 0.6rem;
+  transition: transform 0.2s;
+}
+.privileges-chevron.open {
+  transform: rotate(180deg);
+}
+.privileges-card {
+  opacity: 0.85;
 }
 .privileges-table {
   font-size: 0.85rem;
