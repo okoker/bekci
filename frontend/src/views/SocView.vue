@@ -289,6 +289,10 @@ onUnmounted(() => {
 
     <div v-else class="soc-grid">
       <div v-for="target in filteredAndSortedTargets()" :key="target.id" class="soc-card" :class="{ 'soc-card-down': hasDownCheckTarget(target), 'soc-card-paused': isTargetPaused(target) }">
+        <div class="soc-hover-label">
+          <span class="soc-hover-name">{{ target.name }}</span>
+          <span class="soc-hover-host">{{ target.host }}</span>
+        </div>
         <div class="soc-card-header">
           <span class="soc-target-name">{{ target.name }}</span>
           <span class="soc-host">{{ target.host }}</span>
@@ -412,6 +416,40 @@ onUnmounted(() => {
   border-radius: 8px;
   padding: 0.6rem 0.8rem;
   min-width: 0;
+  position: relative;
+}
+
+/* Hover overlay: full hostname in x-large font */
+.soc-hover-label {
+  display: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid #475569;
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  pointer-events: none;
+}
+.soc-card:hover .soc-hover-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.soc-hover-name {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.2;
+  word-break: break-word;
+}
+.soc-hover-host {
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: #94a3b8;
+  word-break: break-all;
 }
 .soc-card-down {
   border-color: #f56565;
