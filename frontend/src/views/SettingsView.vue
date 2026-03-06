@@ -37,6 +37,10 @@ const generalKeys = new Set(Object.keys(labels))
 async function loadSettings() {
   try {
     const { data } = await api.get('/settings')
+    // Default SLA keys to "0" if missing so inputs aren't blank
+    for (const s of slaKeys) {
+      if (!(s.key in data)) data[s.key] = '0'
+    }
     settings.value = data
   } catch (e) {
     error.value = 'Failed to load settings'
@@ -772,17 +776,15 @@ onUnmounted(() => {
     <div v-if="activeTab === 'backup' && auth.isAdmin">
       <div v-if="error" class="error-msg">{{ error }}</div>
 
-      <div class="card" style="margin-bottom: 1rem;">
+      <div class="card backup-card" style="margin-bottom: 1rem;">
         <h3>Backup</h3>
-        <p class="text-muted">Download a snapshot of all configuration data (users, targets, checks, rules, settings). Historical check results are not included.</p>
-        <div class="backup-actions">
-          <button class="btn btn-primary" @click="downloadBackup">Download Backup</button>
-        </div>
+        <p class="text-muted" style="margin: 0 0 1rem;">Download a snapshot of all configuration data (users, targets, checks, rules, settings). Historical check results are not included.</p>
+        <button class="btn btn-primary" @click="downloadBackup">Download Backup</button>
       </div>
 
-      <div class="card">
+      <div class="card backup-card">
         <h3>Restore</h3>
-        <p class="text-muted">Upload a previously exported backup file to replace all current configuration. This is a destructive operation.</p>
+        <p class="text-muted" style="margin: 0 0 1rem;">Upload a previously exported backup file to replace all current configuration. This is a destructive operation.</p>
 
         <div class="restore-section">
           <label class="file-label">
@@ -1015,12 +1017,9 @@ onUnmounted(() => {
   border-bottom-color: #ea580c;
 }
 
-/* ── General tab ── */
+/* ── Backup & Restore ── */
 .backup-card h3 {
-  margin: 0 0 0.5rem;
-}
-.backup-actions {
-  margin: 1rem 0;
+  margin: 0 0 0.25rem;
 }
 .divider {
   border: none;
@@ -1030,6 +1029,7 @@ onUnmounted(() => {
 .restore-section {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 0.75rem;
 }
 .file-label {
@@ -1057,6 +1057,7 @@ onUnmounted(() => {
   padding: 0.5rem 0.75rem;
   border-radius: 6px;
   font-size: 0.875rem;
+  align-self: stretch;
 }
 .btn-danger {
   background: #dc2626;
