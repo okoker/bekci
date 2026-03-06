@@ -241,7 +241,7 @@ Junction table: which users receive alerts for which targets.
 
 ### audit_logs
 
-Append-only audit trail. Purged by `PurgeOldAuditEntries(days)`.
+Append-only audit trail. Purged by `PurgeOldAuditEntries(days)` (runs at startup + daily).
 
 | Column        | Type     | Constraints               |
 |---------------|----------|---------------------------|

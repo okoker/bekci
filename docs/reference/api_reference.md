@@ -979,7 +979,11 @@ Update one or more settings. Only known keys are accepted. Sending masked API ke
 }
 ```
 
-**Audit actions:** `login`, `login_failed`, `logout`, `create_user`, `update_user`, `suspend_user`, `activate_user`, `reset_password`, `change_password`, `change_password_failed`, `update_profile`, `create_target`, `update_target`, `delete_target`, `set_alert_recipients`, `update_settings`, `restore_backup`.
+**Audit actions:** `login`, `login_failed`, `logout`, `create_user`, `update_user`, `suspend_user`, `activate_user`, `reset_password`, `change_password`, `change_password_failed`, `update_profile`, `create_target`, `update_target`, `delete_target`, `pause_target`, `unpause_target`, `set_alert_recipients`, `update_settings`, `restore_backup`, `export_backup`, `run_check`, `test_email`.
+
+**Status values:** `success`, `failure`. All mutating actions log both success and failure (with detail). Login and change_password also log dedicated failure actions (`login_failed`, `change_password_failed`).
+
+**IP address:** All audit entries include the client's source IP. Behind a reverse proxy, `X-Real-IP` header is used when RemoteAddr is loopback.
 
 ---
 
