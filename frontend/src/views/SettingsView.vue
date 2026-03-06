@@ -39,7 +39,7 @@ async function loadSettings() {
     const { data } = await api.get('/settings')
     // Default SLA keys to "0" if missing so inputs aren't blank
     for (const s of slaKeys) {
-      if (!(s.key in data)) data[s.key] = '0'
+      if (!(s.key in data)) data[s.key] = '99.5'
     }
     settings.value = data
   } catch (e) {
@@ -1066,14 +1066,6 @@ onUnmounted(() => {
 }
 .btn-danger:hover {
   background: #b91c1c;
-}
-.btn-restore {
-  background: #7c3aed;
-  color: #fff;
-  border-color: #7c3aed;
-}
-.btn-restore:hover {
-  background: #6d28d9;
 }
 
 /* ── Restore confirmation modal ── */
