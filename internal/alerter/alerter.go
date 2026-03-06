@@ -37,11 +37,9 @@ func (a *AlertService) Dispatch(ruleID, oldState, newState string) {
 	apiKey, _ := a.store.GetSetting("resend_api_key")
 	fromEmail, _ := a.store.GetSetting("alert_from_email")
 
-	if method == "email" || method == "email+signal" {
-		if apiKey == "" || fromEmail == "" {
-			slog.Warn("Alerter: email alerting configured but resend_api_key or alert_from_email is empty")
-			return
-		}
+	if method == "email" && (apiKey == "" || fromEmail == "") {
+		slog.Warn("Alerter: email alerting configured but resend_api_key or alert_from_email is empty")
+		return
 	}
 
 	// Check cooldown (skip for recovery alerts)
@@ -86,7 +84,7 @@ func (a *AlertService) Dispatch(ruleID, oldState, newState string) {
 	now := time.Now()
 
 	// Send emails
-	if method == "email" || method == "email+signal" {
+	if (method == "email" || method == "email+signal") && apiKey != "" && fromEmail != "" {
 		subject, htmlBody := RenderEmailAlert(target.Name, target.Host, newState, nil, now)
 
 		for _, user := range recipients {
@@ -115,7 +113,7 @@ func (a *AlertService) Dispatch(ruleID, oldState, newState string) {
 		sigUser, _ := a.store.GetSetting("signal_username")
 		sigPass, _ := a.store.GetSetting("signal_password")
 
-		if sigURL == "" || sigUser == "" || sigPass == "" {
+		if sigURL == "" || sigNumber == "" || sigUser == "" || sigPass == "" {
 			slog.Warn("Alerter: signal alerting configured but signal settings incomplete")
 		} else {
 			msg := RenderSignalAlert(target.Name, target.Host, newState, nil, now)
@@ -155,7 +153,7 @@ func (a *AlertService) CheckRealerts() {
 	}
 	apiKey, _ := a.store.GetSetting("resend_api_key")
 	fromEmail, _ := a.store.GetSetting("alert_from_email")
-	if (method == "email" || method == "email+signal") && (apiKey == "" || fromEmail == "") {
+	if method == "email" && (apiKey == "" || fromEmail == "") {
 		return
 	}
 
@@ -183,7 +181,7 @@ func (a *AlertService) CheckRealerts() {
 
 		now := time.Now()
 
-		if method == "email" || method == "email+signal" {
+		if (method == "email" || method == "email+signal") && apiKey != "" && fromEmail != "" {
 			subject, htmlBody := RenderEmailAlert(target.Name, target.Host, "unhealthy", nil, now)
 			subject = "[RE-ALERT] " + subject[8:] // replace [ALERT] with [RE-ALERT]
 
@@ -211,7 +209,7 @@ func (a *AlertService) CheckRealerts() {
 			sigUser, _ := a.store.GetSetting("signal_username")
 			sigPass, _ := a.store.GetSetting("signal_password")
 
-			if sigURL != "" && sigUser != "" && sigPass != "" {
+			if sigURL != "" && sigNumber != "" && sigUser != "" && sigPass != "" {
 				msg := RenderSignalAlert(target.Name, target.Host, "unhealthy", nil, now)
 				msg = strings.Replace(msg, "[ALERT]", "[RE-ALERT]", 1)
 				msg = strings.Replace(msg, "\U0001F534", "\U0001F7E0", 1) // red -> orange circle
@@ -272,7 +270,7 @@ func (a *AlertService) SendTestSignal(toPhone string) error {
 	sigUser, _ := a.store.GetSetting("signal_username")
 	sigPass, _ := a.store.GetSetting("signal_password")
 
-	if sigURL == "" || sigUser == "" || sigPass == "" {
+	if sigURL == "" || sigNumber == "" || sigUser == "" || sigPass == "" {
 		return ErrSignalNotConfigured
 	}
 

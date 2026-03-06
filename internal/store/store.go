@@ -542,8 +542,8 @@ func (s *Store) migration015() error {
 // migration016 adds Signal alerting settings.
 func (s *Store) migration016() error {
 	_, err := s.db.Exec(`
-		INSERT OR IGNORE INTO settings (key, value) VALUES ('signal_api_url',  'http://10.0.9.21:55555/v2/send');
-		INSERT OR IGNORE INTO settings (key, value) VALUES ('signal_number',   '+908502851580');
+		INSERT OR IGNORE INTO settings (key, value) VALUES ('signal_api_url',  '');
+		INSERT OR IGNORE INTO settings (key, value) VALUES ('signal_number',   '');
 		INSERT OR IGNORE INTO settings (key, value) VALUES ('signal_username', '');
 		INSERT OR IGNORE INTO settings (key, value) VALUES ('signal_password', '');
 	`)
