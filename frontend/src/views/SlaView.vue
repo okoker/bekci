@@ -259,30 +259,46 @@ onUnmounted(() => {
     <!-- Insights card -->
     <div class="insights-card">
       <div class="insights-row">
-        <div class="insight-item">
-          <span class="insight-value">{{ insights.totalHosts }}</span>
-          <span class="insight-label">Hosts Monitored</span>
-        </div>
-        <div class="insight-item" :class="{ 'insight-warn': insights.failingHosts > 0 }">
-          <span class="insight-value">{{ insights.failingHosts }}</span>
-          <span class="insight-label">Not Meeting SLA</span>
-        </div>
-        <div class="insight-divider"></div>
-        <div class="insight-item insight-avg">
-          <span class="insight-label">All</span>
-          <span class="insight-value insight-pct">{{ insights.allAvg !== null ? insights.allAvg.toFixed(1) + '%' : '—' }}</span>
-        </div>
-        <template v-for="g in insights.groupAvgs" :key="g.name">
-          <div class="insight-item insight-avg">
-            <span class="insight-label">{{ g.name }}</span>
-            <span class="insight-value insight-pct">{{ g.avg !== null ? g.avg.toFixed(1) + '%' : '—' }}</span>
+        <!-- Left: key stats -->
+        <div class="insights-stats">
+          <div class="insight-stat">
+            <span class="insight-stat-value">{{ insights.totalHosts }}</span>
+            <span class="insight-stat-label">Hosts Monitored</span>
           </div>
-        </template>
+          <div class="insight-stat" :class="{ 'insight-warn': insights.failingHosts > 0 }">
+            <span class="insight-stat-value">{{ insights.failingHosts }}</span>
+            <span class="insight-stat-label">Not Meeting SLA</span>
+          </div>
+        </div>
+
         <div class="insight-divider"></div>
-        <div class="insight-item">
-          <span class="insight-value">{{ pauseStats.count }}</span>
-          <span class="insight-label">Planned Work <span class="insight-sub">({{ new Date().toLocaleDateString('en-GB', { month: 'short' }) }})</span></span>
-          <span v-if="pauseStats.affected_hosts > 0" class="insight-sub">{{ pauseStats.affected_hosts }} host{{ pauseStats.affected_hosts !== 1 ? 's' : '' }} affected</span>
+
+        <!-- Center: SLA averages as mini cards -->
+        <div class="insights-averages">
+          <span class="insights-averages-title">90-Day Averages</span>
+          <div class="insights-avg-grid">
+            <div class="avg-card avg-card-all">
+              <span class="avg-card-label">All</span>
+              <span class="avg-card-value">{{ insights.allAvg !== null ? insights.allAvg.toFixed(1) + '%' : '—' }}</span>
+            </div>
+            <template v-for="g in insights.groupAvgs" :key="g.name">
+              <div class="avg-card">
+                <span class="avg-card-label">{{ g.name }}</span>
+                <span class="avg-card-value">{{ g.avg !== null ? g.avg.toFixed(1) + '%' : '—' }}</span>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <div class="insight-divider"></div>
+
+        <!-- Right: planned work -->
+        <div class="insights-pause">
+          <div class="insight-stat">
+            <span class="insight-stat-value">{{ pauseStats.count }}</span>
+            <span class="insight-stat-label">Planned Work <span class="insight-sub">({{ new Date().toLocaleDateString('en-GB', { month: 'short' }) }})</span></span>
+            <span v-if="pauseStats.affected_hosts > 0" class="insight-sub">{{ pauseStats.affected_hosts }} host{{ pauseStats.affected_hosts !== 1 ? 's' : '' }} affected</span>
+          </div>
         </div>
       </div>
     </div>
@@ -424,42 +440,46 @@ onUnmounted(() => {
 .insights-card {
   background: #fff;
   border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 12px 20px;
+  border-radius: 10px;
+  padding: 16px 24px;
   margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 .insights-row {
   display: flex;
   align-items: center;
-  gap: 1.25rem;
+  gap: 24px;
   flex-wrap: wrap;
 }
-.insight-item {
+
+/* Left stats section */
+.insights-stats {
+  display: flex;
+  gap: 24px;
+  flex-shrink: 0;
+}
+.insight-stat {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1px;
+  gap: 2px;
 }
-.insight-item.insight-avg {
-  gap: 0;
-}
-.insight-value {
-  font-size: 1.3rem;
+.insight-stat-value {
+  font-size: 1.5rem;
   font-weight: 700;
   color: #1e293b;
   line-height: 1.2;
 }
-.insight-value.insight-pct {
-  font-size: 1rem;
-  font-weight: 600;
-}
-.insight-label {
+.insight-stat-label {
   font-size: 0.7rem;
   color: #64748b;
   text-transform: uppercase;
   letter-spacing: 0.03em;
   font-weight: 500;
   white-space: nowrap;
+}
+.insight-warn .insight-stat-value {
+  color: #dc2626;
 }
 .insight-sub {
   font-size: 0.7rem;
@@ -468,14 +488,110 @@ onUnmounted(() => {
   letter-spacing: normal;
   font-weight: 400;
 }
-.insight-warn .insight-value {
-  color: #dc2626;
-}
+
+/* Divider */
 .insight-divider {
   width: 1px;
-  height: 36px;
+  align-self: stretch;
+  min-height: 48px;
   background: #e2e8f0;
   flex-shrink: 0;
+}
+
+/* Center: SLA averages */
+.insights-averages {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.insights-averages-title {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+  font-weight: 600;
+}
+.insights-avg-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Mini cards */
+.avg-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 6px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  min-width: 72px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.avg-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+}
+.avg-card-label {
+  font-size: 0.65rem;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.avg-card-value {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #334155;
+  line-height: 1.3;
+}
+
+/* "All" card — visually distinct */
+.avg-card-all {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  min-width: 80px;
+  padding: 6px 16px;
+}
+.avg-card-all .avg-card-label {
+  color: #1e40af;
+  font-weight: 600;
+}
+.avg-card-all .avg-card-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1e40af;
+}
+
+/* Right: planned work */
+.insights-pause {
+  flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .insights-row {
+    gap: 16px;
+  }
+  .insight-divider {
+    display: none;
+  }
+  .insights-stats {
+    width: 100%;
+    justify-content: center;
+  }
+  .insights-averages {
+    width: 100%;
+  }
+  .insights-pause {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+  }
 }
 
 .empty-cat {

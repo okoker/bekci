@@ -1068,12 +1068,12 @@ onUnmounted(() => {
   background: #b91c1c;
 }
 .btn-restore {
-  background: #d97706;
+  background: #7c3aed;
   color: #fff;
-  border-color: #d97706;
+  border-color: #7c3aed;
 }
 .btn-restore:hover {
-  background: #b45309;
+  background: #6d28d9;
 }
 
 /* ── Restore confirmation modal ── */
