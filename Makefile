@@ -1,6 +1,6 @@
 .PHONY: build frontend backend run dev clean test docker
 
-VERSION := 2.8.0
+VERSION := 3.0.1
 BINARY := bekci
 BUILD_DIR := bin
 FRONTEND_DIR := frontend
