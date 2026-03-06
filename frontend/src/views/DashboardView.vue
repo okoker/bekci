@@ -358,6 +358,7 @@ onUnmounted(() => {
               <span :class="['status-dot', check.last_status === 'up' ? 'dot-up' : (check.last_status === 'down' ? 'dot-down' : 'dot-unknown')]"></span>
               <span class="check-name">{{ check.name }}</span>
               <span class="badge badge-type">{{ check.type }}</span>
+              <span v-if="check.type === target.preferred_check_type" class="badge badge-primary-check" title="Primary check used for SLA &amp; dashboard status">PRIMARY</span>
               <span v-if="check.response_ms > 0" class="check-response text-muted">{{ check.response_ms }}ms</span>
               <span v-if="check.uptime_90d_pct >= 0" class="check-uptime" :style="{ color: uptimeColor(check.uptime_90d_pct) }">
                 {{ check.uptime_90d_pct.toFixed(1) }}%
@@ -489,6 +490,14 @@ onUnmounted(() => {
   font-size: 0.65rem;
   text-transform: uppercase;
   padding: 0.1rem 0.375rem;
+}
+.badge-primary-check {
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 0.55rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 0.05rem 0.3rem;
   border-radius: 10px;
   font-weight: 600;
 }

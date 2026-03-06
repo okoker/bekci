@@ -526,7 +526,10 @@ onMounted(() => loadTargets())
                   <tbody>
                     <tr v-for="c in targetChecks[t.id]" :key="c.id">
                       <td>{{ c.name }}</td>
-                      <td><span class="badge badge-type">{{ c.type }}</span></td>
+                      <td>
+                        <span class="badge badge-type">{{ c.type }}</span>
+                        <span v-if="c.type === t.preferred_check_type" class="badge badge-primary-check" title="Primary check used for SLA &amp; dashboard status">PRIMARY</span>
+                      </td>
                       <td>{{ formatInterval(c.interval_s) }}</td>
                       <td><span :class="['badge', c.enabled ? 'badge-active' : 'badge-suspended']">{{ c.enabled ? 'yes' : 'no' }}</span></td>
                     </tr>
@@ -926,6 +929,13 @@ onMounted(() => loadTargets())
   background: #e0e7ff;
   color: #3730a3;
   font-size: 0.7rem;
+  text-transform: uppercase;
+}
+.badge-primary-check {
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 0.6rem;
+  font-weight: 700;
   text-transform: uppercase;
 }
 
