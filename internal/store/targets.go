@@ -619,3 +619,15 @@ func (s *Store) GetPauseHistory(targetID string) ([]PausePeriod, error) {
 	}
 	return periods, rows.Err()
 }
+
+// GetMonthlyPauseStats returns the number of pause events and distinct affected
+// hosts for the current calendar month.
+func (s *Store) GetMonthlyPauseStats() (count int, affectedHosts int, err error) {
+	now := time.Now()
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).Format("2006-01-02")
+	err = s.db.QueryRow(
+		`SELECT COUNT(*), COUNT(DISTINCT target_id) FROM target_pause_history WHERE paused_at >= ?`,
+		monthStart,
+	).Scan(&count, &affectedHosts)
+	return
+}

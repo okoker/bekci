@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { Line } from 'vue-chartjs'
 import {
   Chart as ChartJS,
@@ -18,6 +18,7 @@ ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Tooltip,
 const loading = ref(true)
 const error = ref('')
 const categories = ref([])
+const pauseStats = ref({ count: 0, affected_hosts: 0 })
 const modalCat = ref(null)
 
 const palette = [
@@ -31,12 +32,47 @@ async function loadHistory() {
   try {
     const { data } = await api.get('/sla/history')
     categories.value = data.categories || []
+    pauseStats.value = data.pause_stats || { count: 0, affected_hosts: 0 }
   } catch {
     error.value = 'Failed to load SLA history'
   } finally {
     loading.value = false
   }
 }
+
+// Compute 90d average uptime for a target from its daily data
+function target90dAvg(target) {
+  const vals = target.daily_uptime.map(d => d.uptime_pct).filter(v => v != null)
+  if (vals.length === 0) return null
+  return vals.reduce((a, b) => a + b, 0) / vals.length
+}
+
+const insights = computed(() => {
+  const cats = categories.value
+  let totalHosts = 0
+  let failingHosts = 0
+
+  const groupAvgs = []
+  for (const cat of cats) {
+    const targets = cat.targets || []
+    const avgs = targets.map(t => target90dAvg(t)).filter(v => v !== null)
+    totalHosts += targets.length
+
+    const threshold = cat.sla_threshold || 0
+    if (threshold > 0) {
+      failingHosts += avgs.filter(a => a < threshold).length
+    }
+
+    const avg = avgs.length > 0 ? avgs.reduce((a, b) => a + b, 0) / avgs.length : null
+    groupAvgs.push({ name: cat.name, avg })
+  }
+
+  // "All" average
+  const allAvgs = cats.flatMap(c => (c.targets || []).map(t => target90dAvg(t))).filter(v => v !== null)
+  const allAvg = allAvgs.length > 0 ? allAvgs.reduce((a, b) => a + b, 0) / allAvgs.length : null
+
+  return { totalHosts, failingHosts, allAvg, groupAvgs }
+})
 
 function padDays(dailyUptime) {
   const map = {}
@@ -219,7 +255,39 @@ onUnmounted(() => {
     <div v-if="loading" class="loading-msg">Loading SLA data...</div>
     <div v-else-if="error" class="error-msg">{{ error }}</div>
 
-    <div v-else class="sla-grid">
+    <template v-else>
+    <!-- Insights card -->
+    <div class="insights-card">
+      <div class="insights-row">
+        <div class="insight-item">
+          <span class="insight-value">{{ insights.totalHosts }}</span>
+          <span class="insight-label">Hosts Monitored</span>
+        </div>
+        <div class="insight-item" :class="{ 'insight-warn': insights.failingHosts > 0 }">
+          <span class="insight-value">{{ insights.failingHosts }}</span>
+          <span class="insight-label">Not Meeting SLA</span>
+        </div>
+        <div class="insight-divider"></div>
+        <div class="insight-item insight-avg">
+          <span class="insight-label">All</span>
+          <span class="insight-value insight-pct">{{ insights.allAvg !== null ? insights.allAvg.toFixed(1) + '%' : '—' }}</span>
+        </div>
+        <template v-for="g in insights.groupAvgs" :key="g.name">
+          <div class="insight-item insight-avg">
+            <span class="insight-label">{{ g.name }}</span>
+            <span class="insight-value insight-pct">{{ g.avg !== null ? g.avg.toFixed(1) + '%' : '—' }}</span>
+          </div>
+        </template>
+        <div class="insight-divider"></div>
+        <div class="insight-item">
+          <span class="insight-value">{{ pauseStats.count }}</span>
+          <span class="insight-label">Planned Work <span class="insight-sub">({{ new Date().toLocaleDateString('en-GB', { month: 'short' }) }})</span></span>
+          <span v-if="pauseStats.affected_hosts > 0" class="insight-sub">{{ pauseStats.affected_hosts }} host{{ pauseStats.affected_hosts !== 1 ? 's' : '' }} affected</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sla-grid">
       <div
         v-for="cat in categories"
         :key="cat.name"
@@ -241,6 +309,8 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
+
+    </template>
 
     <!-- Modal -->
     <Teleport to="body">
@@ -348,6 +418,64 @@ onUnmounted(() => {
   background: #f1f5f9;
   padding: 2px 8px;
   border-radius: 10px;
+}
+
+/* Insights card */
+.insights-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px 20px;
+  margin-bottom: 20px;
+}
+.insights-row {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+.insight-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+.insight-item.insight-avg {
+  gap: 0;
+}
+.insight-value {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #1e293b;
+  line-height: 1.2;
+}
+.insight-value.insight-pct {
+  font-size: 1rem;
+  font-weight: 600;
+}
+.insight-label {
+  font-size: 0.7rem;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.insight-sub {
+  font-size: 0.7rem;
+  color: #94a3b8;
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 400;
+}
+.insight-warn .insight-value {
+  color: #dc2626;
+}
+.insight-divider {
+  width: 1px;
+  height: 36px;
+  background: #e2e8f0;
+  flex-shrink: 0;
 }
 
 .empty-cat {

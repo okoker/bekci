@@ -26,8 +26,14 @@ type slaCategory struct {
 	Targets      []slaTarget `json:"targets"`
 }
 
+type slaPauseStats struct {
+	Count         int `json:"count"`
+	AffectedHosts int `json:"affected_hosts"`
+}
+
 type slaHistoryResponse struct {
 	Categories []slaCategory `json:"categories"`
+	PauseStats slaPauseStats `json:"pause_stats"`
 }
 
 func (s *Server) handleSLAHistory(w http.ResponseWriter, r *http.Request) {
@@ -99,8 +105,13 @@ func (s *Server) handleSLAHistory(w http.ResponseWriter, r *http.Request) {
 		catTargets[cat] = append(catTargets[cat], st)
 	}
 
+	// Pause stats for current calendar month
+	pauseCount, pauseHosts, _ := s.store.GetMonthlyPauseStats()
+
 	// Build ordered response: known categories first, then any unknown
-	resp := slaHistoryResponse{}
+	resp := slaHistoryResponse{
+		PauseStats: slaPauseStats{Count: pauseCount, AffectedHosts: pauseHosts},
+	}
 	seen := make(map[string]bool)
 
 	for _, cat := range slaCategories {

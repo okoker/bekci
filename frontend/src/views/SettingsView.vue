@@ -772,15 +772,17 @@ onUnmounted(() => {
     <div v-if="activeTab === 'backup' && auth.isAdmin">
       <div v-if="error" class="error-msg">{{ error }}</div>
 
-      <div class="card">
-        <h3>Backup & Restore</h3>
-        <p class="text-muted">Export or import configuration data (users, targets, checks, rules, settings). Historical check results are not included.</p>
-
+      <div class="card" style="margin-bottom: 1rem;">
+        <h3>Backup</h3>
+        <p class="text-muted">Download a snapshot of all configuration data (users, targets, checks, rules, settings). Historical check results are not included.</p>
         <div class="backup-actions">
           <button class="btn btn-primary" @click="downloadBackup">Download Backup</button>
         </div>
+      </div>
 
-        <hr class="divider" />
+      <div class="card">
+        <h3>Restore</h3>
+        <p class="text-muted">Upload a previously exported backup file to replace all current configuration. This is a destructive operation.</p>
 
         <div class="restore-section">
           <label class="file-label">
@@ -794,11 +796,11 @@ onUnmounted(() => {
 
           <button
             v-if="restoreFile"
-            class="btn btn-danger"
+            class="btn btn-restore"
             :disabled="restoring"
             @click="confirmRestore"
           >
-            {{ restoring ? 'Restoring...' : 'Restore Now' }}
+            {{ restoring ? 'Restoring...' : 'Restore from backup' }}
           </button>
         </div>
       </div>
@@ -809,7 +811,7 @@ onUnmounted(() => {
           <h3>Restore Backup</h3>
           <p>This will <strong>WIPE all current data</strong> and replace it with the backup. All users will be logged out. This cannot be undone.</p>
           <div class="form-actions">
-            <button class="btn btn-danger" @click="executeRestore">Restore</button>
+            <button class="btn btn-restore" @click="executeRestore">Restore from backup</button>
             <button class="btn" @click="showRestoreConfirm = false">Cancel</button>
           </div>
         </div>
@@ -1063,6 +1065,14 @@ onUnmounted(() => {
 }
 .btn-danger:hover {
   background: #b91c1c;
+}
+.btn-restore {
+  background: #d97706;
+  color: #fff;
+  border-color: #d97706;
+}
+.btn-restore:hover {
+  background: #b45309;
 }
 
 /* ── Restore confirmation modal ── */

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '../api'
 
@@ -10,6 +10,8 @@ const error = ref('')
 const lastUpdated = ref(null)
 const activeCategory = ref('All')
 const categories = ['All', 'Network', 'Security', 'Physical Security', 'Key Services', 'Other']
+const currentPage = ref(1)
+const pageSize = 10
 
 // Per-check history data
 const historyData = ref({}) // checkId -> { bar90d: [], bar4h: [] }
@@ -149,6 +151,18 @@ function filteredAndSortedTargets() {
   })
 }
 
+function paginatedTargets() {
+  const all = filteredAndSortedTargets()
+  const start = (currentPage.value - 1) * pageSize
+  return all.slice(start, start + pageSize)
+}
+
+function totalPages() {
+  return Math.max(1, Math.ceil(filteredAndSortedTargets().length / pageSize))
+}
+
+watch(activeCategory, () => { currentPage.value = 1 })
+
 function isTargetDown(target) {
   if (target.state === 'paused') return false
   if (target.state === 'unhealthy') return true
@@ -280,7 +294,7 @@ onUnmounted(() => {
         </button>
       </div>
 
-      <div v-for="target in filteredAndSortedTargets()" :key="target.id" class="target-card card">
+      <div v-for="target in paginatedTargets()" :key="target.id" class="target-card card">
         <!-- Collapsed view: target header + preferred check bars -->
         <div class="target-header" @click="toggleTarget(target.id)">
           <div class="target-header-left">
@@ -399,6 +413,13 @@ onUnmounted(() => {
             </div>
           </div>
         </div>
+      </div>
+
+      <!-- Pagination -->
+      <div v-if="totalPages() > 1" class="pagination">
+        <button class="page-btn" :disabled="currentPage <= 1" @click="currentPage--">&laquo; Prev</button>
+        <span class="page-info">{{ currentPage }} / {{ totalPages() }} ({{ filteredAndSortedTargets().length }} hosts)</span>
+        <button class="page-btn" :disabled="currentPage >= totalPages()" @click="currentPage++">&raquo; Next</button>
       </div>
     </template>
   </div>
@@ -655,5 +676,36 @@ onUnmounted(() => {
   font-size: 0.8rem;
   color: #64748b;
   padding: 0.25rem 0 0 1.25rem;
+}
+
+/* Pagination */
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.5rem;
+  padding: 0.5rem 0;
+}
+.page-btn {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #475569;
+  cursor: pointer;
+}
+.page-btn:hover:not(:disabled) {
+  background: #e2e8f0;
+}
+.page-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.page-info {
+  font-size: 0.8rem;
+  color: #64748b;
 }
 </style>
