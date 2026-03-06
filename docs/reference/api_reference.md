@@ -815,6 +815,7 @@ Response formats are identical to their Dashboard counterparts.
 |--------|------|------|-------------|
 | GET | `/api/alerts` | any | List alert history (paginated) |
 | POST | `/api/settings/test-email` | admin | Send test email to current user |
+| POST | `/api/settings/test-signal` | admin | Send test Signal message to a phone number |
 
 ### GET /api/alerts
 
@@ -865,6 +866,29 @@ Sends a test email to the authenticated user's email address. Requires the alert
 | Email send failed | 500 |
 | Alerter not initialized | 503 |
 
+### POST /api/settings/test-signal
+
+Sends a test Signal message to the specified phone number. Requires Signal gateway settings to be configured.
+
+**Request:**
+```json
+{
+  "phone": "+1234567890"
+}
+```
+
+**Response (200):**
+```json
+{ "message": "test signal sent to +1234567890" }
+```
+
+| Error | Code |
+|-------|------|
+| No phone provided | 400 |
+| Signal not configured | 500 |
+| Signal send failed | 500 |
+| Alerter not initialized | 503 |
+
 ---
 
 ## Settings
@@ -890,6 +914,10 @@ Returns all settings as key-value map. Sensitive values (e.g. `resend_api_key`) 
   "alert_from_email": "alerts@example.com",
   "alert_cooldown_s": "300",
   "alert_realert_s": "3600",
+  "signal_api_url": "http://10.0.9.21:55555/v2/send",
+  "signal_number": "+1234567890",
+  "signal_username": "user",
+  "signal_password": "••••••••",
   "sla_network": "99.9",
   "sla_security": "99.9",
   "sla_physical_security": "99.9",
@@ -900,7 +928,7 @@ Returns all settings as key-value map. Sensitive values (e.g. `resend_api_key`) 
 
 ### PUT /api/settings
 
-Update one or more settings. Only known keys are accepted. Sending masked API key value (`"••••••••"`) is silently ignored (preserves existing key).
+Update one or more settings. Only known keys are accepted. Sending masked values (`"••••••••"`) for `resend_api_key` or `signal_password` is silently ignored (preserves existing value).
 
 **Request:**
 ```json
@@ -918,11 +946,15 @@ Update one or more settings. Only known keys are accepted. Sending masked API ke
 | `history_days` | positive integer | >= 1 |
 | `audit_retention_days` | positive integer | >= 1 |
 | `soc_public` | boolean string | `"true"` or `"false"` |
-| `alert_method` | string | `""`, `"email"`, or `"email+signal"` |
+| `alert_method` | string | `""`, `"email"`, `"signal"`, or `"email+signal"` |
 | `resend_api_key` | string | any string (empty to clear) |
 | `alert_from_email` | string | any string |
 | `alert_cooldown_s` | non-negative integer | >= 0 |
 | `alert_realert_s` | non-negative integer | >= 0 |
+| `signal_api_url` | string | any string (full gateway URL) |
+| `signal_number` | string | any string (sender phone number) |
+| `signal_username` | string | any string |
+| `signal_password` | string | any string (masked in GET as `"••••••••"`) |
 | `sla_network` | float string | 0–100 (0 = disabled) |
 | `sla_security` | float string | 0–100 (0 = disabled) |
 | `sla_physical_security` | float string | 0–100 (0 = disabled) |
@@ -979,7 +1011,7 @@ Update one or more settings. Only known keys are accepted. Sending masked API ke
 }
 ```
 
-**Audit actions:** `login`, `login_failed`, `logout`, `create_user`, `update_user`, `suspend_user`, `activate_user`, `reset_password`, `change_password`, `change_password_failed`, `update_profile`, `create_target`, `update_target`, `delete_target`, `pause_target`, `unpause_target`, `set_alert_recipients`, `update_settings`, `restore_backup`, `export_backup`, `run_check`, `test_email`.
+**Audit actions:** `login`, `login_failed`, `logout`, `create_user`, `update_user`, `suspend_user`, `activate_user`, `reset_password`, `change_password`, `change_password_failed`, `update_profile`, `create_target`, `update_target`, `delete_target`, `pause_target`, `unpause_target`, `set_alert_recipients`, `update_settings`, `restore_backup`, `export_backup`, `run_check`, `test_email`, `test_signal`.
 
 **Status values:** `success`, `failure`. All mutating actions log both success and failure (with detail). Login and change_password also log dedicated failure actions (`login_failed`, `change_password_failed`).
 
