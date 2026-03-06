@@ -136,7 +136,7 @@ func (s *Server) handleUpdateMe(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "update failed")
 		return
 	}
-	s.audit(r, "update_profile", "user", user.ID, "email="+email, "success")
+	s.audit(r, "update_profile", "user", user.ID, "email="+email+" phone="+phone, "success")
 	writeJSON(w, http.StatusOK, map[string]string{"message": "profile updated"})
 }
 

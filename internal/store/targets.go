@@ -550,13 +550,17 @@ func (s *Store) ListTargetSummaries() ([]TargetListItem, error) {
 // PauseTarget sets paused_at = NOW and inserts a pause_history record.
 func (s *Store) PauseTarget(id string) error {
 	now := time.Now()
-	res, err := s.db.Exec(`UPDATE targets SET paused_at = ? WHERE id = ? AND paused_at IS NULL`, now, id)
+	// Check existence first to distinguish "not found" from "already paused"
+	var paused bool
+	err := s.db.QueryRow(`SELECT paused_at IS NOT NULL FROM targets WHERE id = ?`, id).Scan(&paused)
 	if err != nil {
-		return err
+		return fmt.Errorf("target not found")
 	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		return fmt.Errorf("target not found or already paused")
+	if paused {
+		return fmt.Errorf("target already paused")
+	}
+	if _, err := s.db.Exec(`UPDATE targets SET paused_at = ? WHERE id = ?`, now, id); err != nil {
+		return err
 	}
 	_, err = s.db.Exec(`INSERT INTO target_pause_history (target_id, paused_at) VALUES (?, ?)`, id, now)
 	return err
@@ -565,13 +569,17 @@ func (s *Store) PauseTarget(id string) error {
 // UnpauseTarget clears paused_at and updates the open pause_history record.
 func (s *Store) UnpauseTarget(id string) error {
 	now := time.Now()
-	res, err := s.db.Exec(`UPDATE targets SET paused_at = NULL WHERE id = ? AND paused_at IS NOT NULL`, id)
+	// Check existence first to distinguish "not found" from "not paused"
+	var paused bool
+	err := s.db.QueryRow(`SELECT paused_at IS NOT NULL FROM targets WHERE id = ?`, id).Scan(&paused)
 	if err != nil {
-		return err
+		return fmt.Errorf("target not found")
 	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		return fmt.Errorf("target not found or not paused")
+	if !paused {
+		return fmt.Errorf("target not paused")
+	}
+	if _, err := s.db.Exec(`UPDATE targets SET paused_at = NULL WHERE id = ?`, id); err != nil {
+		return err
 	}
 	_, err = s.db.Exec(`UPDATE target_pause_history SET resumed_at = ? WHERE target_id = ? AND resumed_at IS NULL`, now, id)
 	return err
