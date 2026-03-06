@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import api from '../api'
 
 const dashboardData = ref([])
@@ -10,6 +10,56 @@ const lastUpdated = ref(null)
 const activeCategory = ref('All')
 const categories = ['All', 'Network', 'Security', 'Physical Security', 'Key Services', 'Other']
 let refreshTimer = null
+let healthTimer = null
+
+// --- System Health ---
+const health = ref(null)
+const showPopover = ref(false)
+
+async function fetchHealth() {
+  try {
+    const { data } = await api.get('/system/health')
+    health.value = data
+  } catch {
+    health.value = null
+  }
+}
+
+function dotColor(metric) {
+  if (!health.value) return 'dot-grey'
+  if (metric === 'net') return health.value.net.status === 'ok' ? 'dot-green' : 'dot-red'
+  if (metric === 'disk') {
+    const d = health.value.disk
+    if (!d.total_gb) return 'dot-grey'
+    const pct = d.free_gb / d.total_gb
+    return pct > 0.2 ? 'dot-green' : pct > 0.1 ? 'dot-yellow' : 'dot-red'
+  }
+  if (metric === 'cpu') {
+    const c = health.value.cpu
+    if (c.load1 < 0) return 'dot-grey'
+    return c.load1 < c.num_cpu ? 'dot-green' : c.load1 < c.num_cpu * 2 ? 'dot-yellow' : 'dot-red'
+  }
+  return 'dot-grey'
+}
+
+const netLabel = computed(() => {
+  if (!health.value) return 'Net: —'
+  const n = health.value.net
+  return n.status === 'ok' ? `Net: OK (${n.latency_ms}ms)` : 'Net: Unreachable'
+})
+const diskLabel = computed(() => {
+  if (!health.value || !health.value.disk.total_gb) return 'Disk: —'
+  const d = health.value.disk
+  return `Disk: ${d.free_gb}/${d.total_gb} GB free`
+})
+const cpuLabel = computed(() => {
+  if (!health.value) return 'Load: —'
+  const c = health.value.cpu
+  return c.load1 < 0 ? 'Load: —' : `Load: ${c.load1} (${c.num_cpu} cores)`
+})
+
+function togglePopover() { showPopover.value = !showPopover.value }
+function closePopover(e) { if (!e.target.closest('.health-indicator')) showPopover.value = false }
 
 const empty90d = Array.from({ length: 90 }, () => ({ date: '', uptime_pct: -1, total_checks: 0 }))
 const empty4h = Array.from({ length: 48 }, () => ({ status: 'none', response_ms: 0, checked_at: '' }))
@@ -193,10 +243,15 @@ function formatTooltip4h(r) {
 onMounted(() => {
   loadDashboard()
   refreshTimer = setInterval(loadDashboard, 15000)
+  fetchHealth()
+  healthTimer = setInterval(fetchHealth, 30000)
+  document.addEventListener('click', closePopover)
 })
 
 onUnmounted(() => {
   if (refreshTimer) clearInterval(refreshTimer)
+  if (healthTimer) clearInterval(healthTimer)
+  document.removeEventListener('click', closePopover)
 })
 </script>
 
@@ -210,6 +265,18 @@ onUnmounted(() => {
           @click="activeCategory = cat">
           {{ cat }} <span class="soc-filter-count">({{ categoryCount(cat) }})</span>
         </button>
+      </div>
+      <div v-if="health" class="health-indicator" @click.stop="togglePopover">
+        <div class="health-dots">
+          <span class="health-dot" :class="dotColor('net')" title="Network"></span>
+          <span class="health-dot" :class="dotColor('disk')" title="Disk"></span>
+          <span class="health-dot" :class="dotColor('cpu')" title="CPU"></span>
+        </div>
+        <div v-if="showPopover" class="health-popover soc-health-popover">
+          <div class="health-row" :class="dotColor('net')">{{ netLabel }}</div>
+          <div class="health-row" :class="dotColor('disk')">{{ diskLabel }}</div>
+          <div class="health-row" :class="dotColor('cpu')">{{ cpuLabel }}</div>
+        </div>
       </div>
       <span v-if="lastUpdated" class="soc-updated">
         {{ lastUpdated.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) }}
@@ -507,5 +574,12 @@ onUnmounted(() => {
 .soc-cat-other {
   background: rgba(148, 163, 184, 0.15);
   color: #94a3b8;
+}
+
+/* Dark theme overrides for health popover */
+.soc-health-popover {
+  background: #1e293b;
+  color: #e2e8f0;
+  border-color: #334155;
 }
 </style>

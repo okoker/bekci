@@ -14,7 +14,7 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       const url = error.config?.url || ''
-      if (url !== '/me' && !url.startsWith('/soc/')) {
+      if (url !== '/me' && !url.startsWith('/soc/') && !url.startsWith('/system/')) {
         const auth = useAuthStore()
         auth.clearAuth()
         router.push('/login')

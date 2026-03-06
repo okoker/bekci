@@ -117,8 +117,8 @@ func (s *Server) Handler() http.Handler {
 	// User list — operators need this for recipient picker
 	mux.Handle("GET /api/users", opAuth(s.handleListUsers))
 
-	// System health
-	mux.Handle("GET /api/system/health", anyAuth(s.handleSystemHealth))
+	// System health (public when SOC is public, otherwise requires auth)
+	mux.Handle("GET /api/system/health", s.socAuth(http.HandlerFunc(s.handleSystemHealth)))
 
 	// Audit log
 	mux.Handle("GET /api/audit-log", opAuth(s.handleListAuditLogs))
