@@ -124,7 +124,7 @@ a:hover { text-decoration: underline; }
 
 .content {
   flex: 1;
-  padding: 1rem;
+  padding: 1rem 0.75rem;
 }
 
 /* ─── Page ───────────────────────────────────────────────── */
@@ -259,7 +259,7 @@ th {
   display: flex;
   gap: 0.375rem;
   align-items: center;
-  flex-wrap: wrap;
+  white-space: nowrap;
 }
 
 .inline-form {

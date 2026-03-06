@@ -1,11 +1,12 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
 const auth = useAuthStore()
 const router = useRouter()
 
+const usernameInput = ref(null)
 const username = ref('')
 const password = ref('')
 const error = ref('')
@@ -23,6 +24,10 @@ async function handleLogin() {
     loading.value = false
   }
 }
+
+onMounted(() => {
+  usernameInput.value?.focus()
+})
 </script>
 
 <template>
@@ -35,7 +40,7 @@ async function handleLogin() {
       <form @submit.prevent="handleLogin">
         <div class="form-group">
           <label for="username">Username</label>
-          <input id="username" v-model="username" type="text" autocomplete="username" required autofocus />
+          <input id="username" ref="usernameInput" v-model="username" type="text" autocomplete="username" required />
         </div>
         <div class="form-group">
           <label for="password">Password</label>
