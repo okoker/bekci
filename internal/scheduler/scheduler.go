@@ -222,6 +222,23 @@ func (s *Scheduler) runCheck(checkID string) {
 	// Run the check
 	result := checker.Run(check.Type, target.Host, check.Config)
 
+	// Auto-persist baseline hash on first capture
+	if result.Metrics["baseline_captured"] == true {
+		if hash, ok := result.Metrics["hash"].(string); ok && hash != "" {
+			var cfg map[string]any
+			if err := json.Unmarshal([]byte(check.Config), &cfg); err == nil {
+				cfg["baseline_hash"] = hash
+				if updated, err := json.Marshal(cfg); err == nil {
+					if err := s.store.UpdateCheckConfig(checkID, string(updated)); err != nil {
+						slog.Error("Scheduler: failed to persist baseline hash", "check_id", checkID, "error", err)
+					} else {
+						slog.Info("Scheduler: baseline hash auto-captured", "check_id", checkID, "hash", hash)
+					}
+				}
+			}
+		}
+	}
+
 	// Serialize metrics
 	metricsJSON, err := json.Marshal(result.Metrics)
 	if err != nil {

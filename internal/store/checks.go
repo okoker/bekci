@@ -63,6 +63,12 @@ func (s *Store) ListChecksByTarget(targetID string) ([]Check, error) {
 	return checks, rows.Err()
 }
 
+// UpdateCheckConfig updates the config JSON for a check.
+func (s *Store) UpdateCheckConfig(id, config string) error {
+	_, err := s.db.Exec(`UPDATE checks SET config = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, config, id)
+	return err
+}
+
 // ListAllEnabledChecks returns all enabled checks with target host, for the scheduler.
 func (s *Store) ListAllEnabledChecks() ([]EnabledCheck, error) {
 	rows, err := s.db.Query(`
