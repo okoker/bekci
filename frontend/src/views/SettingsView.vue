@@ -787,10 +787,10 @@ onUnmounted(() => {
         <p class="text-muted" style="margin: 0 0 1rem;">Upload a previously exported backup file to replace all current configuration. This is a destructive operation.</p>
 
         <div class="restore-section">
-          <label class="file-label">
-            <input type="file" accept=".json" @change="onFileSelected" />
-            <span>{{ restoreFile ? restoreFile.name : 'Choose backup file...' }}</span>
-          </label>
+          <input ref="restoreInput" type="file" accept=".json" style="display:none" @change="onFileSelected" />
+          <button class="btn btn-restore" @click="$refs.restoreInput.click()">
+            {{ restoreFile ? restoreFile.name : 'Choose backup file...' }}
+          </button>
 
           <div v-if="restoreFile" class="restore-warning">
             <strong>Warning:</strong> Restoring will delete ALL current data and replace it with the backup contents. All sessions will be invalidated.
@@ -1031,25 +1031,6 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: flex-start;
   gap: 0.75rem;
-}
-.file-label {
-  display: inline-block;
-  cursor: pointer;
-}
-.file-label input[type="file"] {
-  display: none;
-}
-.file-label span {
-  display: inline-block;
-  padding: 0.5rem 1rem;
-  background: #f1f5f9;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  font-size: 0.875rem;
-  color: #475569;
-}
-.file-label span:hover {
-  background: #e2e8f0;
 }
 .restore-warning {
   background: #fef3c7;

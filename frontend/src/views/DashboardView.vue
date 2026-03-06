@@ -444,7 +444,9 @@ onUnmounted(() => {
 .target-header-right {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.35rem;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 .target-name {
   font-weight: 600;

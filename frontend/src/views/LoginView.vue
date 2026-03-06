@@ -35,7 +35,7 @@ async function handleLogin() {
       <form @submit.prevent="handleLogin">
         <div class="form-group">
           <label for="username">Username</label>
-          <input id="username" v-model="username" type="text" autocomplete="username" required />
+          <input id="username" v-model="username" type="text" autocomplete="username" required autofocus />
         </div>
         <div class="form-group">
           <label for="password">Password</label>
