@@ -790,7 +790,7 @@ onMounted(() => loadTargets())
                           @change="onFailCountChange(cond)" />
                       </div>
                       <div class="form-group">
-                        <label>Window (s)</label>
+                        <label>Time Window</label>
                         <input type="number" v-model.number="cond.fail_window"
                           :min="cond.interval_s" max="1800"
                           :disabled="cond.fail_count <= 1"
@@ -1177,7 +1177,10 @@ onMounted(() => loadTargets())
   grid-template-columns: 1fr 1fr 1fr 1fr;
 }
 .form-row-5 {
-  grid-template-columns: 1fr 1fr 1fr 0.7fr 0.7fr;
+  grid-template-columns: 1fr 1fr 0.7fr 0.7fr 0.85fr;
+}
+.form-row-5 > .form-group > label {
+  padding-left: 0.25rem;
 }
 
 /* Recipients */
