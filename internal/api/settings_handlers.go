@@ -144,6 +144,7 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.store.SetSettings(req); err != nil {
+		s.audit(r, "update_settings", "settings", "", "failed", "failure")
 		writeError(w, http.StatusInternalServerError, "failed to update settings")
 		return
 	}

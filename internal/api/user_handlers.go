@@ -55,6 +55,7 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 
 	existing, _ := s.store.GetUserByUsername(req.Username)
 	if existing != nil {
+		s.audit(r, "create_user", "user", "", "username="+req.Username+" duplicate", "failure")
 		writeError(w, http.StatusConflict, "username already exists")
 		return
 	}
@@ -78,6 +79,7 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.store.CreateUser(user); err != nil {
+		s.audit(r, "create_user", "user", "", "username="+req.Username+" failed", "failure")
 		writeError(w, http.StatusInternalServerError, "failed to create user")
 		return
 	}
@@ -149,6 +151,7 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if count <= 1 {
+			s.audit(r, "update_user", "user", id, "last admin demotion blocked", "failure")
 			writeError(w, http.StatusConflict, "cannot demote the last active admin")
 			return
 		}
@@ -164,6 +167,7 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.store.UpdateUser(id, email, phone, role); err != nil {
+		s.audit(r, "update_user", "user", id, "update failed", "failure")
 		writeError(w, http.StatusInternalServerError, "update failed")
 		return
 	}
@@ -195,12 +199,18 @@ func (s *Server) handleSuspendUser(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if count <= 1 {
+			s.audit(r, "suspend_user", "user", id, "last admin suspension blocked", "failure")
 			writeError(w, http.StatusConflict, "cannot suspend the last active admin")
 			return
 		}
 	}
 
 	if err := s.store.SuspendUser(id, req.Suspended); err != nil {
+		action := "activate_user"
+		if req.Suspended {
+			action = "suspend_user"
+		}
+		s.audit(r, action, "user", id, "username="+user.Username+" failed", "failure")
 		writeError(w, http.StatusInternalServerError, "update failed")
 		return
 	}
@@ -246,6 +256,7 @@ func (s *Server) handleResetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.store.UpdateUserPassword(id, hash); err != nil {
+		s.audit(r, "reset_password", "user", id, "username="+user.Username+" failed", "failure")
 		writeError(w, http.StatusInternalServerError, "password reset failed")
 		return
 	}

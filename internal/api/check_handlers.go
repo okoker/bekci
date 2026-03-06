@@ -19,6 +19,7 @@ func (s *Server) handleRunCheckNow(w http.ResponseWriter, r *http.Request) {
 
 	check, err := s.store.GetCheck(id)
 	if err != nil || check == nil {
+		s.audit(r, "run_check", "check", id, "check not found", "failure")
 		writeError(w, http.StatusNotFound, "check not found")
 		return
 	}
@@ -26,6 +27,7 @@ func (s *Server) handleRunCheckNow(w http.ResponseWriter, r *http.Request) {
 	if s.scheduler != nil {
 		s.scheduler.RunNow(id)
 	}
+	s.audit(r, "run_check", "check", id, "name="+check.Name, "success")
 	writeJSON(w, http.StatusOK, map[string]string{"status": "queued"})
 }
 

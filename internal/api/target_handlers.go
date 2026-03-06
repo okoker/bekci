@@ -173,9 +173,11 @@ func (s *Server) handleCreateTarget(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.store.CreateTargetWithConditions(t, conds, creatorID); err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
+			s.audit(r, "create_target", "target", "", "name="+t.Name+" duplicate", "failure")
 			writeError(w, http.StatusConflict, "target name already exists")
 			return
 		}
+		s.audit(r, "create_target", "target", "", "name="+t.Name+" failed", "failure")
 		writeError(w, http.StatusInternalServerError, "failed to create target")
 		return
 	}
@@ -297,13 +299,16 @@ func (s *Server) handleUpdateTarget(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.store.UpdateTargetWithConditions(id, req.Name, req.Host, req.Description, enabled, req.Operator, req.Category, req.PreferredCheckType, conds); err != nil {
 		if strings.Contains(err.Error(), "not found") {
+			s.audit(r, "update_target", "target", id, "not found", "failure")
 			writeError(w, http.StatusNotFound, "target not found")
 			return
 		}
 		if strings.Contains(err.Error(), "UNIQUE") {
+			s.audit(r, "update_target", "target", id, "name="+req.Name+" duplicate", "failure")
 			writeError(w, http.StatusConflict, "target name already exists")
 			return
 		}
+		s.audit(r, "update_target", "target", id, "name="+req.Name+" failed", "failure")
 		writeError(w, http.StatusInternalServerError, "failed to update target")
 		return
 	}
@@ -327,6 +332,7 @@ func (s *Server) handlePauseTarget(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if err := s.store.PauseTarget(id); err != nil {
 		if strings.Contains(err.Error(), "not found") {
+			s.audit(r, "pause_target", "target", id, "not found", "failure")
 			writeError(w, http.StatusNotFound, err.Error())
 			return
 		}
@@ -334,6 +340,7 @@ func (s *Server) handlePauseTarget(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
+		s.audit(r, "pause_target", "target", id, "failed", "failure")
 		writeError(w, http.StatusInternalServerError, "failed to pause target")
 		return
 	}
@@ -348,6 +355,7 @@ func (s *Server) handleUnpauseTarget(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if err := s.store.UnpauseTarget(id); err != nil {
 		if strings.Contains(err.Error(), "not found") {
+			s.audit(r, "unpause_target", "target", id, "not found", "failure")
 			writeError(w, http.StatusNotFound, err.Error())
 			return
 		}
@@ -355,6 +363,7 @@ func (s *Server) handleUnpauseTarget(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
+		s.audit(r, "unpause_target", "target", id, "failed", "failure")
 		writeError(w, http.StatusInternalServerError, "failed to unpause target")
 		return
 	}
@@ -376,9 +385,11 @@ func (s *Server) handleDeleteTarget(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if err := s.store.DeleteTarget(id); err != nil {
 		if strings.Contains(err.Error(), "not found") {
+			s.audit(r, "delete_target", "target", id, "not found", "failure")
 			writeError(w, http.StatusNotFound, "target not found")
 			return
 		}
+		s.audit(r, "delete_target", "target", id, "failed", "failure")
 		writeError(w, http.StatusInternalServerError, "failed to delete target")
 		return
 	}

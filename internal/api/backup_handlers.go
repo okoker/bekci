@@ -15,10 +15,12 @@ func (s *Server) handleBackup(w http.ResponseWriter, r *http.Request) {
 	data, err := s.store.ExportBackup(s.version)
 	if err != nil {
 		slog.Error("Backup export failed", "error", err)
+		s.audit(r, "export_backup", "backup", "", err.Error(), "failure")
 		writeError(w, http.StatusInternalServerError, "backup failed")
 		return
 	}
 
+	s.audit(r, "export_backup", "backup", "", "", "success")
 	filename := fmt.Sprintf("bekci-backup-%s.json", time.Now().Format("20060102-150405"))
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
@@ -92,6 +94,7 @@ func (s *Server) handleRestore(w http.ResponseWriter, r *http.Request) {
 	// Perform restore
 	if err := s.store.RestoreBackup(&data); err != nil {
 		slog.Error("Backup restore failed", "error", err)
+		s.audit(r, "restore_backup", "backup", "", "restore failed", "failure")
 		writeError(w, http.StatusInternalServerError, "restore failed")
 		return
 	}

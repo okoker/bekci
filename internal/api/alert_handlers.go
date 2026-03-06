@@ -42,6 +42,7 @@ func (s *Server) handleSetRecipients(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.store.SetTargetRecipients(id, req.UserIDs); err != nil {
+		s.audit(r, "set_alert_recipients", "target", id, "failed", "failure")
 		writeError(w, http.StatusInternalServerError, "failed to set recipients")
 		return
 	}
@@ -90,14 +91,17 @@ func (s *Server) handleTestEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if user.Email == "" {
+		s.audit(r, "test_email", "settings", "", "no email configured", "failure")
 		writeError(w, http.StatusBadRequest, "your account has no email address configured")
 		return
 	}
 
 	if err := s.alerter.SendTestEmail(user.Email); err != nil {
+		s.audit(r, "test_email", "settings", "", "to="+user.Email+" error="+err.Error(), "failure")
 		writeError(w, http.StatusInternalServerError, "failed to send test email: "+err.Error())
 		return
 	}
 
+	s.audit(r, "test_email", "settings", "", "to="+user.Email, "success")
 	writeJSON(w, http.StatusOK, map[string]string{"message": "test email sent to " + user.Email})
 }
