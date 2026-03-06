@@ -283,6 +283,7 @@ th {
   border-radius: 12px;
   font-size: 0.75rem;
   font-weight: 600;
+  white-space: nowrap;
 }
 .badge-admin { background: #dbeafe; color: #1d4ed8; }
 .badge-operator { background: #fef3c7; color: #92400e; }
