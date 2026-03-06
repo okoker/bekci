@@ -10,6 +10,7 @@ const profileMsg = ref('')
 const profileErr = ref('')
 
 const pwForm = ref({ current_password: '', new_password: '' })
+const confirmPassword = ref('')
 const pwMsg = ref('')
 const pwErr = ref('')
 
@@ -32,10 +33,15 @@ async function updateProfile() {
 
 async function changePassword() {
   pwErr.value = ''
+  if (pwForm.value.new_password !== confirmPassword.value) {
+    pwErr.value = 'Passwords do not match'
+    return
+  }
   try {
     await api.put('/me/password', pwForm.value)
     pwMsg.value = 'Password changed'
     pwForm.value = { current_password: '', new_password: '' }
+    confirmPassword.value = ''
   } catch (e) {
     pwErr.value = e.response?.data?.error || 'Password change failed'
   }
@@ -82,6 +88,10 @@ async function changePassword() {
         <div class="form-group">
           <label>New Password (min 15 chars)</label>
           <input v-model="pwForm.new_password" type="password" required minlength="15" />
+        </div>
+        <div class="form-group">
+          <label>Confirm New Password</label>
+          <input v-model="confirmPassword" type="password" required minlength="15" />
         </div>
         <div v-if="pwErr" class="error-msg">{{ pwErr }}</div>
         <div v-if="pwMsg" class="success-msg" @click="pwMsg = ''">{{ pwMsg }}</div>

@@ -411,6 +411,7 @@ onUnmounted(() => {
   border: 1px solid #334155;
   border-radius: 8px;
   padding: 0.6rem 0.8rem;
+  min-width: 0;
 }
 .soc-card-down {
   border-color: #f56565;
@@ -429,12 +430,16 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.5rem;
   margin-bottom: 0.4rem;
+  overflow: hidden;
 }
 .soc-target-name {
   font-weight: 600;
   font-size: 0.9rem;
   color: #fff;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 .soc-host {
   font-size: 0.75rem;

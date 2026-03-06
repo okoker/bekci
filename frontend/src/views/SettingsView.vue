@@ -166,10 +166,12 @@ function actionClass(action) {
 const users = ref([])
 const userShowCreate = ref(false)
 const userShowResetPw = ref(null)
+const userShowEdit = ref(null)
 const userError = ref('')
 const userSuccess = ref('')
 const userForm = ref({ username: '', email: '', password: '', role: 'operator' })
 const resetPwForm = ref({ password: '' })
+const editUserForm = ref({ email: '', phone: '', role: '' })
 
 async function loadUsers() {
   try {
@@ -198,6 +200,23 @@ async function toggleSuspend(user) {
   try {
     await api.put(`/users/${user.id}/suspend`, { suspended: user.status === 'active' })
     userSuccess.value = `User ${user.status === 'active' ? 'suspended' : 'activated'}`
+    await loadUsers()
+  } catch (e) {
+    userError.value = e.response?.data?.error || 'Failed to update user'
+  }
+}
+
+function openEditUser(u) {
+  userShowEdit.value = userShowEdit.value === u.id ? null : u.id
+  editUserForm.value = { email: u.email || '', phone: u.phone || '', role: u.role }
+}
+
+async function saveEditUser(userId) {
+  userError.value = ''
+  try {
+    await api.put(`/users/${userId}`, editUserForm.value)
+    userSuccess.value = 'User updated'
+    userShowEdit.value = null
     await loadUsers()
   } catch (e) {
     userError.value = e.response?.data?.error || 'Failed to update user'
@@ -635,12 +654,33 @@ onUnmounted(() => {
               <td><span :class="'badge badge-' + u.role">{{ u.role }}</span></td>
               <td><span :class="'badge badge-' + u.status">{{ u.status }}</span></td>
               <td class="actions">
+                <button class="btn btn-sm" @click="openEditUser(u)">Edit</button>
                 <button class="btn btn-sm" @click="toggleSuspend(u)">
                   {{ u.status === 'active' ? 'Suspend' : 'Activate' }}
                 </button>
                 <button class="btn btn-sm" @click="userShowResetPw = (userShowResetPw === u.id ? null : u.id)">
                   Reset PW
                 </button>
+                <div v-if="userShowEdit === u.id" class="inline-form" style="margin-top:0.4rem;">
+                  <div class="form-group compact">
+                    <label>Email</label>
+                    <input v-model="editUserForm.email" type="email" placeholder="user@example.com" />
+                  </div>
+                  <div class="form-group compact">
+                    <label>Phone</label>
+                    <input v-model="editUserForm.phone" type="tel" placeholder="+1234567890" />
+                  </div>
+                  <div class="form-group compact">
+                    <label>Role</label>
+                    <select v-model="editUserForm.role">
+                      <option value="admin">admin</option>
+                      <option value="operator">operator</option>
+                      <option value="viewer">viewer</option>
+                    </select>
+                  </div>
+                  <button class="btn btn-sm btn-primary" @click="saveEditUser(u.id)">Save</button>
+                  <button class="btn btn-sm" @click="userShowEdit = null">Cancel</button>
+                </div>
                 <div v-if="userShowResetPw === u.id" class="inline-form">
                   <input v-model="resetPwForm.password" type="password" placeholder="New password" minlength="15" />
                   <button class="btn btn-sm btn-primary" @click="resetPassword(u.id)">Set</button>
