@@ -229,7 +229,13 @@ func main() {
 
 	// Start HTTP server
 	go func() {
-		slog.Warn("Bekci started", "version", version, "addr", fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port))
+		slog.Warn("Bekci started",
+			"version", version,
+			"addr", fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),
+			"db", cfg.Server.DBPath,
+			"log_file", cfg.Logging.Path,
+			"log_level", cfg.Logging.Level,
+		)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("HTTP server error", "error", err)
 			os.Exit(1)

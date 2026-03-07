@@ -94,6 +94,9 @@ func applyEnvOverrides(cfg *Config) {
 	if v := os.Getenv("BEKCI_BACKUP_DIR"); v != "" {
 		cfg.Server.BackupDir = v
 	}
+	if v := os.Getenv("BEKCI_LOG_LEVEL"); v != "" {
+		cfg.Logging.Level = v
+	}
 }
 
 func applyDefaults(cfg *Config) {

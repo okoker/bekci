@@ -12,8 +12,16 @@ import (
 type contextKey string
 
 const (
-	ctxClaims contextKey = "claims"
+	ctxClaims  contextKey = "claims"
+	ctxUserRef contextKey = "userRef"
 )
+
+// userRef is a mutable holder so outer middleware (logging) can read user info
+// set by inner middleware (auth). Go contexts are immutable, but a pointer stored
+// in the original context lets inner layers write back to the outer scope.
+type userRef struct {
+	ID string
+}
 
 // getClaims extracts auth claims from request context.
 func getClaims(r *http.Request) *auth.Claims {
@@ -46,6 +54,11 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 			return
 		}
 		claims.Role = user.Role
+
+		// Write user ID back to the mutable holder so outer middleware can read it
+		if ref, ok := r.Context().Value(ctxUserRef).(*userRef); ok {
+			ref.ID = claims.Subject
+		}
 
 		ctx := context.WithValue(r.Context(), ctxClaims, claims)
 		next.ServeHTTP(w, r.WithContext(ctx))
@@ -99,17 +112,34 @@ func recoveryMiddleware(next http.Handler) http.Handler {
 }
 
 // loggingMiddleware logs HTTP requests.
+// All requests are logged at DEBUG level. 5xx responses are also logged at WARN
+// with IP and user context to aid production troubleshooting.
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
+		ref := &userRef{}
+		r = r.WithContext(context.WithValue(r.Context(), ctxUserRef, ref))
 		sw := &statusWriter{ResponseWriter: w, status: 200}
 		next.ServeHTTP(sw, r)
+		duration := time.Since(start).String()
+
 		slog.Debug("HTTP request",
 			"method", r.Method,
 			"path", r.URL.Path,
 			"status", sw.status,
-			"duration", time.Since(start).String(),
+			"duration", duration,
 		)
+
+		if sw.status >= 500 {
+			slog.Warn("HTTP 5xx",
+				"method", r.Method,
+				"path", r.URL.Path,
+				"status", sw.status,
+				"duration", duration,
+				"ip", clientIP(r),
+				"user_id", ref.ID,
+			)
+		}
 	})
 }
 
