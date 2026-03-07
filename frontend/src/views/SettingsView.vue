@@ -981,7 +981,7 @@ onUnmounted(() => {
                       <th>Filename</th>
                       <th>Date</th>
                       <th>Size</th>
-                      <th>SHA256</th>
+                      <th>Hash <span class="copy-hint" title="Click hash to copy">&#128203;</span></th>
                       <th></th>
                     </tr>
                   </thead>
@@ -990,7 +990,7 @@ onUnmounted(() => {
                       <td class="saved-backup-filename">{{ b.filename }}</td>
                       <td style="white-space: nowrap;">{{ formatBackupDate(b.created_at) }}</td>
                       <td style="white-space: nowrap;">{{ formatSize(b.size) }}</td>
-                      <td><code class="hash-text" @click="copyHash(b.sha256)" title="Click to copy full hash">{{ b.sha256.slice(0, 12) }}...</code></td>
+                      <td><code class="hash-text" @click="copyHash(b.sha256)" title="Click to copy">{{ b.sha256 }}</code></td>
                       <td class="saved-backup-actions">
                         <button class="btn btn-small" @click="downloadSavedBackup(b.filename)" title="Download">Download</button>
                         <button class="btn btn-small btn-danger" @click="deleteSavedBackup(b.filename)" title="Delete">Delete</button>
@@ -1433,6 +1433,11 @@ onUnmounted(() => {
 }
 .hash-text:hover {
   background: #e2e8f0;
+}
+.copy-hint {
+  font-size: 0.7rem;
+  cursor: help;
+  opacity: 0.6;
 }
 .success-msg {
   background: #dcfce7;

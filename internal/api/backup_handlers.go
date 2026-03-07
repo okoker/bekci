@@ -312,9 +312,9 @@ func (s *Server) handleSaveFullBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Compute SHA256
+	// Compute SHA256 (store truncated to 16 hex chars — enough for integrity check)
 	hash := sha256.Sum256(archiveData)
-	hashStr := hex.EncodeToString(hash[:])
+	hashStr := hex.EncodeToString(hash[:])[:16]
 
 	// Update index
 	entries := loadBackupIndex(s.backupDir)
