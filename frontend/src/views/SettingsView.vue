@@ -844,43 +844,48 @@ onUnmounted(() => {
         <button class="btn btn-primary" @click="downloadBackup">Download Config Backup</button>
       </div>
 
-      <div class="card backup-card" style="margin-bottom: 1rem;">
-        <h3 class="collapsible-header" @click="fullBackupExpanded = !fullBackupExpanded">
-          <span class="collapse-arrow" :class="{ open: fullBackupExpanded }">&#9654;</span>
-          Full Database Backup
-        </h3>
+      <div class="card backup-card collapsible-card" :class="{ expanded: fullBackupExpanded }" style="margin-bottom: 1rem;">
+        <div class="collapsible-header" @click="fullBackupExpanded = !fullBackupExpanded">
+          <div class="collapsible-title-row">
+            <span class="collapse-arrow" :class="{ open: fullBackupExpanded }">&#9654;</span>
+            <h3 style="margin: 0;">Full Database Backup</h3>
+          </div>
+          <span class="collapsible-hint">{{ fullBackupExpanded ? 'collapse' : 'expand' }}</span>
+        </div>
         <p class="text-muted" style="margin: 0;">Complete database including historical data, audit logs, alert history.<br>Restore via CLI: <code>bekci restore-full &lt;file&gt;</code></p>
 
-        <template v-if="fullBackupExpanded">
-          <hr class="divider" />
-          <div v-if="fullBackupError" class="error-msg" style="margin-bottom: 0.75rem;">{{ fullBackupError }}</div>
+        <div class="collapsible-body" :class="{ open: fullBackupExpanded }">
+          <div class="collapsible-inner">
+            <hr class="divider" />
+            <div v-if="fullBackupError" class="error-msg" style="margin-bottom: 0.75rem;">{{ fullBackupError }}</div>
 
-          <div class="full-backup-options">
-            <label class="toggle-label">
-              <input type="checkbox" v-model="fullBackupEncrypt" />
-              <span>Encrypt backup</span>
-            </label>
+            <div class="full-backup-options">
+              <label class="toggle-label">
+                <input type="checkbox" v-model="fullBackupEncrypt" />
+                <span>Encrypt backup</span>
+              </label>
 
-            <div v-if="fullBackupEncrypt" class="passphrase-section">
-              <div class="passphrase-display">
-                <code class="passphrase-text">{{ fullBackupPassphrase || 'Generating...' }}</code>
-                <button class="btn btn-small" @click="copyPassphrase" title="Copy">Copy</button>
-                <button class="btn btn-small" @click="fetchPassphrase" title="Regenerate">New</button>
+              <div v-if="fullBackupEncrypt" class="passphrase-section">
+                <div class="passphrase-display">
+                  <code class="passphrase-text">{{ fullBackupPassphrase || 'Generating...' }}</code>
+                  <button class="btn btn-small" @click="copyPassphrase" title="Copy">Copy</button>
+                  <button class="btn btn-small" @click="fetchPassphrase" title="Regenerate">New</button>
+                </div>
+                <div class="restore-warning" style="margin-top: 0.5rem;">
+                  <strong>Save this passphrase</strong> &mdash; it cannot be recovered. You will need it to restore from this backup.
+                </div>
               </div>
-              <div class="restore-warning" style="margin-top: 0.5rem;">
-                <strong>Save this passphrase</strong> &mdash; it cannot be recovered. You will need it to restore from this backup.
-              </div>
+
+              <button
+                class="btn btn-primary"
+                :disabled="fullBackupLoading || (fullBackupEncrypt && !fullBackupPassphrase)"
+                @click="downloadFullBackup"
+              >
+                {{ fullBackupLoading ? 'Preparing backup...' : 'Download Full Backup' }}
+              </button>
             </div>
-
-            <button
-              class="btn btn-primary"
-              :disabled="fullBackupLoading || (fullBackupEncrypt && !fullBackupPassphrase)"
-              @click="downloadFullBackup"
-            >
-              {{ fullBackupLoading ? 'Preparing backup...' : 'Download Full Backup' }}
-            </button>
           </div>
-        </template>
+        </div>
       </div>
 
       <div class="card backup-card">
@@ -1151,23 +1156,55 @@ onUnmounted(() => {
 }
 
 /* ── Full Backup ── */
+.collapsible-card {
+  border-left: 3px solid #e2e8f0;
+  transition: border-color 0.3s;
+}
+.collapsible-card.expanded {
+  border-left-color: #ea580c;
+}
 .collapsible-header {
   cursor: pointer;
   user-select: none;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  justify-content: space-between;
 }
 .collapsible-header:hover {
   color: #ea580c;
 }
+.collapsible-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.collapsible-hint {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+.collapsible-header:hover .collapsible-hint {
+  color: #ea580c;
+}
 .collapse-arrow {
   font-size: 0.7rem;
-  transition: transform 0.15s;
+  transition: transform 0.35s ease;
   color: #94a3b8;
 }
 .collapse-arrow.open {
   transform: rotate(90deg);
+}
+.collapsible-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.35s ease;
+}
+.collapsible-body.open {
+  grid-template-rows: 1fr;
+}
+.collapsible-inner {
+  overflow: hidden;
 }
 .full-backup-options {
   display: flex;
