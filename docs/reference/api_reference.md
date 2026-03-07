@@ -1099,11 +1099,11 @@ Downloads a complete database backup as a tar.gz archive containing the SQLite d
 **Response headers:**
 ```
 Content-Type: application/octet-stream
-Content-Disposition: attachment; filename="bekci-full-20260115-100000.bekci-full"
+Content-Disposition: attachment; filename="bekci-full-20260115-100000.tar.gz"
 Content-Length: <size>
 ```
 
-File extension: `.bekci-full` (plain) or `.bekci-full.enc` (encrypted).
+File extension: `.tar.gz` (plain) or `.tar.gz.enc` (encrypted).
 
 **Archive contents (tar.gz):**
 - `bekci.db` — full SQLite database snapshot (via online backup API)

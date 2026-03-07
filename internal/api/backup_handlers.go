@@ -184,7 +184,7 @@ func (s *Server) handleFullBackup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Optionally encrypt
-	ext := ".bekci-full"
+	ext := ".tar.gz"
 	if encrypt {
 		archiveData, err = crypto.Encrypt(archiveData, passphrase)
 		if err != nil {
@@ -192,7 +192,7 @@ func (s *Server) handleFullBackup(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, "encryption failed")
 			return
 		}
-		ext = ".bekci-full.enc"
+		ext = ".tar.gz.enc"
 	}
 
 	s.audit(r, "export_full_backup", "backup", "", fmt.Sprintf("encrypted=%v size=%d", encrypt, len(archiveData)), "success")

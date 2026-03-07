@@ -39,8 +39,8 @@ Two backup types exist in Bekci:
 Response: binary stream with `Content-Disposition: attachment`.
 
 File extensions:
-- `.bekci-full` — plain tar.gz
-- `.bekci-full.enc` — encrypted
+- `.tar.gz` — plain archive
+- `.tar.gz.enc` — encrypted
 
 #### GET /api/backup/generate-passphrase
 
@@ -119,7 +119,7 @@ When declining the bundled config, the wizard prompts for each field with the bu
 sudo systemctl stop bekci
 
 # 2. Run restore
-bekci restore-full /path/to/bekci-full-20260306-235000.bekci-full.enc
+bekci restore-full /path/to/bekci-full-20260306-235000.tar.gz.enc
 # Follow interactive prompts
 
 # 3. Start the service
