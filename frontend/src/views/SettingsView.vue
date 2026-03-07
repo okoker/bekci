@@ -71,6 +71,7 @@ const restoring = ref(false)
 const showRestoreConfirm = ref(false)
 
 // ── Full Backup state ──
+const fullBackupExpanded = ref(false)
 const fullBackupEncrypt = ref(false)
 const fullBackupPassphrase = ref('')
 const fullBackupLoading = ref(false)
@@ -844,36 +845,42 @@ onUnmounted(() => {
       </div>
 
       <div class="card backup-card" style="margin-bottom: 1rem;">
-        <h3>Full Database Backup</h3>
-        <p class="text-muted" style="margin: 0 0 1rem;">Download a complete backup of the entire database (including all historical data, audit logs, alert history) plus the server config file. Restore is done via CLI: <code>bekci restore-full &lt;file&gt;</code></p>
+        <h3 class="collapsible-header" @click="fullBackupExpanded = !fullBackupExpanded">
+          <span class="collapse-arrow" :class="{ open: fullBackupExpanded }">&#9654;</span>
+          Full Database Backup
+        </h3>
+        <p class="text-muted" style="margin: 0;">Complete database including historical data, audit logs, alert history.<br>Restore via CLI: <code>bekci restore-full &lt;file&gt;</code></p>
 
-        <div v-if="fullBackupError" class="error-msg" style="margin-bottom: 0.75rem;">{{ fullBackupError }}</div>
+        <template v-if="fullBackupExpanded">
+          <hr class="divider" />
+          <div v-if="fullBackupError" class="error-msg" style="margin-bottom: 0.75rem;">{{ fullBackupError }}</div>
 
-        <div class="full-backup-options">
-          <label class="toggle-label">
-            <input type="checkbox" v-model="fullBackupEncrypt" />
-            <span>Encrypt backup</span>
-          </label>
+          <div class="full-backup-options">
+            <label class="toggle-label">
+              <input type="checkbox" v-model="fullBackupEncrypt" />
+              <span>Encrypt backup</span>
+            </label>
 
-          <div v-if="fullBackupEncrypt" class="passphrase-section">
-            <div class="passphrase-display">
-              <code class="passphrase-text">{{ fullBackupPassphrase || 'Generating...' }}</code>
-              <button class="btn btn-small" @click="copyPassphrase" title="Copy">Copy</button>
-              <button class="btn btn-small" @click="fetchPassphrase" title="Regenerate">New</button>
+            <div v-if="fullBackupEncrypt" class="passphrase-section">
+              <div class="passphrase-display">
+                <code class="passphrase-text">{{ fullBackupPassphrase || 'Generating...' }}</code>
+                <button class="btn btn-small" @click="copyPassphrase" title="Copy">Copy</button>
+                <button class="btn btn-small" @click="fetchPassphrase" title="Regenerate">New</button>
+              </div>
+              <div class="restore-warning" style="margin-top: 0.5rem;">
+                <strong>Save this passphrase</strong> &mdash; it cannot be recovered. You will need it to restore from this backup.
+              </div>
             </div>
-            <div class="restore-warning" style="margin-top: 0.5rem;">
-              <strong>Save this passphrase</strong> &mdash; it cannot be recovered. You will need it to restore from this backup.
-            </div>
+
+            <button
+              class="btn btn-primary"
+              :disabled="fullBackupLoading || (fullBackupEncrypt && !fullBackupPassphrase)"
+              @click="downloadFullBackup"
+            >
+              {{ fullBackupLoading ? 'Preparing backup...' : 'Download Full Backup' }}
+            </button>
           </div>
-
-          <button
-            class="btn btn-primary"
-            :disabled="fullBackupLoading || (fullBackupEncrypt && !fullBackupPassphrase)"
-            @click="downloadFullBackup"
-          >
-            {{ fullBackupLoading ? 'Preparing backup...' : 'Download Full Backup' }}
-          </button>
-        </div>
+        </template>
       </div>
 
       <div class="card backup-card">
@@ -1144,6 +1151,24 @@ onUnmounted(() => {
 }
 
 /* ── Full Backup ── */
+.collapsible-header {
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.collapsible-header:hover {
+  color: #ea580c;
+}
+.collapse-arrow {
+  font-size: 0.7rem;
+  transition: transform 0.15s;
+  color: #94a3b8;
+}
+.collapse-arrow.open {
+  transform: rotate(90deg);
+}
 .full-backup-options {
   display: flex;
   flex-direction: column;
