@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -62,6 +63,7 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 
 	hash, err := auth.HashPassword(req.Password)
 	if err != nil {
+		s.audit(r, "create_user", "user", "", "username="+req.Username+" hash failed", "failure")
 		writeError(w, http.StatusInternalServerError, "password hashing failed")
 		return
 	}
@@ -84,7 +86,7 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.audit(r, "create_user", "user", user.ID, "username="+user.Username+" role="+user.Role, "success")
+	s.audit(r, "create_user", "user", user.ID, fmt.Sprintf("username=%s role=%s id=%s", user.Username, user.Role, user.ID), "success")
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"id":       user.ID,
 		"username": user.Username,
@@ -171,7 +173,7 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "update failed")
 		return
 	}
-	s.audit(r, "update_user", "user", id, "role="+role, "success")
+	s.audit(r, "update_user", "user", id, fmt.Sprintf("old_role=%s new_role=%s email=%s phone=%s", user.Role, role, email, phone), "success")
 	writeJSON(w, http.StatusOK, map[string]string{"message": "user updated"})
 }
 
@@ -252,6 +254,7 @@ func (s *Server) handleResetPassword(w http.ResponseWriter, r *http.Request) {
 
 	hash, err := auth.HashPassword(req.Password)
 	if err != nil {
+		s.audit(r, "reset_password", "user", id, "username="+user.Username+" hash failed", "failure")
 		writeError(w, http.StatusInternalServerError, "password hashing failed")
 		return
 	}
@@ -266,6 +269,12 @@ func (s *Server) handleResetPassword(w http.ResponseWriter, r *http.Request) {
 		slog.Error("Failed to delete user sessions", "user_id", id, "error", err)
 	}
 
-	s.audit(r, "reset_password", "user", id, "username="+user.Username, "success")
+	resetBy := ""
+	if claims := getClaims(r); claims != nil {
+		if admin, _ := s.store.GetUserByID(claims.Subject); admin != nil {
+			resetBy = admin.Username
+		}
+	}
+	s.audit(r, "reset_password", "user", id, fmt.Sprintf("username=%s reset_by=%s", user.Username, resetBy), "success")
 	writeJSON(w, http.StatusOK, map[string]string{"message": "password reset"})
 }

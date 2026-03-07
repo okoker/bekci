@@ -275,17 +275,25 @@ function onConditionTypeChange(cond) {
 
 // ── Alert recipients ──
 const allUsers = ref([])
+const allUsersError = ref(false)
 const selectedRecipients = ref([])
 
 async function loadAllUsers() {
+  allUsersError.value = false
   try {
     const { data } = await api.get('/users')
     allUsers.value = data.filter(u => u.status === 'active')
-  } catch { /* ignore */ }
+  } catch {
+    allUsersError.value = true
+  }
 }
 
 async function saveRecipients(targetId) {
-  await api.put(`/targets/${targetId}/recipients`, { user_ids: selectedRecipients.value })
+  try {
+    await api.put(`/targets/${targetId}/recipients`, { user_ids: selectedRecipients.value })
+  } catch (e) {
+    error.value = e.response?.data?.error || 'Failed to save alert recipients'
+  }
 }
 
 function toggleRecipient(userId) {
@@ -343,10 +351,24 @@ async function runAllChecks(targetId) {
       error.value = 'No checks configured for this target'
       return
     }
+    let queued = 0
+    let failed = 0
     for (const c of checks) {
-      await api.post(`/checks/${c.id}/run`)
+      try {
+        await api.post(`/checks/${c.id}/run`)
+        queued++
+      } catch {
+        failed++
+      }
     }
-    success.value = `${checks.length} check(s) queued for immediate run`
+    if (failed === 0) {
+      success.value = `${queued} check(s) queued for immediate run`
+    } else if (queued > 0) {
+      success.value = `${queued} of ${checks.length} check(s) queued`
+      error.value = `${failed} check(s) failed to queue`
+    } else {
+      error.value = 'Failed to queue any checks'
+    }
   } catch (e) {
     error.value = e.response?.data?.error || 'Failed to run checks'
   }
@@ -960,7 +982,8 @@ onMounted(() => loadTargets())
             <div class="conditions-header">
               <strong>Alert Recipients</strong>
             </div>
-            <p v-if="allUsers.length === 0" class="text-muted" style="font-size: 0.85rem;">No users available.</p>
+            <p v-if="allUsersError" class="text-muted" style="font-size: 0.85rem; color: #dc2626;">Could not load users.</p>
+            <p v-else-if="allUsers.length === 0" class="text-muted" style="font-size: 0.85rem;">No users available.</p>
             <div v-else class="recipient-list">
               <label v-for="u in allUsers" :key="u.id" class="recipient-item">
                 <input type="checkbox" :checked="selectedRecipients.includes(u.id)" @change="toggleRecipient(u.id)" />

@@ -257,7 +257,14 @@ func (s *Scheduler) runCheck(checkID string) {
 	if err := s.store.SaveResult(cr); err != nil {
 		slog.Error("Scheduler: failed to save result", "check_id", checkID, "error", err)
 	} else if s.engine != nil {
-		go s.engine.Evaluate(checkID)
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Error("Panic in rule evaluation", "check_id", checkID, "panic", r)
+				}
+			}()
+			s.engine.Evaluate(checkID)
+		}()
 	}
 
 	slog.Debug("Check completed", "check_id", checkID, "type", check.Type, "status", result.Status,

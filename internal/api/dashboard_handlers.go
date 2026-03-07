@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -115,6 +116,8 @@ func (s *Server) buildDashboardTargets() ([]dashboardTarget, error) {
 			pct, err := s.store.GetUptimePercent(c.ID, 90)
 			if err == nil {
 				dc.Uptime90d = pct
+			} else {
+				slog.Warn("Failed to fetch uptime percent", "check_id", c.ID, "error", err)
 			}
 
 			dt.Checks = append(dt.Checks, dc)

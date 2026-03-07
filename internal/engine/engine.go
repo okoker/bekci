@@ -123,7 +123,14 @@ func (e *Engine) evaluateRule(rule store.Rule) {
 
 		// Dispatch alert asynchronously
 		if e.dispatcher != nil {
-			go e.dispatcher.Dispatch(rule.ID, oldState, newState)
+			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						slog.Error("Panic in alert dispatcher", "rule_id", rule.ID, "panic", r)
+					}
+				}()
+				e.dispatcher.Dispatch(rule.ID, oldState, newState)
+			}()
 		}
 	} else {
 		_ = e.store.TouchRuleEvaluated(rule.ID)

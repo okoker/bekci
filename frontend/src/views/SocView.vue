@@ -61,6 +61,7 @@ const cpuLabel = computed(() => {
 function togglePopover() { showPopover.value = !showPopover.value }
 function closePopover(e) { if (!e.target.closest('.health-indicator')) showPopover.value = false }
 
+const historyError = ref({}) // checkId -> true if history load failed
 const empty90d = Array.from({ length: 90 }, () => ({ date: '', uptime_pct: -1, total_checks: 0 }))
 const empty4h = Array.from({ length: 48 }, () => ({ status: 'none', response_ms: 0, checked_at: '' }))
 
@@ -100,7 +101,7 @@ async function loadHistory(checkId) {
       bar4h: pad4hBars(res4h.data),
     }
   } catch {
-    // silently fail
+    historyError.value[checkId] = true
   }
 }
 
@@ -313,20 +314,27 @@ onUnmounted(() => {
         </div>
         <!-- Compact bars -->
         <div v-if="getPreferredCheck(target)" class="soc-bars">
-          <div class="soc-bar-track">
-            <div v-for="(day, i) in (historyData[getPreferredCheck(target)?.id]?.bar90d || empty90d)" :key="'90d-' + i"
-              class="soc-bar-tick"
-              :style="{ background: uptimeColor(day.uptime_pct) }"
-              :title="formatTooltip90d(day)">
+          <template v-if="historyError[getPreferredCheck(target)?.id]">
+            <div class="soc-history-error" title="History data unavailable">
+              <span class="soc-history-error-icon">!</span>
             </div>
-          </div>
-          <div class="soc-bar-track soc-bar-4h">
-            <div v-for="(r, i) in (historyData[getPreferredCheck(target)?.id]?.bar4h || empty4h)" :key="'4h-' + i"
-              class="soc-bar-tick"
-              :style="{ background: statusColor(r.status) }"
-              :title="formatTooltip4h(r)">
+          </template>
+          <template v-else>
+            <div class="soc-bar-track">
+              <div v-for="(day, i) in (historyData[getPreferredCheck(target)?.id]?.bar90d || empty90d)" :key="'90d-' + i"
+                class="soc-bar-tick"
+                :style="{ background: uptimeColor(day.uptime_pct) }"
+                :title="formatTooltip90d(day)">
+              </div>
             </div>
-          </div>
+            <div class="soc-bar-track soc-bar-4h">
+              <div v-for="(r, i) in (historyData[getPreferredCheck(target)?.id]?.bar4h || empty4h)" :key="'4h-' + i"
+                class="soc-bar-tick"
+                :style="{ background: statusColor(r.status) }"
+                :title="formatTooltip4h(r)">
+              </div>
+            </div>
+          </template>
         </div>
       </div>
     </div>
@@ -624,5 +632,24 @@ onUnmounted(() => {
   background: #1e293b;
   color: #e2e8f0;
   border-color: #334155;
+}
+
+.soc-history-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 35px;
+}
+.soc-history-error-icon {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  line-height: 16px;
+  text-align: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.15);
+  border-radius: 50%;
 }
 </style>

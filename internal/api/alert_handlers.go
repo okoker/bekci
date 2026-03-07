@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 )
@@ -47,7 +48,7 @@ func (s *Server) handleSetRecipients(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.audit(r, "set_alert_recipients", "target", id, "", "success")
+	s.audit(r, "set_alert_recipients", "target", id, fmt.Sprintf("user_ids=%v count=%d", req.UserIDs, len(req.UserIDs)), "success")
 	writeJSON(w, http.StatusOK, map[string]string{"message": "recipients updated"})
 }
 
@@ -75,6 +76,7 @@ func (s *Server) handleListAlerts(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleTestEmail(w http.ResponseWriter, r *http.Request) {
 	if s.alerter == nil {
+		s.audit(r, "test_email", "settings", "", "alerter unavailable", "failure")
 		writeError(w, http.StatusServiceUnavailable, "alerter not initialized")
 		return
 	}
@@ -108,6 +110,7 @@ func (s *Server) handleTestEmail(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleTestSignal(w http.ResponseWriter, r *http.Request) {
 	if s.alerter == nil {
+		s.audit(r, "test_signal", "settings", "", "alerter unavailable", "failure")
 		writeError(w, http.StatusServiceUnavailable, "alerter not initialized")
 		return
 	}

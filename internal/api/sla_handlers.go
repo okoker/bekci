@@ -1,6 +1,7 @@
 package api
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -66,7 +67,11 @@ func (s *Server) handleSLAHistory(w http.ResponseWriter, r *http.Request) {
 		}
 		// Find preferred check
 		checks, err := s.store.ListChecksByTarget(t.ID)
-		if err != nil || len(checks) == 0 {
+		if err != nil {
+			slog.Warn("SLA: failed to list checks for target", "target_id", t.ID, "error", err)
+			continue
+		}
+		if len(checks) == 0 {
 			continue
 		}
 
@@ -84,6 +89,7 @@ func (s *Server) handleSLAHistory(w http.ResponseWriter, r *http.Request) {
 		// Get 90-day daily uptime
 		uptimes, err := s.store.GetDailyUptime(checkID, 90)
 		if err != nil {
+			slog.Warn("SLA: failed to get daily uptime", "check_id", checkID, "target_id", t.ID, "error", err)
 			continue
 		}
 

@@ -143,7 +143,11 @@ async function saveFullBackup() {
     }
     const { data } = await api.post('/backup/full/save', null, { params, timeout: 300000 })
     fullBackupSuccess.value = `Saved: ${data.filename}`
-    fetchSavedBackups()
+    try {
+      await fetchSavedBackups()
+    } catch {
+      fullBackupError.value = 'Backup saved but failed to refresh backup list'
+    }
   } catch (e) {
     fullBackupError.value = e.response?.data?.error || 'Save failed'
   } finally {

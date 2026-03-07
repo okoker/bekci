@@ -104,6 +104,7 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	// Validate: only known keys, type-appropriate values
 	for key, val := range req {
 		if !knownSettings[key] {
+			s.audit(r, "update_settings", "settings", "", "unknown key="+key, "failure")
 			writeError(w, http.StatusBadRequest, "unknown setting: "+key)
 			return
 		}

@@ -15,6 +15,7 @@ const pageSize = 10
 
 // Per-check history data
 const historyData = ref({}) // checkId -> { bar90d: [], bar4h: [] }
+const historyError = ref({}) // checkId -> true if history load failed
 const expandedTargetId = ref(null)
 const expandedCheckId = ref(null)
 
@@ -57,7 +58,7 @@ async function loadHistory(checkId) {
       bar4h: pad4hBars(res4h.data),
     }
   } catch {
-    // silently fail
+    historyError.value[checkId] = true
   }
 }
 
@@ -331,7 +332,10 @@ onUnmounted(() => {
 
         <!-- Collapsed: preferred check bars -->
         <div v-if="expandedTargetId !== target.id && target.checks.length > 0" class="collapsed-bars" @click="toggleTarget(target.id)">
-          <div class="uptime-bars-row">
+          <div v-if="historyError[getPreferredCheck(target)?.id]" class="history-error-hint" title="History data unavailable">
+            <span class="history-error-icon">!</span> History unavailable
+          </div>
+          <div v-else class="uptime-bars-row">
             <div class="bar-section bar-90d-section">
               <div class="bar-track">
                 <div v-for="(day, i) in (historyData[getPreferredCheck(target)?.id]?.bar90d || empty90d)" :key="'90d-' + i"
@@ -379,7 +383,10 @@ onUnmounted(() => {
               </span>
             </div>
 
-            <div class="uptime-bars-row">
+            <div v-if="historyError[check.id]" class="history-error-hint" title="History data unavailable">
+              <span class="history-error-icon">!</span> History unavailable
+            </div>
+            <div v-else class="uptime-bars-row">
               <div class="bar-section bar-90d-section">
                 <div class="bar-track">
                   <div v-for="(day, i) in (historyData[check.id]?.bar90d || empty90d)" :key="'90d-' + i"
@@ -678,6 +685,24 @@ onUnmounted(() => {
   font-size: 0.8rem;
   color: #64748b;
   padding: 0.25rem 0 0 1.25rem;
+}
+
+.history-error-hint {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  padding: 0.25rem 0;
+}
+.history-error-icon {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  line-height: 14px;
+  text-align: center;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #f59e0b;
+  background: #fef3c7;
+  border-radius: 50%;
 }
 
 /* Pagination */

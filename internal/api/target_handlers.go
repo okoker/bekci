@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -105,12 +106,14 @@ func (s *Server) handleCreateTarget(w http.ResponseWriter, r *http.Request) {
 
 	// Validate conditions
 	if len(req.Conditions) == 0 {
+		s.audit(r, "create_target", "target", "", "name="+req.Name+" no conditions", "failure")
 		writeError(w, http.StatusBadRequest, "at least one condition is required")
 		return
 	}
 	conds := make([]store.TargetCondition, 0, len(req.Conditions))
 	for _, c := range req.Conditions {
 		if c.CheckType == "" || !validCheckTypes[c.CheckType] {
+			s.audit(r, "create_target", "target", "", "name="+req.Name+" invalid check_type="+c.CheckType, "failure")
 			writeError(w, http.StatusBadRequest, "invalid check_type in condition")
 			return
 		}
@@ -186,7 +189,7 @@ func (s *Server) handleCreateTarget(w http.ResponseWriter, r *http.Request) {
 		s.scheduler.Reload()
 	}
 
-	s.audit(r, "create_target", "target", t.ID, "name="+t.Name, "success")
+	s.audit(r, "create_target", "target", t.ID, fmt.Sprintf("name=%s host=%s category=%s conditions=%d", t.Name, req.Host, req.Category, len(conds)), "success")
 
 	// Return full detail
 	detail, err := s.store.GetTargetDetail(t.ID)
@@ -246,12 +249,14 @@ func (s *Server) handleUpdateTarget(w http.ResponseWriter, r *http.Request) {
 
 	// Validate conditions
 	if len(req.Conditions) == 0 {
+		s.audit(r, "update_target", "target", id, "name="+req.Name+" no conditions", "failure")
 		writeError(w, http.StatusBadRequest, "at least one condition is required")
 		return
 	}
 	conds := make([]store.TargetCondition, 0, len(req.Conditions))
 	for _, c := range req.Conditions {
 		if c.CheckType == "" || !validCheckTypes[c.CheckType] {
+			s.audit(r, "update_target", "target", id, "name="+req.Name+" invalid check_type="+c.CheckType, "failure")
 			writeError(w, http.StatusBadRequest, "invalid check_type in condition")
 			return
 		}
@@ -317,7 +322,7 @@ func (s *Server) handleUpdateTarget(w http.ResponseWriter, r *http.Request) {
 		s.scheduler.Reload()
 	}
 
-	s.audit(r, "update_target", "target", id, "name="+req.Name, "success")
+	s.audit(r, "update_target", "target", id, fmt.Sprintf("name=%s host=%s conditions=%d", req.Name, req.Host, len(conds)), "success")
 
 	// Return full detail
 	detail, err := s.store.GetTargetDetail(id)
@@ -337,6 +342,7 @@ func (s *Server) handlePauseTarget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if strings.Contains(err.Error(), "already paused") {
+			s.audit(r, "pause_target", "target", id, "already paused", "failure")
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
@@ -347,7 +353,7 @@ func (s *Server) handlePauseTarget(w http.ResponseWriter, r *http.Request) {
 	if s.scheduler != nil {
 		s.scheduler.Reload()
 	}
-	s.audit(r, "pause_target", "target", id, "", "success")
+	s.audit(r, "pause_target", "target", id, "paused", "success")
 	writeJSON(w, http.StatusOK, map[string]string{"status": "paused"})
 }
 
@@ -360,6 +366,7 @@ func (s *Server) handleUnpauseTarget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if strings.Contains(err.Error(), "not paused") {
+			s.audit(r, "unpause_target", "target", id, "not paused", "failure")
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
@@ -377,7 +384,7 @@ func (s *Server) handleUnpauseTarget(w http.ResponseWriter, r *http.Request) {
 			s.scheduler.RunNow(c.ID)
 		}
 	}
-	s.audit(r, "unpause_target", "target", id, "", "success")
+	s.audit(r, "unpause_target", "target", id, "unpaused", "success")
 	writeJSON(w, http.StatusOK, map[string]string{"status": "unpaused"})
 }
 

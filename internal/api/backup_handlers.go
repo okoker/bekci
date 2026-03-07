@@ -348,8 +348,18 @@ func (s *Server) handleDownloadSavedBackup(w http.ResponseWriter, r *http.Reques
 	fullPath := filepath.Join(s.backupDir, filename)
 
 	// Safety: ensure resolved path is within backup dir
-	absBackupDir, _ := filepath.Abs(s.backupDir)
-	absPath, _ := filepath.Abs(fullPath)
+	absBackupDir, err := filepath.Abs(s.backupDir)
+	if err != nil {
+		slog.Error("Failed to resolve backup dir", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	absPath, err := filepath.Abs(fullPath)
+	if err != nil {
+		slog.Error("Failed to resolve backup path", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
 	if absPath != filepath.Join(absBackupDir, filename) {
 		writeError(w, http.StatusBadRequest, "invalid filename")
 		return
@@ -373,7 +383,9 @@ func (s *Server) handleDownloadSavedBackup(w http.ResponseWriter, r *http.Reques
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", info.Size()))
-	io.Copy(w, f)
+	if _, err := io.Copy(w, f); err != nil {
+		slog.Error("Failed to stream backup file", "filename", filename, "error", err)
+	}
 }
 
 func (s *Server) handleDeleteSavedBackup(w http.ResponseWriter, r *http.Request) {
@@ -386,8 +398,18 @@ func (s *Server) handleDeleteSavedBackup(w http.ResponseWriter, r *http.Request)
 	fullPath := filepath.Join(s.backupDir, filename)
 
 	// Safety: ensure resolved path is within backup dir
-	absBackupDir, _ := filepath.Abs(s.backupDir)
-	absPath, _ := filepath.Abs(fullPath)
+	absBackupDir, err := filepath.Abs(s.backupDir)
+	if err != nil {
+		slog.Error("Failed to resolve backup dir", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	absPath, err := filepath.Abs(fullPath)
+	if err != nil {
+		slog.Error("Failed to resolve backup path", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
 	if absPath != filepath.Join(absBackupDir, filename) {
 		writeError(w, http.StatusBadRequest, "invalid filename")
 		return

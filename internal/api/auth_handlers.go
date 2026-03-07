@@ -168,10 +168,12 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 
 	hash, err := authpkg.HashPassword(req.New)
 	if err != nil {
+		s.audit(r, "change_password", "user", user.ID, "hash failed", "failure")
 		writeError(w, http.StatusInternalServerError, "password hashing failed")
 		return
 	}
 	if err := s.store.UpdateUserPassword(user.ID, hash); err != nil {
+		s.audit(r, "change_password", "user", user.ID, "db update failed", "failure")
 		writeError(w, http.StatusInternalServerError, "password update failed")
 		return
 	}
