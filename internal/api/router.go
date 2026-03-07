@@ -27,12 +27,13 @@ type Server struct {
 	spa            fs.FS // embedded frontend/dist
 	corsOrigin     string
 	dbPath         string
+	configPath     string
 	loginLimiter   *loginLimiter
 	socPublicCache cachedSetting
 }
 
 // New creates a new API server.
-func New(st *store.Store, authSvc *auth.Service, sched *scheduler.Scheduler, alertSvc *alerter.AlertService, version string, spa fs.FS, corsOrigin string, dbPath string) *Server {
+func New(st *store.Store, authSvc *auth.Service, sched *scheduler.Scheduler, alertSvc *alerter.AlertService, version string, spa fs.FS, corsOrigin string, dbPath string, configPath string) *Server {
 	return &Server{
 		store:        st,
 		auth:         authSvc,
@@ -42,6 +43,7 @@ func New(st *store.Store, authSvc *auth.Service, sched *scheduler.Scheduler, ale
 		spa:          spa,
 		corsOrigin:   corsOrigin,
 		dbPath:       dbPath,
+		configPath:   configPath,
 		loginLimiter: newLoginLimiter(),
 	}
 }
@@ -102,6 +104,8 @@ func (s *Server) Handler() http.Handler {
 	// Backup & Restore — admin only
 	mux.Handle("GET /api/backup", adminAuth(s.handleBackup))
 	mux.Handle("POST /api/backup/restore", adminAuth(s.handleRestore))
+	mux.Handle("GET /api/backup/full", adminAuth(s.handleFullBackup))
+	mux.Handle("GET /api/backup/generate-passphrase", adminAuth(s.handleGeneratePassphrase))
 
 	// Fail2Ban status — admin only
 	mux.Handle("GET /api/fail2ban/status", adminAuth(s.handleFail2BanStatus))

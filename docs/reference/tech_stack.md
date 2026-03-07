@@ -68,7 +68,7 @@ No npm on server — `cmd/bekci/frontend_dist/` is committed to git. Go binary e
 | golang-jwt/jwt/v5 | 5.3.1 | JWT signing & verification |
 | mattn/go-sqlite3 | 1.14.19 | SQLite driver (requires CGO) |
 | prometheus-community/pro-bing | 0.8.0 | ICMP ping |
-| golang.org/x/crypto | 0.48.0 | Bcrypt password hashing |
+| golang.org/x/crypto | 0.48.0 | Bcrypt password hashing, Argon2id KDF (backup encryption) |
 | gopkg.in/yaml.v3 | 3.0.1 | Config file parsing |
 
 ### Frontend (package.json)

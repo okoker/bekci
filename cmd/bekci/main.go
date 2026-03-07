@@ -34,6 +34,12 @@ var version = "2.0.0-dev"
 var frontendFS embed.FS
 
 func main() {
+	// Subcommand detection — must run before flag.Parse()
+	if len(os.Args) > 1 && os.Args[1] == "restore-full" {
+		runRestoreFull()
+		return
+	}
+
 	var (
 		configPath  = flag.String("config", "config.yaml", "path to config file")
 		showVersion = flag.Bool("version", false, "show version")
@@ -121,7 +127,7 @@ func main() {
 	}
 
 	// Create API server
-	apiServer := api.New(db, authSvc, sched, alertSvc, version, spa, cfg.Server.CORSOrigin, cfg.Server.DBPath)
+	apiServer := api.New(db, authSvc, sched, alertSvc, version, spa, cfg.Server.CORSOrigin, cfg.Server.DBPath, *configPath)
 
 	// Setup HTTP server
 	httpServer := &http.Server{

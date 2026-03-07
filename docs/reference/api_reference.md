@@ -1011,7 +1011,7 @@ Update one or more settings. Only known keys are accepted. Sending masked values
 }
 ```
 
-**Audit actions:** `login`, `login_failed`, `logout`, `create_user`, `update_user`, `suspend_user`, `activate_user`, `reset_password`, `change_password`, `change_password_failed`, `update_profile`, `create_target`, `update_target`, `delete_target`, `pause_target`, `unpause_target`, `set_alert_recipients`, `update_settings`, `restore_backup`, `export_backup`, `run_check`, `test_email`, `test_signal`.
+**Audit actions:** `login`, `login_failed`, `logout`, `create_user`, `update_user`, `suspend_user`, `activate_user`, `reset_password`, `change_password`, `change_password_failed`, `update_profile`, `create_target`, `update_target`, `delete_target`, `pause_target`, `unpause_target`, `set_alert_recipients`, `update_settings`, `restore_backup`, `export_backup`, `export_full_backup`, `run_check`, `test_email`, `test_signal`.
 
 **Status values:** `success`, `failure`. All mutating actions log both success and failure (with detail). Login and change_password also log dedicated failure actions (`login_failed`, `change_password_failed`).
 
@@ -1023,12 +1023,14 @@ Update one or more settings. Only known keys are accepted. Sending masked values
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/api/backup` | admin | Download full config backup |
-| POST | `/api/backup/restore` | admin | Restore from backup file |
+| GET | `/api/backup` | admin | Download config-only backup (JSON) |
+| POST | `/api/backup/restore` | admin | Restore from config backup file |
+| GET | `/api/backup/full` | admin | Download full database backup (tar.gz) |
+| GET | `/api/backup/generate-passphrase` | admin | Generate a random 4-word passphrase |
 
 ### GET /api/backup
 
-Returns a JSON file download containing all config data (users with hashed passwords, targets, checks, rules, settings, recipients).
+Returns a JSON file download containing all config data (users with hashed passwords, targets, checks, rules, settings, recipients). Does NOT include historical data (check_results, audit_logs, alert_history).
 
 **Response headers:**
 ```
@@ -1082,6 +1084,48 @@ Field: file = <backup.json>
 | Unsupported backup version | 400 |
 | Schema version too new | 400 |
 | No active admin in backup | 400 |
+
+### GET /api/backup/full
+
+Downloads a complete database backup as a tar.gz archive containing the SQLite database file and config.yaml. Optionally encrypts the archive with AES-256-GCM (Argon2id KDF).
+
+**Query params:**
+
+| Param | Default | Description |
+|-------|---------|-------------|
+| `encrypt` | `false` | Set to `true` to encrypt the archive |
+| `passphrase` | (required if encrypt=true) | Encryption passphrase (min 8 chars) |
+
+**Response headers:**
+```
+Content-Type: application/octet-stream
+Content-Disposition: attachment; filename="bekci-full-20260115-100000.bekci-full"
+Content-Length: <size>
+```
+
+File extension: `.bekci-full` (plain) or `.bekci-full.enc` (encrypted).
+
+**Archive contents (tar.gz):**
+- `bekci.db` — full SQLite database snapshot (via online backup API)
+- `config.yaml` — server config file (if available; omitted in env-only setups)
+
+**Encryption format:** salt (16B) || nonce (12B) || AES-256-GCM ciphertext+tag. Key derived via Argon2id (time=3, mem=64MB, threads=4).
+
+| Error | Code |
+|-------|------|
+| Passphrase too short (<8 chars) | 400 |
+| Backup/encryption failure | 500 |
+
+**Restore:** Full backups cannot be restored via the web UI. Use the CLI: `bekci restore-full <archive-path>`. See `reference/full_backup.md`.
+
+### GET /api/backup/generate-passphrase
+
+Generates a random 4-word passphrase from a curated word list (~960 words, ~10 bits per word, ~40 bits total entropy).
+
+**Response (200):**
+```json
+{ "passphrase": "wolf-hard-pore-jobs" }
+```
 
 ---
 
