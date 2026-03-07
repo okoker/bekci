@@ -59,7 +59,7 @@ Valid roles enforced at user creation and update: `admin`, `operator`, `viewer`.
 ```
 Request
   -> recoveryMiddleware (panic recovery, returns 500)
-    -> loggingMiddleware (method, path, status, duration)
+    -> loggingMiddleware (DEBUG: all requests; WARN: 5xx with IP + user_id)
       -> corsMiddleware (CORS headers if origin configured)
         -> route match
           -> [requireAuth] (cookie JWT + session + active user check)
