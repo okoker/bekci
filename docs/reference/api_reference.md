@@ -1011,7 +1011,7 @@ Update one or more settings. Only known keys are accepted. Sending masked values
 }
 ```
 
-**Audit actions:** `login`, `login_failed`, `logout`, `create_user`, `update_user`, `suspend_user`, `activate_user`, `reset_password`, `change_password`, `change_password_failed`, `update_profile`, `create_target`, `update_target`, `delete_target`, `pause_target`, `unpause_target`, `set_alert_recipients`, `update_settings`, `restore_backup`, `export_backup`, `export_full_backup`, `run_check`, `test_email`, `test_signal`.
+**Audit actions:** `login`, `login_failed`, `logout`, `create_user`, `update_user`, `suspend_user`, `activate_user`, `reset_password`, `change_password`, `change_password_failed`, `update_profile`, `create_target`, `update_target`, `delete_target`, `pause_target`, `unpause_target`, `set_alert_recipients`, `update_settings`, `restore_backup`, `export_backup`, `export_full_backup`, `save_full_backup`, `download_saved_backup`, `delete_saved_backup`, `run_check`, `test_email`, `test_signal`.
 
 **Status values:** `success`, `failure`. All mutating actions log both success and failure (with detail). Login and change_password also log dedicated failure actions (`login_failed`, `change_password_failed`).
 
@@ -1026,6 +1026,10 @@ Update one or more settings. Only known keys are accepted. Sending masked values
 | GET | `/api/backup` | admin | Download config-only backup (JSON) |
 | POST | `/api/backup/restore` | admin | Restore from config backup file |
 | GET | `/api/backup/full` | admin | Download full database backup (tar.gz) |
+| POST | `/api/backup/full/save` | admin | Save full backup to server |
+| GET | `/api/backup/full/list` | admin | List saved backups on server |
+| GET | `/api/backup/full/saved/{filename}` | admin | Download a saved backup |
+| DELETE | `/api/backup/full/saved/{filename}` | admin | Delete a saved backup |
 | GET | `/api/backup/generate-passphrase` | admin | Generate a random 4-word passphrase |
 
 ### GET /api/backup
@@ -1117,6 +1121,56 @@ File extension: `.tar.gz` (plain) or `.tar.gz.enc` (encrypted).
 | Backup/encryption failure | 500 |
 
 **Restore:** Full backups cannot be restored via the web UI. Use the CLI: `bekci restore-full <archive-path>`. See `reference/full_backup.md`.
+
+### POST /api/backup/full/save
+
+Same as `GET /api/backup/full` but saves the archive to the server-side backup directory instead of streaming to browser. Same query params (`encrypt`, `passphrase`).
+
+**Response (200):**
+```json
+{ "message": "backup saved", "filename": "bekci-full-20260307-015116.tar.gz", "sha256": "82d676c68f5e..." }
+```
+
+| Error | Code |
+|-------|------|
+| Passphrase too short (<8 chars) | 400 |
+| Backup/encryption/write failure | 500 |
+
+### GET /api/backup/full/list
+
+Lists saved backups on the server with metadata (SHA256 hash, size, date, encrypted flag).
+
+**Response (200):**
+```json
+[
+  { "filename": "bekci-full-20260307-015116.tar.gz", "sha256": "82d676c68f5e...", "size": 535424, "created_at": "2026-03-07T01:51:16Z", "encrypted": false }
+]
+```
+
+### GET /api/backup/full/saved/{filename}
+
+Download a previously saved backup file. Filename must match `^bekci-full-\d{8}-\d{6}\.tar\.gz(\.enc)?$`.
+
+**Response:** Binary stream with `Content-Disposition: attachment`.
+
+| Error | Code |
+|-------|------|
+| Invalid filename | 400 |
+| Backup not found | 404 |
+
+### DELETE /api/backup/full/saved/{filename}
+
+Delete a saved backup file. Same filename validation.
+
+**Response (200):**
+```json
+{ "message": "deleted" }
+```
+
+| Error | Code |
+|-------|------|
+| Invalid filename | 400 |
+| Backup not found | 404 |
 
 ### GET /api/backup/generate-passphrase
 

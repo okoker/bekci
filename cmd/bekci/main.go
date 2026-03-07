@@ -127,7 +127,7 @@ func main() {
 	}
 
 	// Create API server
-	apiServer := api.New(db, authSvc, sched, alertSvc, version, spa, cfg.Server.CORSOrigin, cfg.Server.DBPath, *configPath)
+	apiServer := api.New(db, authSvc, sched, alertSvc, version, spa, cfg.Server.CORSOrigin, cfg.Server.DBPath, *configPath, cfg.Server.BackupDir)
 
 	// Setup HTTP server
 	httpServer := &http.Server{

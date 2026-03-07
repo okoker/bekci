@@ -26,7 +26,11 @@ Two backup types exist in Bekci:
 
 | Endpoint | Auth | Description |
 |----------|------|-------------|
-| `GET /api/backup/full` | admin | Download full backup |
+| `GET /api/backup/full` | admin | Download full backup (streams to browser) |
+| `POST /api/backup/full/save` | admin | Save full backup to server |
+| `GET /api/backup/full/list` | admin | List saved backups |
+| `GET /api/backup/full/saved/{filename}` | admin | Download a saved backup |
+| `DELETE /api/backup/full/saved/{filename}` | admin | Delete a saved backup |
 | `GET /api/backup/generate-passphrase` | admin | Generate 4-word passphrase |
 
 #### GET /api/backup/full
@@ -46,18 +50,58 @@ File extensions:
 
 Returns `{"passphrase": "word-word-word-word"}`. Uses crypto/rand from a curated ~960-word list (~40 bits entropy for 4 words).
 
+#### POST /api/backup/full/save
+
+Same query params as `GET /api/backup/full` (`encrypt`, `passphrase`). Saves to `backup_dir` on the server.
+
+Response: `{"message": "backup saved", "filename": "bekci-full-20260307-015116.tar.gz", "sha256": "82d676c68f5e..."}`
+
+#### GET /api/backup/full/list
+
+Response: JSON array of saved backup metadata.
+```json
+[{"filename": "bekci-full-20260307-015116.tar.gz", "sha256": "82d6...", "size": 535424, "created_at": "2026-03-07T01:51:16Z", "encrypted": false}]
+```
+
+#### GET /api/backup/full/saved/{filename}
+
+Filename must match `^bekci-full-\d{8}-\d{6}\.tar\.gz(\.enc)?$`. Path traversal protected.
+
+Response: binary stream with `Content-Disposition: attachment`.
+
+#### DELETE /api/backup/full/saved/{filename}
+
+Same filename validation. Response: `{"message": "deleted"}`
+
+### Server-Side Storage
+
+**Config:** `server.backup_dir` in config.yaml. Default: `{db_dir}/backups/` (e.g. `/var/lib/bekci/backups/` in prod, `/data/backups/` in Docker).
+
+Env override: `BEKCI_BACKUP_DIR`.
+
+Directory auto-created on first save. Metadata tracked in `{backup_dir}/index.json` — SHA256 hash computed at save time to avoid re-hashing large files on list.
+
+No auto-purge — deletion is manual via the web UI.
+
 ### Frontend UI
 
-Located in Settings > Backup & Restore tab (admin only). The "Full Database Backup" card provides:
+Located in Settings > Backup & Restore tab (admin only). The "Full Database Backup" collapsible card provides:
 
 - **Encrypt backup** toggle — when enabled, auto-fetches a passphrase
 - **Passphrase display** — monospace code block with Copy and New (regenerate) buttons
 - **Warning banner** — "Save this passphrase — it cannot be recovered"
-- **Download button** — streams the backup with a loading state (large DBs may take time)
+- **Destination dropdown** — "Download" (streams to browser) or "Save to server" (saves to backup_dir)
+- **Action button** — label changes based on destination selection
+- **Saved Backups table** — lists server-side backups with filename, date, size, truncated SHA256 (click to copy), Download and Delete buttons. Max 5-6 rows visible, scrollable overflow. Delete requires confirmation popup.
 
 ### Audit Trail
 
-Full backup downloads are logged as `export_full_backup` in the audit log with encrypted status and file size in the detail field.
+| Action | Description |
+|--------|-------------|
+| `export_full_backup` | Direct download to browser |
+| `save_full_backup` | Saved to server-side backup directory |
+| `download_saved_backup` | Downloaded a previously saved backup |
+| `delete_saved_backup` | Deleted a saved backup from server |
 
 ---
 

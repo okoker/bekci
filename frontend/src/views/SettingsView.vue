@@ -76,6 +76,10 @@ const fullBackupEncrypt = ref(false)
 const fullBackupPassphrase = ref('')
 const fullBackupLoading = ref(false)
 const fullBackupError = ref('')
+const fullBackupDest = ref('download')
+const fullBackupSuccess = ref('')
+const savedBackups = ref([])
+const savedBackupsLoading = ref(false)
 
 async function fetchPassphrase() {
   try {
@@ -116,6 +120,76 @@ async function downloadFullBackup() {
 
 function copyPassphrase() {
   navigator.clipboard.writeText(fullBackupPassphrase.value)
+}
+
+async function fetchSavedBackups() {
+  savedBackupsLoading.value = true
+  try {
+    const { data } = await api.get('/backup/full/list')
+    savedBackups.value = data || []
+  } catch { savedBackups.value = [] }
+  finally { savedBackupsLoading.value = false }
+}
+
+async function saveFullBackup() {
+  fullBackupError.value = ''
+  fullBackupSuccess.value = ''
+  fullBackupLoading.value = true
+  try {
+    const params = {}
+    if (fullBackupEncrypt.value) {
+      params.encrypt = 'true'
+      params.passphrase = fullBackupPassphrase.value
+    }
+    const { data } = await api.post('/backup/full/save', null, { params, timeout: 300000 })
+    fullBackupSuccess.value = `Saved: ${data.filename}`
+    fetchSavedBackups()
+  } catch (e) {
+    fullBackupError.value = e.response?.data?.error || 'Save failed'
+  } finally {
+    fullBackupLoading.value = false
+  }
+}
+
+async function downloadSavedBackup(filename) {
+  try {
+    const resp = await api.get(`/backup/full/saved/${filename}`, { responseType: 'blob', timeout: 300000 })
+    const url = URL.createObjectURL(resp.data)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    fullBackupError.value = e.response?.data?.error || 'Download failed'
+  }
+}
+
+async function deleteSavedBackup(filename) {
+  if (!confirm(`Delete ${filename}?`)) return
+  try {
+    await api.delete(`/backup/full/saved/${filename}`)
+    fetchSavedBackups()
+  } catch (e) {
+    fullBackupError.value = e.response?.data?.error || 'Delete failed'
+  }
+}
+
+function copyHash(hash) {
+  navigator.clipboard.writeText(hash)
+}
+
+function formatBackupDate(isoStr) {
+  const d = new Date(isoStr)
+  return d.toLocaleDateString('en-GB') + ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / 1048576).toFixed(1) + ' MB'
 }
 
 async function downloadBackup() {
@@ -446,6 +520,10 @@ watch(fullBackupEncrypt, (val) => {
   if (val && !fullBackupPassphrase.value) {
     fetchPassphrase()
   }
+})
+
+watch(fullBackupExpanded, (val) => {
+  if (val) fetchSavedBackups()
 })
 
 watch(activeTab, (tab) => {
@@ -858,6 +936,7 @@ onUnmounted(() => {
           <div class="collapsible-inner">
             <hr class="divider" />
             <div v-if="fullBackupError" class="error-msg" style="margin-bottom: 0.75rem;">{{ fullBackupError }}</div>
+            <div v-if="fullBackupSuccess" class="success-msg" style="margin-bottom: 0.75rem;">{{ fullBackupSuccess }}</div>
 
             <div class="full-backup-options">
               <label class="toggle-label">
@@ -876,13 +955,51 @@ onUnmounted(() => {
                 </div>
               </div>
 
-              <button
-                class="btn btn-primary"
-                :disabled="fullBackupLoading || (fullBackupEncrypt && !fullBackupPassphrase)"
-                @click="downloadFullBackup"
-              >
-                {{ fullBackupLoading ? 'Preparing backup...' : 'Download Full Backup' }}
-              </button>
+              <div class="backup-action-row">
+                <label class="backup-dest-label">Backup to:</label>
+                <select v-model="fullBackupDest" class="backup-dest-select">
+                  <option value="download">Download</option>
+                  <option value="server">Save to server</option>
+                </select>
+                <button
+                  class="btn btn-primary"
+                  :disabled="fullBackupLoading || (fullBackupEncrypt && !fullBackupPassphrase)"
+                  @click="fullBackupDest === 'download' ? downloadFullBackup() : saveFullBackup()"
+                >
+                  {{ fullBackupLoading ? 'Preparing...' : (fullBackupDest === 'download' ? 'Download Backup' : 'Save Backup') }}
+                </button>
+              </div>
+            </div>
+
+            <div class="saved-backups-section">
+              <h4 style="margin: 0 0 0.5rem;">Saved Backups</h4>
+              <div v-if="savedBackupsLoading" class="text-muted">Loading...</div>
+              <div v-else-if="savedBackups.length" class="saved-backups-list">
+                <table class="saved-backups-table">
+                  <thead>
+                    <tr>
+                      <th>Filename</th>
+                      <th>Date</th>
+                      <th>Size</th>
+                      <th>SHA256</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="b in savedBackups" :key="b.filename">
+                      <td class="saved-backup-filename">{{ b.filename }}</td>
+                      <td style="white-space: nowrap;">{{ formatBackupDate(b.created_at) }}</td>
+                      <td style="white-space: nowrap;">{{ formatSize(b.size) }}</td>
+                      <td><code class="hash-text" @click="copyHash(b.sha256)" title="Click to copy full hash">{{ b.sha256.slice(0, 12) }}...</code></td>
+                      <td class="saved-backup-actions">
+                        <button class="btn btn-small" @click="downloadSavedBackup(b.filename)" title="Download">Download</button>
+                        <button class="btn btn-small btn-danger" @click="deleteSavedBackup(b.filename)" title="Delete">Delete</button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p v-else class="text-muted" style="margin: 0;">No saved backups</p>
             </div>
           </div>
         </div>
@@ -1244,6 +1361,85 @@ onUnmounted(() => {
 .btn-small {
   padding: 0.25rem 0.6rem;
   font-size: 0.8rem;
+}
+
+/* ── Backup action row ── */
+.backup-action-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.backup-dest-label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.backup-dest-select {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  background: #fff;
+}
+
+/* ── Saved Backups ── */
+.saved-backups-section {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e2e8f0;
+}
+.saved-backups-list {
+  max-height: 260px;
+  overflow-y: auto;
+}
+.saved-backups-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.825rem;
+}
+.saved-backups-table th {
+  text-align: left;
+  font-weight: 600;
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid #e2e8f0;
+  color: #64748b;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.saved-backups-table td {
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+.saved-backups-table tbody tr:hover {
+  background: #f8fafc;
+}
+.saved-backup-filename {
+  font-family: monospace;
+  font-size: 0.8rem;
+  word-break: break-all;
+}
+.saved-backup-actions {
+  white-space: nowrap;
+  display: flex;
+  gap: 0.35rem;
+}
+.hash-text {
+  cursor: pointer;
+  font-size: 0.8rem;
+  background: #f1f5f9;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+}
+.hash-text:hover {
+  background: #e2e8f0;
+}
+.success-msg {
+  background: #dcfce7;
+  color: #166534;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
 }
 
 /* ── Restore confirmation modal ── */

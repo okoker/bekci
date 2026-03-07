@@ -3,6 +3,8 @@ package api
 import (
 	"archive/tar"
 	"compress/gzip"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,6 +12,8 @@ import (
 	"mime"
 	"net/http"
 	"os"
+	"path/filepath"
+	"regexp"
 	"time"
 
 	"github.com/bekci/internal/crypto"
@@ -112,6 +116,69 @@ func (s *Server) handleRestore(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"message": "restore successful"})
 }
 
+// buildFullBackupArchive creates a full backup archive (tar.gz), optionally encrypted.
+// Returns the archive data, filename, and any error.
+func (s *Server) buildFullBackupArchive(encrypt bool, passphrase string) ([]byte, string, error) {
+	// Create temp file for SQLite backup
+	tmpDB, err := os.CreateTemp("", "bekci-fullbackup-*.db")
+	if err != nil {
+		return nil, "", fmt.Errorf("creating temp file: %w", err)
+	}
+	tmpDBPath := tmpDB.Name()
+	tmpDB.Close()
+	defer os.Remove(tmpDBPath)
+
+	// Perform SQLite online backup to temp file
+	if err := s.store.FullBackup(tmpDBPath); err != nil {
+		return nil, "", fmt.Errorf("SQLite backup: %w", err)
+	}
+
+	// Build tar.gz archive: bekci.db + config.yaml
+	tmpArchive, err := os.CreateTemp("", "bekci-fullbackup-*.tar.gz")
+	if err != nil {
+		return nil, "", fmt.Errorf("creating temp archive: %w", err)
+	}
+	tmpArchivePath := tmpArchive.Name()
+	defer os.Remove(tmpArchivePath)
+
+	gzw := gzip.NewWriter(tmpArchive)
+	tw := tar.NewWriter(gzw)
+
+	if err := addFileToTar(tw, tmpDBPath, "bekci.db"); err != nil {
+		tw.Close()
+		gzw.Close()
+		tmpArchive.Close()
+		return nil, "", fmt.Errorf("adding DB to archive: %w", err)
+	}
+
+	if s.configPath != "" {
+		if err := addFileToTar(tw, s.configPath, "config.yaml"); err != nil {
+			slog.Warn("Could not include config.yaml in backup", "error", err)
+		}
+	}
+
+	tw.Close()
+	gzw.Close()
+	tmpArchive.Close()
+
+	archiveData, err := os.ReadFile(tmpArchivePath)
+	if err != nil {
+		return nil, "", fmt.Errorf("reading archive: %w", err)
+	}
+
+	ext := ".tar.gz"
+	if encrypt {
+		archiveData, err = crypto.Encrypt(archiveData, passphrase)
+		if err != nil {
+			return nil, "", fmt.Errorf("encrypting: %w", err)
+		}
+		ext = ".tar.gz.enc"
+	}
+
+	filename := fmt.Sprintf("bekci-full-%s%s", time.Now().Format("20060102-150405"), ext)
+	return archiveData, filename, nil
+}
+
 func (s *Server) handleFullBackup(w http.ResponseWriter, r *http.Request) {
 	encrypt := r.URL.Query().Get("encrypt") == "true"
 	passphrase := r.URL.Query().Get("passphrase")
@@ -121,83 +188,16 @@ func (s *Server) handleFullBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create temp file for SQLite backup
-	tmpDB, err := os.CreateTemp("", "bekci-fullbackup-*.db")
+	archiveData, filename, err := s.buildFullBackupArchive(encrypt, passphrase)
 	if err != nil {
-		slog.Error("Failed to create temp file for full backup", "error", err)
-		writeError(w, http.StatusInternalServerError, "backup failed")
-		return
-	}
-	tmpDBPath := tmpDB.Name()
-	tmpDB.Close()
-	defer os.Remove(tmpDBPath)
-
-	// Perform SQLite online backup to temp file
-	if err := s.store.FullBackup(tmpDBPath); err != nil {
-		slog.Error("SQLite full backup failed", "error", err)
+		slog.Error("Full backup failed", "error", err)
 		s.audit(r, "export_full_backup", "backup", "", err.Error(), "failure")
 		writeError(w, http.StatusInternalServerError, "backup failed")
 		return
 	}
 
-	// Build tar.gz archive: bekci.db + config.yaml
-	tmpArchive, err := os.CreateTemp("", "bekci-fullbackup-*.tar.gz")
-	if err != nil {
-		slog.Error("Failed to create temp archive", "error", err)
-		writeError(w, http.StatusInternalServerError, "backup failed")
-		return
-	}
-	tmpArchivePath := tmpArchive.Name()
-	defer os.Remove(tmpArchivePath)
-
-	gzw := gzip.NewWriter(tmpArchive)
-	tw := tar.NewWriter(gzw)
-
-	// Add bekci.db
-	if err := addFileToTar(tw, tmpDBPath, "bekci.db"); err != nil {
-		tw.Close()
-		gzw.Close()
-		tmpArchive.Close()
-		slog.Error("Failed to add DB to archive", "error", err)
-		writeError(w, http.StatusInternalServerError, "backup failed")
-		return
-	}
-
-	// Add config.yaml (if it exists)
-	if s.configPath != "" {
-		if err := addFileToTar(tw, s.configPath, "config.yaml"); err != nil {
-			slog.Warn("Could not include config.yaml in backup", "error", err)
-			// Non-fatal — config may not exist (env-only setup)
-		}
-	}
-
-	tw.Close()
-	gzw.Close()
-	tmpArchive.Close()
-
-	// Read the archive
-	archiveData, err := os.ReadFile(tmpArchivePath)
-	if err != nil {
-		slog.Error("Failed to read archive", "error", err)
-		writeError(w, http.StatusInternalServerError, "backup failed")
-		return
-	}
-
-	// Optionally encrypt
-	ext := ".tar.gz"
-	if encrypt {
-		archiveData, err = crypto.Encrypt(archiveData, passphrase)
-		if err != nil {
-			slog.Error("Failed to encrypt backup", "error", err)
-			writeError(w, http.StatusInternalServerError, "encryption failed")
-			return
-		}
-		ext = ".tar.gz.enc"
-	}
-
 	s.audit(r, "export_full_backup", "backup", "", fmt.Sprintf("encrypted=%v size=%d", encrypt, len(archiveData)), "success")
 
-	filename := fmt.Sprintf("bekci-full-%s%s", time.Now().Format("20060102-150405"), ext)
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(archiveData)))
@@ -238,4 +238,183 @@ func (s *Server) handleGeneratePassphrase(w http.ResponseWriter, r *http.Request
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"passphrase": passphrase})
+}
+
+// ── Server-side backup storage ──
+
+type backupMeta struct {
+	Filename  string `json:"filename"`
+	SHA256    string `json:"sha256"`
+	Size      int64  `json:"size"`
+	CreatedAt string `json:"created_at"`
+	Encrypted bool   `json:"encrypted"`
+}
+
+var validBackupFilename = regexp.MustCompile(`^bekci-full-\d{8}-\d{6}\.tar\.gz(\.enc)?$`)
+
+func loadBackupIndex(backupDir string) []backupMeta {
+	data, err := os.ReadFile(filepath.Join(backupDir, "index.json"))
+	if err != nil {
+		return []backupMeta{}
+	}
+	var entries []backupMeta
+	if err := json.Unmarshal(data, &entries); err != nil {
+		return []backupMeta{}
+	}
+	// Filter out entries whose files no longer exist on disk
+	valid := make([]backupMeta, 0, len(entries))
+	for _, e := range entries {
+		path := filepath.Join(backupDir, e.Filename)
+		if _, err := os.Stat(path); err == nil {
+			valid = append(valid, e)
+		}
+	}
+	return valid
+}
+
+func saveBackupIndex(backupDir string, entries []backupMeta) error {
+	data, err := json.MarshalIndent(entries, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(backupDir, "index.json"), data, 0600)
+}
+
+func (s *Server) handleSaveFullBackup(w http.ResponseWriter, r *http.Request) {
+	encrypt := r.URL.Query().Get("encrypt") == "true"
+	passphrase := r.URL.Query().Get("passphrase")
+
+	if encrypt && len(passphrase) < 8 {
+		writeError(w, http.StatusBadRequest, "passphrase must be at least 8 characters")
+		return
+	}
+
+	archiveData, filename, err := s.buildFullBackupArchive(encrypt, passphrase)
+	if err != nil {
+		slog.Error("Full backup save failed", "error", err)
+		s.audit(r, "save_full_backup", "backup", "", err.Error(), "failure")
+		writeError(w, http.StatusInternalServerError, "backup failed")
+		return
+	}
+
+	// Ensure backup directory exists
+	if err := os.MkdirAll(s.backupDir, 0755); err != nil {
+		slog.Error("Failed to create backup directory", "error", err, "path", s.backupDir)
+		writeError(w, http.StatusInternalServerError, "backup failed")
+		return
+	}
+
+	// Write file
+	destPath := filepath.Join(s.backupDir, filename)
+	if err := os.WriteFile(destPath, archiveData, 0600); err != nil {
+		slog.Error("Failed to write backup file", "error", err)
+		writeError(w, http.StatusInternalServerError, "backup failed")
+		return
+	}
+
+	// Compute SHA256
+	hash := sha256.Sum256(archiveData)
+	hashStr := hex.EncodeToString(hash[:])
+
+	// Update index
+	entries := loadBackupIndex(s.backupDir)
+	entries = append(entries, backupMeta{
+		Filename:  filename,
+		SHA256:    hashStr,
+		Size:      int64(len(archiveData)),
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+		Encrypted: encrypt,
+	})
+	if err := saveBackupIndex(s.backupDir, entries); err != nil {
+		slog.Warn("Failed to update backup index", "error", err)
+	}
+
+	s.audit(r, "save_full_backup", "backup", "", fmt.Sprintf("encrypted=%v size=%d file=%s", encrypt, len(archiveData), filename), "success")
+	writeJSON(w, http.StatusOK, map[string]string{"message": "backup saved", "filename": filename, "sha256": hashStr})
+}
+
+func (s *Server) handleListSavedBackups(w http.ResponseWriter, r *http.Request) {
+	entries := loadBackupIndex(s.backupDir)
+	writeJSON(w, http.StatusOK, entries)
+}
+
+func (s *Server) handleDownloadSavedBackup(w http.ResponseWriter, r *http.Request) {
+	filename := r.PathValue("filename")
+	if !validBackupFilename.MatchString(filename) {
+		writeError(w, http.StatusBadRequest, "invalid filename")
+		return
+	}
+
+	fullPath := filepath.Join(s.backupDir, filename)
+
+	// Safety: ensure resolved path is within backup dir
+	absBackupDir, _ := filepath.Abs(s.backupDir)
+	absPath, _ := filepath.Abs(fullPath)
+	if absPath != filepath.Join(absBackupDir, filename) {
+		writeError(w, http.StatusBadRequest, "invalid filename")
+		return
+	}
+
+	f, err := os.Open(fullPath)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "backup not found")
+		return
+	}
+	defer f.Close()
+
+	info, err := f.Stat()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to read backup")
+		return
+	}
+
+	s.audit(r, "download_saved_backup", "backup", "", filename, "success")
+
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", info.Size()))
+	io.Copy(w, f)
+}
+
+func (s *Server) handleDeleteSavedBackup(w http.ResponseWriter, r *http.Request) {
+	filename := r.PathValue("filename")
+	if !validBackupFilename.MatchString(filename) {
+		writeError(w, http.StatusBadRequest, "invalid filename")
+		return
+	}
+
+	fullPath := filepath.Join(s.backupDir, filename)
+
+	// Safety: ensure resolved path is within backup dir
+	absBackupDir, _ := filepath.Abs(s.backupDir)
+	absPath, _ := filepath.Abs(fullPath)
+	if absPath != filepath.Join(absBackupDir, filename) {
+		writeError(w, http.StatusBadRequest, "invalid filename")
+		return
+	}
+
+	if err := os.Remove(fullPath); err != nil {
+		if os.IsNotExist(err) {
+			writeError(w, http.StatusNotFound, "backup not found")
+			return
+		}
+		slog.Error("Failed to delete backup", "error", err)
+		writeError(w, http.StatusInternalServerError, "delete failed")
+		return
+	}
+
+	// Update index — remove entry
+	entries := loadBackupIndex(s.backupDir)
+	filtered := make([]backupMeta, 0, len(entries))
+	for _, e := range entries {
+		if e.Filename != filename {
+			filtered = append(filtered, e)
+		}
+	}
+	if err := saveBackupIndex(s.backupDir, filtered); err != nil {
+		slog.Warn("Failed to update backup index", "error", err)
+	}
+
+	s.audit(r, "delete_saved_backup", "backup", "", filename, "success")
+	writeJSON(w, http.StatusOK, map[string]string{"message": "deleted"})
 }

@@ -24,6 +24,7 @@ type ServerConfig struct {
 	Port       int    `yaml:"port"`
 	Host       string `yaml:"host"`
 	DBPath     string `yaml:"db_path"`
+	BackupDir  string `yaml:"backup_dir"`
 	CORSOrigin string `yaml:"cors_origin"`
 }
 
@@ -90,6 +91,9 @@ func applyEnvOverrides(cfg *Config) {
 	if v := os.Getenv("BEKCI_CORS_ORIGIN"); v != "" {
 		cfg.Server.CORSOrigin = v
 	}
+	if v := os.Getenv("BEKCI_BACKUP_DIR"); v != "" {
+		cfg.Server.BackupDir = v
+	}
 }
 
 func applyDefaults(cfg *Config) {
@@ -101,6 +105,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Server.DBPath == "" {
 		cfg.Server.DBPath = "bekci.db"
+	}
+	if cfg.Server.BackupDir == "" {
+		cfg.Server.BackupDir = filepath.Join(filepath.Dir(cfg.Server.DBPath), "backups")
 	}
 	if cfg.Logging.Level == "" {
 		cfg.Logging.Level = "warn"
