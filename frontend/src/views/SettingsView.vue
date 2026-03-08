@@ -94,12 +94,12 @@ async function downloadFullBackup() {
   fullBackupError.value = ''
   fullBackupLoading.value = true
   try {
-    const params = {}
+    const body = {}
     if (fullBackupEncrypt.value) {
-      params.encrypt = 'true'
-      params.passphrase = fullBackupPassphrase.value
+      body.encrypt = true
+      body.passphrase = fullBackupPassphrase.value
     }
-    const resp = await api.get('/backup/full', { params, responseType: 'blob', timeout: 300000 })
+    const resp = await api.post('/backup/full', body, { responseType: 'blob', timeout: 300000 })
     const disposition = resp.headers['content-disposition'] || ''
     const match = disposition.match(/filename="(.+)"/)
     const filename = match ? match[1] : 'bekci-full-backup'
@@ -136,12 +136,12 @@ async function saveFullBackup() {
   fullBackupSuccess.value = ''
   fullBackupLoading.value = true
   try {
-    const params = {}
+    const body = {}
     if (fullBackupEncrypt.value) {
-      params.encrypt = 'true'
-      params.passphrase = fullBackupPassphrase.value
+      body.encrypt = true
+      body.passphrase = fullBackupPassphrase.value
     }
-    const { data } = await api.post('/backup/full/save', null, { params, timeout: 300000 })
+    const { data } = await api.post('/backup/full/save', body, { timeout: 300000 })
     fullBackupSuccess.value = `Saved: ${data.filename}`
     try {
       await fetchSavedBackups()

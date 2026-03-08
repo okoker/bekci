@@ -659,6 +659,53 @@ func TestAlertHistory(t *testing.T) {
 	}
 }
 
+func TestCooldownIgnoresRecoveryAlerts(t *testing.T) {
+	s := newTestStore(t)
+	tgt, conds := makeTarget("cooldown-tgt")
+	if err := s.CreateTargetWithConditions(tgt, conds[:1], ""); err != nil {
+		t.Fatal(err)
+	}
+	ruleID := ""
+	if tgt.RuleID != nil {
+		ruleID = *tgt.RuleID
+	}
+
+	u := makeUser("cooldownuser", "admin")
+	if err := s.CreateUser(u); err != nil {
+		t.Fatal(err)
+	}
+
+	// Log a firing alert
+	if err := s.LogAlert(tgt.ID, ruleID, u.ID, "firing", "host is down"); err != nil {
+		t.Fatalf("LogAlert(firing): %v", err)
+	}
+
+	// Record the firing alert time
+	firingTime, err := s.GetLastAlertTime(ruleID)
+	if err != nil {
+		t.Fatalf("GetLastAlertTime after firing: %v", err)
+	}
+	if firingTime.IsZero() {
+		t.Fatal("expected non-zero firing time")
+	}
+
+	// Log a recovery alert after the firing alert
+	// Small sleep to ensure different timestamp
+	time.Sleep(50 * time.Millisecond)
+	if err := s.LogAlert(tgt.ID, ruleID, u.ID, "recovery", "host recovered"); err != nil {
+		t.Fatalf("LogAlert(recovery): %v", err)
+	}
+
+	// GetLastAlertTime should return the firing time, not the recovery time
+	got, err := s.GetLastAlertTime(ruleID)
+	if err != nil {
+		t.Fatalf("GetLastAlertTime after recovery: %v", err)
+	}
+	if !got.Equal(firingTime) {
+		t.Fatalf("GetLastAlertTime = %v, want %v (firing time); recovery alert should be ignored", got, firingTime)
+	}
+}
+
 func TestBackupExportRestore(t *testing.T) {
 	s1 := newTestStore(t)
 

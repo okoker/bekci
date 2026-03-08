@@ -54,6 +54,15 @@ func runPageHash(host string, config map[string]any) *Result {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return &Result{
+			Status:     "down",
+			Message:    fmt.Sprintf("HTTP %d", resp.StatusCode),
+			ResponseMs: elapsed,
+			Metrics:    map[string]any{"url": url},
+		}
+	}
+
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 10*1024*1024)) // 10MB limit
 	if err != nil {
 		return &Result{

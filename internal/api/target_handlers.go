@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -123,6 +124,10 @@ func (s *Server) handleCreateTarget(w http.ResponseWriter, r *http.Request) {
 		}
 		if c.Config == "" {
 			c.Config = "{}"
+		}
+		if !json.Valid([]byte(c.Config)) {
+			writeError(w, http.StatusBadRequest, "invalid JSON in condition config")
+			return
 		}
 		if c.IntervalS <= 0 {
 			c.IntervalS = 300
@@ -266,6 +271,10 @@ func (s *Server) handleUpdateTarget(w http.ResponseWriter, r *http.Request) {
 		}
 		if c.Config == "" {
 			c.Config = "{}"
+		}
+		if !json.Valid([]byte(c.Config)) {
+			writeError(w, http.StatusBadRequest, "invalid JSON in condition config")
+			return
 		}
 		if c.IntervalS <= 0 {
 			c.IntervalS = 300

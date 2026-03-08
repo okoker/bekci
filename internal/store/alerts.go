@@ -99,7 +99,7 @@ func (s *Store) LogAlert(targetID, ruleID, recipientID, alertType, message strin
 func (s *Store) GetLastAlertTime(ruleID string) (time.Time, error) {
 	var t time.Time
 	err := s.db.QueryRow(`
-		SELECT sent_at FROM alert_history WHERE rule_id = ? ORDER BY sent_at DESC LIMIT 1
+		SELECT sent_at FROM alert_history WHERE rule_id = ? AND alert_type = 'firing' ORDER BY sent_at DESC LIMIT 1
 	`, ruleID).Scan(&t)
 	if err == sql.ErrNoRows {
 		return time.Time{}, nil // no previous alert

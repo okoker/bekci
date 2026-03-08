@@ -1164,6 +1164,43 @@ func TestSOCPublicStatusAndHistory(t *testing.T) {
 	}
 }
 
+func TestCreateTargetInvalidConfig(t *testing.T) {
+	ts, st := setupTestServer(t)
+	createUser(t, st, "cfgadmin", "testpassword12345", "admin")
+	client := loginAs(t, ts, "cfgadmin", "testpassword12345")
+
+	payload := map[string]any{
+		"name":     "Bad Config Target",
+		"host":     "badconfig.example.com",
+		"category": "Network",
+		"operator": "AND",
+		"conditions": []map[string]any{
+			{
+				"check_type":      "http",
+				"check_name":      "HTTP Check",
+				"config":          "{invalid json",
+				"interval_s":      300,
+				"field":           "status",
+				"comparator":      "eq",
+				"value":           "down",
+				"fail_count":      1,
+				"fail_window":     0,
+				"condition_group": 0,
+				"group_operator":  "AND",
+			},
+		},
+	}
+	body, _ := json.Marshal(payload)
+	resp, err := client.Post(ts.URL+"/api/targets", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 400 {
+		t.Fatalf("expected 400 for invalid config JSON, got %d", resp.StatusCode)
+	}
+}
+
 func putReq(t *testing.T, url string, body []byte) *http.Request {
 	t.Helper()
 	req, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(body))

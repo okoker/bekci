@@ -1025,7 +1025,7 @@ Update one or more settings. Only known keys are accepted. Sending masked values
 |--------|------|------|-------------|
 | GET | `/api/backup` | admin | Download config-only backup (JSON) |
 | POST | `/api/backup/restore` | admin | Restore from config backup file |
-| GET | `/api/backup/full` | admin | Download full database backup (tar.gz) |
+| POST | `/api/backup/full` | admin | Download full database backup (tar.gz) |
 | POST | `/api/backup/full/save` | admin | Save full backup to server |
 | GET | `/api/backup/full/list` | admin | List saved backups on server |
 | GET | `/api/backup/full/saved/{filename}` | admin | Download a saved backup |
@@ -1089,16 +1089,19 @@ Field: file = <backup.json>
 | Schema version too new | 400 |
 | No active admin in backup | 400 |
 
-### GET /api/backup/full
+### POST /api/backup/full
 
 Downloads a complete database backup as a tar.gz archive containing the SQLite database file and config.yaml. Optionally encrypts the archive with AES-256-GCM (Argon2id KDF).
 
-**Query params:**
+**Request:**
+```json
+{
+  "encrypt": true,
+  "passphrase": "string (required if encrypt=true, min 8 chars)"
+}
+```
 
-| Param | Default | Description |
-|-------|---------|-------------|
-| `encrypt` | `false` | Set to `true` to encrypt the archive |
-| `passphrase` | (required if encrypt=true) | Encryption passphrase (min 8 chars) |
+Both fields are optional. Omit or send `{}` for an unencrypted backup.
 
 **Response headers:**
 ```
@@ -1124,7 +1127,7 @@ File extension: `.tar.gz` (plain) or `.tar.gz.enc` (encrypted).
 
 ### POST /api/backup/full/save
 
-Same as `GET /api/backup/full` but saves the archive to the server-side backup directory instead of streaming to browser. Same query params (`encrypt`, `passphrase`).
+Same as `POST /api/backup/full` but saves the archive to the server-side backup directory instead of streaming to browser. Same JSON body (`encrypt`, `passphrase`).
 
 **Response (200):**
 ```json

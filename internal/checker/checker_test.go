@@ -117,6 +117,32 @@ func TestTLSCertCheck(t *testing.T) {
 	}
 }
 
+func TestPageHashCheckNon2xx(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(404)
+		w.Write([]byte("not found"))
+	}))
+	defer srv.Close()
+
+	u, _ := url.Parse(srv.URL)
+	host := u.Hostname()
+	port := u.Port()
+
+	cfg, _ := json.Marshal(map[string]any{
+		"scheme":   "http",
+		"port":     jsonPort(port),
+		"endpoint": "/",
+	})
+
+	r := Run("page_hash", host, string(cfg))
+	if r.Status != "down" {
+		t.Fatalf("expected status down, got %s (message: %s)", r.Status, r.Message)
+	}
+	if !strings.Contains(r.Message, "404") {
+		t.Fatalf("expected message to contain '404', got %s", r.Message)
+	}
+}
+
 func jsonPort(s string) int {
 	var p int
 	fmt.Sscanf(s, "%d", &p)

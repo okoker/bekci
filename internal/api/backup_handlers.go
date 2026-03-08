@@ -180,8 +180,16 @@ func (s *Server) buildFullBackupArchive(encrypt bool, passphrase string) ([]byte
 }
 
 func (s *Server) handleFullBackup(w http.ResponseWriter, r *http.Request) {
-	encrypt := r.URL.Query().Get("encrypt") == "true"
-	passphrase := r.URL.Query().Get("passphrase")
+	var req struct {
+		Encrypt    bool   `json:"encrypt"`
+		Passphrase string `json:"passphrase"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err.Error() != "EOF" {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	encrypt := req.Encrypt
+	passphrase := req.Passphrase
 
 	if encrypt && len(passphrase) < 8 {
 		writeError(w, http.StatusBadRequest, "passphrase must be at least 8 characters")
@@ -281,8 +289,16 @@ func saveBackupIndex(backupDir string, entries []backupMeta) error {
 }
 
 func (s *Server) handleSaveFullBackup(w http.ResponseWriter, r *http.Request) {
-	encrypt := r.URL.Query().Get("encrypt") == "true"
-	passphrase := r.URL.Query().Get("passphrase")
+	var req struct {
+		Encrypt    bool   `json:"encrypt"`
+		Passphrase string `json:"passphrase"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err.Error() != "EOF" {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	encrypt := req.Encrypt
+	passphrase := req.Passphrase
 
 	if encrypt && len(passphrase) < 8 {
 		writeError(w, http.StatusBadRequest, "passphrase must be at least 8 characters")

@@ -106,7 +106,7 @@ func (s *Server) Handler() http.Handler {
 	// Backup & Restore — admin only
 	mux.Handle("GET /api/backup", adminAuth(s.handleBackup))
 	mux.Handle("POST /api/backup/restore", adminAuth(s.handleRestore))
-	mux.Handle("GET /api/backup/full", adminAuth(s.handleFullBackup))
+	mux.Handle("POST /api/backup/full", adminAuth(s.handleFullBackup))
 	mux.Handle("GET /api/backup/generate-passphrase", adminAuth(s.handleGeneratePassphrase))
 	mux.Handle("POST /api/backup/full/save", adminAuth(s.handleSaveFullBackup))
 	mux.Handle("GET /api/backup/full/list", adminAuth(s.handleListSavedBackups))
