@@ -11,7 +11,6 @@ bin/
 
 # Config (contains credentials)
 config.yaml
-config.example.yaml
 
 # Internal docs (keep reference/ and README tracked)
 docs/*

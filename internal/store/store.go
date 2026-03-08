@@ -28,6 +28,8 @@ func New(dbPath string) (*Store, error) {
 	}
 
 	os.Chmod(dbPath, 0600)
+	os.Chmod(dbPath+"-wal", 0600)
+	os.Chmod(dbPath+"-shm", 0600)
 	return s, nil
 }
 
