@@ -1201,6 +1201,25 @@ func TestCreateTargetInvalidConfig(t *testing.T) {
 	}
 }
 
+func TestViewerCannotListRecipients(t *testing.T) {
+	ts, st := setupTestServer(t)
+	createUser(t, st, "recipadmin", "testpassword12345", "admin")
+	createUser(t, st, "recipviewer", "testpassword12345", "viewer")
+
+	adminClient := loginAs(t, ts, "recipadmin", "testpassword12345")
+	targetID, _ := createTargetViaAPI(t, adminClient, ts.URL, "recip-target", "recip.example.com", "Network", "http")
+
+	viewerClient := loginAs(t, ts, "recipviewer", "testpassword12345")
+	resp, err := viewerClient.Get(ts.URL + "/api/targets/" + targetID + "/recipients")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 403 {
+		t.Fatalf("expected 403 for GET recipients as viewer, got %d", resp.StatusCode)
+	}
+}
+
 func putReq(t *testing.T, url string, body []byte) *http.Request {
 	t.Helper()
 	req, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(body))

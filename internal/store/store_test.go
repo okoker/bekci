@@ -763,3 +763,113 @@ func TestBackupExportRestore(t *testing.T) {
 		t.Fatalf("restored target name = %q, want bak-tgt", restoredTarget.Name)
 	}
 }
+
+func TestRecipientsExcludesSuspendedUsers(t *testing.T) {
+	s := newTestStore(t)
+
+	uA := makeUser("recipA", "operator")
+	uB := makeUser("recipB", "operator")
+	if err := s.CreateUser(uA); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CreateUser(uB); err != nil {
+		t.Fatal(err)
+	}
+
+	tgt, conds := makeTarget("suspend-tgt")
+	if err := s.CreateTargetWithConditions(tgt, conds[:1], ""); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.SetTargetRecipients(tgt.ID, []string{uA.ID, uB.ID}); err != nil {
+		t.Fatalf("SetTargetRecipients: %v", err)
+	}
+
+	recipients, err := s.ListTargetRecipients(tgt.ID)
+	if err != nil {
+		t.Fatalf("ListTargetRecipients (both active): %v", err)
+	}
+	if len(recipients) != 2 {
+		t.Fatalf("recipients len = %d, want 2", len(recipients))
+	}
+
+	if err := s.SuspendUser(uB.ID, true); err != nil {
+		t.Fatalf("SuspendUser: %v", err)
+	}
+
+	recipients, err = s.ListTargetRecipients(tgt.ID)
+	if err != nil {
+		t.Fatalf("ListTargetRecipients (one suspended): %v", err)
+	}
+	if len(recipients) != 1 {
+		t.Fatalf("recipients len = %d, want 1 (suspended user should be excluded)", len(recipients))
+	}
+	if recipients[0].ID != uA.ID {
+		t.Fatalf("remaining recipient = %q, want %q", recipients[0].ID, uA.ID)
+	}
+}
+
+func TestGetFiringRulesIgnoresPausedDisabled(t *testing.T) {
+	s := newTestStore(t)
+	tgt, conds := makeTarget("firing-tgt")
+	if err := s.CreateTargetWithConditions(tgt, conds[:1], ""); err != nil {
+		t.Fatal(err)
+	}
+	if tgt.RuleID == nil {
+		t.Fatal("RuleID is nil after CreateTargetWithConditions")
+	}
+	ruleID := *tgt.RuleID
+
+	// Set the rule_state to 'unhealthy' (CreateTargetWithConditions already inserts 'healthy')
+	if _, err := s.db.Exec(`UPDATE rule_states SET current_state = 'unhealthy', last_change = CURRENT_TIMESTAMP WHERE rule_id = ?`, ruleID); err != nil {
+		t.Fatalf("update rule_state: %v", err)
+	}
+
+	// Active + enabled target should appear
+	rules, err := s.GetFiringRules()
+	if err != nil {
+		t.Fatalf("GetFiringRules (active): %v", err)
+	}
+	if len(rules) != 1 {
+		t.Fatalf("firing rules len = %d, want 1", len(rules))
+	}
+	if rules[0].RuleID != ruleID || rules[0].TargetID != tgt.ID {
+		t.Fatalf("unexpected rule: %+v", rules[0])
+	}
+
+	// Pause the target — should no longer appear
+	if err := s.PauseTarget(tgt.ID); err != nil {
+		t.Fatalf("PauseTarget: %v", err)
+	}
+	rules, err = s.GetFiringRules()
+	if err != nil {
+		t.Fatalf("GetFiringRules (paused): %v", err)
+	}
+	if len(rules) != 0 {
+		t.Fatalf("firing rules len = %d, want 0 (paused target should be excluded)", len(rules))
+	}
+
+	// Unpause — should appear again
+	if err := s.UnpauseTarget(tgt.ID); err != nil {
+		t.Fatalf("UnpauseTarget: %v", err)
+	}
+	rules, err = s.GetFiringRules()
+	if err != nil {
+		t.Fatalf("GetFiringRules (unpaused): %v", err)
+	}
+	if len(rules) != 1 {
+		t.Fatalf("firing rules len = %d, want 1 after unpause", len(rules))
+	}
+
+	// Disable the target — should no longer appear
+	if _, err := s.db.Exec(`UPDATE targets SET enabled = 0 WHERE id = ?`, tgt.ID); err != nil {
+		t.Fatalf("disable target: %v", err)
+	}
+	rules, err = s.GetFiringRules()
+	if err != nil {
+		t.Fatalf("GetFiringRules (disabled): %v", err)
+	}
+	if len(rules) != 0 {
+		t.Fatalf("firing rules len = %d, want 0 (disabled target should be excluded)", len(rules))
+	}
+}

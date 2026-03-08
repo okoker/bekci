@@ -31,7 +31,7 @@ func (s *Store) ListTargetRecipients(targetID string) ([]User, error) {
 		SELECT u.id, u.username, u.email, u.phone, u.role, u.status, u.created_at, u.updated_at
 		FROM users u
 		JOIN target_alert_recipients tar ON tar.user_id = u.id
-		WHERE tar.target_id = ?
+		WHERE tar.target_id = ? AND u.status = 'active'
 		ORDER BY u.username ASC
 	`, targetID)
 	if err != nil {
@@ -173,7 +173,7 @@ func (s *Store) GetFiringRules() ([]struct {
 		SELECT rs.rule_id, t.id
 		FROM rule_states rs
 		JOIN targets t ON t.rule_id = rs.rule_id
-		WHERE rs.current_state = 'unhealthy'
+		WHERE rs.current_state = 'unhealthy' AND t.enabled = 1 AND t.paused_at IS NULL
 	`)
 	if err != nil {
 		return nil, err

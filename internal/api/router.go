@@ -143,7 +143,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/targets/{id}/unpause", opAuth(s.handleUnpauseTarget))
 
 	// Target alert recipients
-	mux.Handle("GET /api/targets/{id}/recipients", anyAuth(s.handleListRecipients))
+	mux.Handle("GET /api/targets/{id}/recipients", opAuth(s.handleListRecipients))
 	mux.Handle("PUT /api/targets/{id}/recipients", opAuth(s.handleSetRecipients))
 
 	// Checks (read-only + run)
