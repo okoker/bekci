@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+var resendAPIURL = "https://api.resend.com/emails"
+
 // SendEmail sends an email via the Resend API. Standalone and reusable.
 func SendEmail(apiKey, from string, to []string, subject, htmlBody string) error {
 	payload := map[string]any{
@@ -22,7 +24,7 @@ func SendEmail(apiKey, from string, to []string, subject, htmlBody string) error
 		return fmt.Errorf("marshal email payload: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", "https://api.resend.com/emails", bytes.NewReader(body))
+	req, err := http.NewRequest("POST", resendAPIURL, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
