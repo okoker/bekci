@@ -267,3 +267,285 @@ func TestEvaluateFailWindow(t *testing.T) {
 		t.Fatalf("expected healthy, got %v", state)
 	}
 }
+
+// --- saveResultFull helper for custom metrics/response_ms ---
+
+func saveResultFull(t *testing.T, st *store.Store, checkID, status, metrics string, responseMs int64) {
+	t.Helper()
+	if err := st.SaveResult(&store.CheckResult{
+		CheckID: checkID, Status: status, ResponseMs: responseMs,
+		Message: "", Metrics: metrics, CheckedAt: time.Now(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// --- Numeric comparators ---
+
+// T-E8: response_ms gt 500, responseMs=600 → unhealthy
+func TestResponseMsGt(t *testing.T) {
+	st := newTestStore(t)
+	eng := New(st)
+	checkID, ruleID := setupTarget(t, st, "response_ms", "gt", "500", 1, 0)
+	saveResultFull(t, st, checkID, "up", "{}", 600)
+	eng.Evaluate(checkID)
+	state, err := st.GetRuleState(ruleID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state == nil || state.CurrentState != "unhealthy" {
+		t.Fatalf("expected unhealthy, got %v", state)
+	}
+}
+
+// T-E9: response_ms gt 500, responseMs=100 → healthy (not triggered)
+func TestResponseMsGtNotTriggered(t *testing.T) {
+	st := newTestStore(t)
+	eng := New(st)
+	checkID, ruleID := setupTarget(t, st, "response_ms", "gt", "500", 1, 0)
+	saveResultFull(t, st, checkID, "up", "{}", 100)
+	eng.Evaluate(checkID)
+	state, err := st.GetRuleState(ruleID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state == nil || state.CurrentState != "healthy" {
+		t.Fatalf("expected healthy, got %v", state)
+	}
+}
+
+// T-E10: response_ms lt 50, responseMs=30 → unhealthy
+func TestComparatorLt(t *testing.T) {
+	st := newTestStore(t)
+	eng := New(st)
+	checkID, ruleID := setupTarget(t, st, "response_ms", "lt", "50", 1, 0)
+	saveResultFull(t, st, checkID, "up", "{}", 30)
+	eng.Evaluate(checkID)
+	state, err := st.GetRuleState(ruleID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state == nil || state.CurrentState != "unhealthy" {
+		t.Fatalf("expected unhealthy, got %v", state)
+	}
+}
+
+// T-E11: response_ms gte 100, exactly 100ms → unhealthy (boundary)
+func TestComparatorGteBoundary(t *testing.T) {
+	st := newTestStore(t)
+	eng := New(st)
+	checkID, ruleID := setupTarget(t, st, "response_ms", "gte", "100", 1, 0)
+	saveResultFull(t, st, checkID, "up", "{}", 100)
+	eng.Evaluate(checkID)
+	state, err := st.GetRuleState(ruleID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state == nil || state.CurrentState != "unhealthy" {
+		t.Fatalf("expected unhealthy, got %v", state)
+	}
+}
+
+// T-E12: response_ms lte 100, exactly 100ms → unhealthy (boundary)
+func TestComparatorLteBoundary(t *testing.T) {
+	st := newTestStore(t)
+	eng := New(st)
+	checkID, ruleID := setupTarget(t, st, "response_ms", "lte", "100", 1, 0)
+	saveResultFull(t, st, checkID, "up", "{}", 100)
+	eng.Evaluate(checkID)
+	state, err := st.GetRuleState(ruleID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state == nil || state.CurrentState != "unhealthy" {
+		t.Fatalf("expected unhealthy, got %v", state)
+	}
+}
+
+// T-E13: status neq up, result "down" → unhealthy
+func TestComparatorNeq(t *testing.T) {
+	st := newTestStore(t)
+	eng := New(st)
+	checkID, ruleID := setupTarget(t, st, "status", "neq", "up", 1, 0)
+	saveResult(t, st, checkID, "down")
+	eng.Evaluate(checkID)
+	state, err := st.GetRuleState(ruleID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state == nil || state.CurrentState != "unhealthy" {
+		t.Fatalf("expected unhealthy, got %v", state)
+	}
+}
+
+// --- Field extraction ---
+
+// T-E14: metrics.packet_loss gt 50, metrics={"packet_loss":75} → unhealthy
+func TestMetricsFieldExtraction(t *testing.T) {
+	st := newTestStore(t)
+	eng := New(st)
+	checkID, ruleID := setupTarget(t, st, "metrics.packet_loss", "gt", "50", 1, 0)
+	saveResultFull(t, st, checkID, "up", `{"packet_loss":75}`, 100)
+	eng.Evaluate(checkID)
+	state, err := st.GetRuleState(ruleID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state == nil || state.CurrentState != "unhealthy" {
+		t.Fatalf("expected unhealthy, got %v", state)
+	}
+}
+
+// T-E15: metrics.packet_loss gt 50, malformed JSON → healthy (silent fail)
+func TestMetricsMalformedJSON(t *testing.T) {
+	st := newTestStore(t)
+	eng := New(st)
+	checkID, ruleID := setupTarget(t, st, "metrics.packet_loss", "gt", "50", 1, 0)
+	saveResultFull(t, st, checkID, "up", `"not json"`, 100)
+	eng.Evaluate(checkID)
+	state, err := st.GetRuleState(ruleID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state == nil || state.CurrentState != "healthy" {
+		t.Fatalf("expected healthy, got %v", state)
+	}
+}
+
+// T-E16: metrics.nonexistent gt 50, key missing → healthy (silent fail)
+func TestMetricsMissingKey(t *testing.T) {
+	st := newTestStore(t)
+	eng := New(st)
+	checkID, ruleID := setupTarget(t, st, "metrics.nonexistent", "gt", "50", 1, 0)
+	saveResultFull(t, st, checkID, "up", `{"packet_loss":75}`, 100)
+	eng.Evaluate(checkID)
+	state, err := st.GetRuleState(ruleID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state == nil || state.CurrentState != "healthy" {
+		t.Fatalf("expected healthy, got %v", state)
+	}
+}
+
+// T-E17: unknown field gt 100 → healthy (silent fail)
+func TestUnknownFieldGtComparator(t *testing.T) {
+	st := newTestStore(t)
+	eng := New(st)
+	checkID, ruleID := setupTarget(t, st, "bogus_field", "gt", "100", 1, 0)
+	saveResult(t, st, checkID, "up")
+	eng.Evaluate(checkID)
+	state, err := st.GetRuleState(ruleID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state == nil || state.CurrentState != "healthy" {
+		t.Fatalf("expected healthy, got %v", state)
+	}
+}
+
+// --- Fail window edge cases ---
+
+// T-E18: fail_count=3, fail_window=3600, 3 consecutive "down" → unhealthy
+func TestFailWindowMatchingStreak(t *testing.T) {
+	st := newTestStore(t)
+	eng := New(st)
+	checkID, ruleID := setupTarget(t, st, "status", "eq", "down", 3, 3600)
+	saveResult(t, st, checkID, "down")
+	saveResult(t, st, checkID, "down")
+	saveResult(t, st, checkID, "down")
+	eng.Evaluate(checkID)
+	state, err := st.GetRuleState(ruleID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state == nil || state.CurrentState != "unhealthy" {
+		t.Fatalf("expected unhealthy, got %v", state)
+	}
+}
+
+// T-E19: fail_count=3, fail_window=3600, down/up/down/down → healthy (streak broken)
+func TestFailWindowBrokenStreak(t *testing.T) {
+	st := newTestStore(t)
+	eng := New(st)
+	checkID, ruleID := setupTarget(t, st, "status", "eq", "down", 3, 3600)
+	// Save chronologically: down, up, down, down
+	// DESC order: down(newest), down, up, down(oldest)
+	// Streak from newest: down, down → breaks at up → streak=2 < fail_count=3
+	saveResult(t, st, checkID, "down")
+	time.Sleep(time.Millisecond)
+	saveResult(t, st, checkID, "up")
+	time.Sleep(time.Millisecond)
+	saveResult(t, st, checkID, "down")
+	time.Sleep(time.Millisecond)
+	saveResult(t, st, checkID, "down")
+	eng.Evaluate(checkID)
+	state, err := st.GetRuleState(ruleID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state == nil || state.CurrentState != "healthy" {
+		t.Fatalf("expected healthy, got %v", state)
+	}
+}
+
+// T-E20: fail_count=1, fail_window=300, no results → healthy (empty)
+func TestFailWindowEmptyResults(t *testing.T) {
+	st := newTestStore(t)
+	eng := New(st)
+	checkID, ruleID := setupTarget(t, st, "status", "eq", "down", 1, 300)
+	// No results saved — brand new check
+	eng.Evaluate(checkID)
+	state, err := st.GetRuleState(ruleID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state == nil || state.CurrentState != "healthy" {
+		t.Fatalf("expected healthy, got %v", state)
+	}
+}
+
+// --- State transitions ---
+
+// T-E21: unhealthy → save "up" → healthy + Dispatch(unhealthy→healthy)
+func TestRecoveryTransition(t *testing.T) {
+	st := newTestStore(t)
+	eng := New(st)
+	md := &mockDispatcher{}
+	eng.SetDispatcher(md)
+	checkID, ruleID := setupTarget(t, st, "status", "eq", "down", 1, 0)
+
+	// Make it unhealthy first
+	saveResult(t, st, checkID, "down")
+	eng.Evaluate(checkID)
+	time.Sleep(100 * time.Millisecond)
+	state, err := st.GetRuleState(ruleID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state == nil || state.CurrentState != "unhealthy" {
+		t.Fatalf("expected unhealthy, got %v", state)
+	}
+
+	// Now recover
+	saveResult(t, st, checkID, "up")
+	eng.Evaluate(checkID)
+	time.Sleep(100 * time.Millisecond)
+	state, err = st.GetRuleState(ruleID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state == nil || state.CurrentState != "healthy" {
+		t.Fatalf("expected healthy after recovery, got %v", state)
+	}
+
+	// Verify dispatch: 2 calls — healthy→unhealthy, then unhealthy→healthy
+	md.mu.Lock()
+	defer md.mu.Unlock()
+	if len(md.calls) != 2 {
+		t.Fatalf("expected 2 dispatch calls, got %d", len(md.calls))
+	}
+	if md.calls[1].oldState != "unhealthy" || md.calls[1].newState != "healthy" {
+		t.Fatalf("expected unhealthy→healthy, got %s→%s", md.calls[1].oldState, md.calls[1].newState)
+	}
+}
