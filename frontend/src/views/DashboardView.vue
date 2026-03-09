@@ -28,18 +28,16 @@ const empty4h = Array.from({ length: 48 }, () => ({ status: 'none', response_ms:
 async function loadDashboard() {
   try {
     const { data } = await api.get('/dashboard/status')
+    // Pre-compute on plain objects BEFORE reactive assignment
+    for (const t of data) {
+      t._worstUptime = getWorstUptime(t)
+      t._preferredCheck = getPreferredCheck(t)
+    }
     dashboardData.value = data
     lastUpdated.value = new Date()
     error.value = ''
 
-    // Auto-load history for all checks
-    for (const t of data) {
-      for (const c of t.checks || []) {
-        if (!historyData.value[c.id]) {
-          loadHistory(c.id)
-        }
-      }
-    }
+    // History loaded via watch(paginatedTargets) — visible targets only
   } catch (e) {
     error.value = 'Failed to load dashboard'
   } finally {
@@ -47,19 +45,44 @@ async function loadDashboard() {
   }
 }
 
-async function loadHistory(checkId) {
-  try {
-    const [res90d, res4h] = await Promise.all([
-      api.get(`/dashboard/history/${checkId}?range=90d`),
-      api.get(`/dashboard/history/${checkId}?range=4h`),
-    ])
-    historyData.value[checkId] = {
-      bar90d: pad90dBars(res90d.data),
-      bar4h: pad4hBars(res4h.data),
-    }
-  } catch {
-    historyError.value[checkId] = true
+async function loadHistorySingle(checkId) {
+  const [res90d, res4h] = await Promise.all([
+    api.get(`/dashboard/history/${checkId}?range=90d`),
+    api.get(`/dashboard/history/${checkId}?range=4h`),
+  ])
+  return {
+    bar90d: pad90dBars(res90d.data),
+    bar4h: pad4hBars(res4h.data),
   }
+}
+
+async function loadVisibleHistory(targets) {
+  const checkIds = []
+  for (const t of targets) {
+    for (const c of t.checks || []) {
+      if (!historyData.value[c.id]) {
+        checkIds.push(c.id)
+      }
+    }
+  }
+  if (checkIds.length === 0) return
+
+  const results = await Promise.allSettled(
+    checkIds.map(id => loadHistorySingle(id))
+  )
+
+  // Batch: single reactive assignment
+  const updated = { ...historyData.value }
+  const errors = { ...historyError.value }
+  for (let i = 0; i < checkIds.length; i++) {
+    if (results[i].status === 'fulfilled') {
+      updated[checkIds[i]] = results[i].value
+    } else {
+      errors[checkIds[i]] = true
+    }
+  }
+  historyData.value = updated
+  historyError.value = errors
 }
 
 // Pad 90d data to exactly 90 entries (one per day, oldest first)
@@ -125,7 +148,7 @@ function toggleCheck(e, checkId) {
 }
 
 // Filter by category, sort: problems first, then SLA unhealthy, then healthy, then paused
-function filteredAndSortedTargets() {
+const filteredAndSortedTargets = computed(() => {
   let list = dashboardData.value
   if (activeCategory.value !== 'All') {
     list = list.filter(t => t.category === activeCategory.value)
@@ -135,34 +158,42 @@ function filteredAndSortedTargets() {
     const bPaused = isTargetPaused(b)
     const aDown = isTargetDown(a)
     const bDown = isTargetDown(b)
-    // Down targets first
     if (aDown && !bDown) return -1
     if (!aDown && bDown) return 1
-    if (aDown && bDown) return getWorstUptime(a) - getWorstUptime(b)
-    // UNHEALTHY SLA before HEALTHY/no-SLA
+    if (aDown && bDown) return a._worstUptime - b._worstUptime
     const aUnhealthy = a.sla_status === 'unhealthy'
     const bUnhealthy = b.sla_status === 'unhealthy'
     if (aUnhealthy && !bUnhealthy) return -1
     if (!aUnhealthy && bUnhealthy) return 1
-    // Paused targets after healthy
     if (aPaused && !bPaused) return 1
     if (!aPaused && bPaused) return -1
-    const diff = getWorstUptime(a) - getWorstUptime(b)
+    const diff = a._worstUptime - b._worstUptime
     return diff !== 0 ? diff : a.name.localeCompare(b.name)
   })
-}
+})
 
-function paginatedTargets() {
-  const all = filteredAndSortedTargets()
+const paginatedTargets = computed(() => {
   const start = (currentPage.value - 1) * pageSize
-  return all.slice(start, start + pageSize)
-}
+  return filteredAndSortedTargets.value.slice(start, start + pageSize)
+})
 
-function totalPages() {
-  return Math.max(1, Math.ceil(filteredAndSortedTargets().length / pageSize))
-}
+const totalPages = computed(() => {
+  return Math.max(1, Math.ceil(filteredAndSortedTargets.value.length / pageSize))
+})
 
 watch(activeCategory, () => { currentPage.value = 1 })
+
+// Load history for visible (paginated) targets only
+watch(paginatedTargets, (targets) => {
+  loadVisibleHistory(targets)
+})
+
+// Load history for all checks when a target is expanded
+watch(() => expandedTargetId.value, (targetId) => {
+  if (!targetId) return
+  const target = dashboardData.value.find(t => t.id === targetId)
+  if (target) loadVisibleHistory([target])
+})
 
 function isTargetDown(target) {
   if (target.state === 'paused') return false
@@ -238,15 +269,21 @@ function categoryClass(cat) {
   return 'badge-cat-other'
 }
 
-function categoryCount(cat) {
-  if (cat === 'All') return dashboardData.value.length
-  return dashboardData.value.filter(t => t.category === cat).length
-}
-
-function categoryHasProblems(cat) {
-  const targets = cat === 'All' ? dashboardData.value : dashboardData.value.filter(t => t.category === cat)
-  return targets.some(t => isTargetDown(t))
-}
+const categoryStats = computed(() => {
+  const stats = {}
+  for (const cat of categories) {
+    if (cat === 'All') {
+      stats[cat] = {
+        count: dashboardData.value.length,
+        hasProblems: dashboardData.value.some(t => isTargetDown(t))
+      }
+    } else {
+      const targets = dashboardData.value.filter(t => t.category === cat)
+      stats[cat] = { count: targets.length, hasProblems: targets.some(t => isTargetDown(t)) }
+    }
+  }
+  return stats
+})
 
 function getWorstUptime(target) {
   if (!target.checks || target.checks.length === 0) return 100
@@ -289,13 +326,13 @@ onUnmounted(() => {
       <!-- Category filter bar -->
       <div class="filter-bar">
         <button v-for="cat in categories" :key="cat"
-          :class="['filter-btn', { active: activeCategory === cat, 'has-problems': categoryHasProblems(cat) }]"
+          :class="['filter-btn', { active: activeCategory === cat, 'has-problems': categoryStats[cat].hasProblems }]"
           @click="activeCategory = cat">
-          {{ cat }} <span class="filter-count">({{ categoryCount(cat) }})</span>
+          {{ cat }} <span class="filter-count">({{ categoryStats[cat].count }})</span>
         </button>
       </div>
 
-      <div v-for="target in paginatedTargets()" :key="target.id" class="target-card card">
+      <div v-for="target in paginatedTargets" :key="target.id" class="target-card card">
         <!-- Collapsed view: target header + preferred check bars -->
         <div class="target-header" @click="toggleTarget(target.id)">
           <div class="target-header-left">
@@ -308,13 +345,13 @@ onUnmounted(() => {
           </div>
           <div class="target-header-right">
             <template v-if="target.checks.length > 0">
-              <span class="badge badge-type">{{ getPreferredCheck(target)?.type }}</span>
-              <span v-if="getPreferredCheck(target)?.response_ms > 0" class="check-response text-muted">
-                {{ getPreferredCheck(target)?.response_ms }}ms
+              <span class="badge badge-type">{{ target._preferredCheck?.type }}</span>
+              <span v-if="target._preferredCheck?.response_ms > 0" class="check-response text-muted">
+                {{ target._preferredCheck?.response_ms }}ms
               </span>
-              <span v-if="getPreferredCheck(target)?.uptime_90d_pct >= 0" class="check-uptime"
-                :style="{ color: uptimeColor(getPreferredCheck(target)?.uptime_90d_pct) }">
-                {{ getPreferredCheck(target)?.uptime_90d_pct.toFixed(1) }}%
+              <span v-if="target._preferredCheck?.uptime_90d_pct >= 0" class="check-uptime"
+                :style="{ color: uptimeColor(target._preferredCheck?.uptime_90d_pct) }">
+                {{ target._preferredCheck?.uptime_90d_pct.toFixed(1) }}%
               </span>
             </template>
             <span :class="['badge', categoryClass(target.category)]" style="font-size: 0.6rem;">
@@ -332,13 +369,13 @@ onUnmounted(() => {
 
         <!-- Collapsed: preferred check bars -->
         <div v-if="expandedTargetId !== target.id && target.checks.length > 0" class="collapsed-bars" @click="toggleTarget(target.id)">
-          <div v-if="historyError[getPreferredCheck(target)?.id]" class="history-error-hint" title="History data unavailable">
+          <div v-if="historyError[target._preferredCheck?.id]" class="history-error-hint" title="History data unavailable">
             <span class="history-error-icon">!</span> History unavailable
           </div>
           <div v-else class="uptime-bars-row">
             <div class="bar-section bar-90d-section">
               <div class="bar-track">
-                <div v-for="(day, i) in (historyData[getPreferredCheck(target)?.id]?.bar90d || empty90d)" :key="'90d-' + i"
+                <div v-for="(day, i) in (historyData[target._preferredCheck?.id]?.bar90d || empty90d)" :key="'90d-' + i"
                   class="bar-tick"
                   :style="{ background: uptimeColor(day.uptime_pct) }"
                   :title="formatTooltip90d(day)">
@@ -351,7 +388,7 @@ onUnmounted(() => {
             </div>
             <div class="bar-section bar-4h-section">
               <div class="bar-track">
-                <div v-for="(r, i) in (historyData[getPreferredCheck(target)?.id]?.bar4h || empty4h)" :key="'4h-' + i"
+                <div v-for="(r, i) in (historyData[target._preferredCheck?.id]?.bar4h || empty4h)" :key="'4h-' + i"
                   class="bar-tick"
                   :style="{ background: statusColor(r.status) }"
                   :title="formatTooltip4h(r)">
@@ -423,10 +460,10 @@ onUnmounted(() => {
       </div>
 
       <!-- Pagination -->
-      <div v-if="totalPages() > 1" class="pagination">
+      <div v-if="totalPages > 1" class="pagination">
         <button class="page-btn" :disabled="currentPage <= 1" @click="currentPage--">&laquo; Prev</button>
-        <span class="page-info">{{ currentPage }} / {{ totalPages() }} ({{ filteredAndSortedTargets().length }} hosts)</span>
-        <button class="page-btn" :disabled="currentPage >= totalPages()" @click="currentPage++">&raquo; Next</button>
+        <span class="page-info">{{ currentPage }} / {{ totalPages }} ({{ filteredAndSortedTargets.length }} hosts)</span>
+        <button class="page-btn" :disabled="currentPage >= totalPages" @click="currentPage++">&raquo; Next</button>
       </div>
     </template>
   </div>

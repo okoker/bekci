@@ -68,16 +68,38 @@ const empty4h = Array.from({ length: 48 }, () => ({ status: 'none', response_ms:
 async function loadDashboard() {
   try {
     const { data } = await api.get('/soc/status')
+    // Pre-compute on plain objects BEFORE reactive assignment
+    for (const t of data) {
+      t._worstUptime = getWorstUptime(t)
+      t._preferredCheck = getPreferredCheck(t)
+    }
     dashboardData.value = data
     lastUpdated.value = new Date()
     error.value = ''
 
-    // Load history for preferred checks
+    // Batch-load history for all preferred checks
+    const checkIds = []
     for (const t of data) {
-      const pref = getPreferredCheck(t)
+      const pref = t._preferredCheck
       if (pref && !historyData.value[pref.id]) {
-        loadHistory(pref.id)
+        checkIds.push(pref.id)
       }
+    }
+    if (checkIds.length > 0) {
+      const results = await Promise.allSettled(
+        checkIds.map(id => loadHistorySingle(id))
+      )
+      const updated = { ...historyData.value }
+      const errors = { ...historyError.value }
+      for (let i = 0; i < checkIds.length; i++) {
+        if (results[i].status === 'fulfilled') {
+          updated[checkIds[i]] = results[i].value
+        } else {
+          errors[checkIds[i]] = true
+        }
+      }
+      historyData.value = updated
+      historyError.value = errors
     }
   } catch (e) {
     if (e.response?.status === 401) {
@@ -90,18 +112,14 @@ async function loadDashboard() {
   }
 }
 
-async function loadHistory(checkId) {
-  try {
-    const [res90d, res4h] = await Promise.all([
-      api.get(`/soc/history/${checkId}?range=90d`),
-      api.get(`/soc/history/${checkId}?range=4h`),
-    ])
-    historyData.value[checkId] = {
-      bar90d: pad90dBars(res90d.data),
-      bar4h: pad4hBars(res4h.data),
-    }
-  } catch {
-    historyError.value[checkId] = true
+async function loadHistorySingle(checkId) {
+  const [res90d, res4h] = await Promise.all([
+    api.get(`/soc/history/${checkId}?range=90d`),
+    api.get(`/soc/history/${checkId}?range=4h`),
+  ])
+  return {
+    bar90d: pad90dBars(res90d.data),
+    bar4h: pad4hBars(res4h.data),
   }
 }
 
@@ -156,15 +174,21 @@ function isTargetPaused(target) {
   return target.paused === true || target.state === 'paused'
 }
 
-function categoryCount(cat) {
-  if (cat === 'All') return dashboardData.value.length
-  return dashboardData.value.filter(t => t.category === cat).length
-}
-
-function categoryHasProblems(cat) {
-  const targets = cat === 'All' ? dashboardData.value : dashboardData.value.filter(t => t.category === cat)
-  return targets.some(t => hasDownCheckTarget(t))
-}
+const categoryStats = computed(() => {
+  const stats = {}
+  for (const cat of categories) {
+    if (cat === 'All') {
+      stats[cat] = {
+        count: dashboardData.value.length,
+        hasProblems: dashboardData.value.some(t => hasDownCheckTarget(t))
+      }
+    } else {
+      const targets = dashboardData.value.filter(t => t.category === cat)
+      stats[cat] = { count: targets.length, hasProblems: targets.some(t => hasDownCheckTarget(t)) }
+    }
+  }
+  return stats
+})
 
 function getWorstUptime(target) {
   if (!target.checks || target.checks.length === 0) return 100
@@ -191,7 +215,7 @@ function slaClass(target) {
   return ''
 }
 
-function filteredAndSortedTargets() {
+const filteredAndSortedTargets = computed(() => {
   let list = dashboardData.value
   if (activeCategory.value !== 'All') {
     list = list.filter(t => t.category === activeCategory.value)
@@ -203,18 +227,17 @@ function filteredAndSortedTargets() {
     const bDown = hasDownCheckTarget(b)
     if (aDown && !bDown) return -1
     if (!aDown && bDown) return 1
-    if (aDown && bDown) return getWorstUptime(a) - getWorstUptime(b)
+    if (aDown && bDown) return a._worstUptime - b._worstUptime
     const aUnhealthy = a.sla_status === 'unhealthy'
     const bUnhealthy = b.sla_status === 'unhealthy'
     if (aUnhealthy && !bUnhealthy) return -1
     if (!aUnhealthy && bUnhealthy) return 1
-    // Paused after healthy
     if (aPaused && !bPaused) return 1
     if (!aPaused && bPaused) return -1
-    const diff = getWorstUptime(a) - getWorstUptime(b)
+    const diff = a._worstUptime - b._worstUptime
     return diff !== 0 ? diff : a.name.localeCompare(b.name)
   })
-}
+})
 
 function uptimeColor(pct) {
   if (pct < 0) return '#374151'
@@ -262,9 +285,9 @@ onUnmounted(() => {
       <a href="/" class="soc-brand"><img src="/bekci-icon.png" alt="Bekci" class="soc-icon" />SOC</a>
       <div v-if="!loading && dashboardData.length > 0" class="soc-filter-bar">
         <button v-for="cat in categories" :key="cat"
-          :class="['soc-filter-btn', { active: activeCategory === cat, 'has-problems': categoryHasProblems(cat) }]"
+          :class="['soc-filter-btn', { active: activeCategory === cat, 'has-problems': categoryStats[cat].hasProblems }]"
           @click="activeCategory = cat">
-          {{ cat }} <span class="soc-filter-count">({{ categoryCount(cat) }})</span>
+          {{ cat }} <span class="soc-filter-count">({{ categoryStats[cat].count }})</span>
         </button>
       </div>
       <div v-if="health" class="health-indicator" @click.stop="togglePopover">
@@ -289,7 +312,7 @@ onUnmounted(() => {
     <div v-if="loading" class="soc-loading">Loading...</div>
 
     <div v-else class="soc-grid">
-      <div v-for="target in filteredAndSortedTargets()" :key="target.id" class="soc-card" :class="{ 'soc-card-down': hasDownCheckTarget(target), 'soc-card-paused': isTargetPaused(target) }">
+      <div v-for="target in filteredAndSortedTargets" :key="target.id" class="soc-card" :class="{ 'soc-card-down': hasDownCheckTarget(target), 'soc-card-paused': isTargetPaused(target) }">
         <div class="soc-hover-label">
           <span class="soc-hover-name">{{ target.name }}</span>
           <span class="soc-hover-host">{{ target.host }}</span>
@@ -297,9 +320,9 @@ onUnmounted(() => {
         <div class="soc-card-header">
           <span class="soc-target-name">{{ target.name }}</span>
           <span class="soc-host">{{ target.host }}</span>
-          <span v-if="!isTargetPaused(target) && getPreferredCheck(target)?.uptime_90d_pct >= 0" class="soc-uptime"
-            :style="{ color: uptimeColor(getPreferredCheck(target)?.uptime_90d_pct) }">
-            {{ getPreferredCheck(target)?.uptime_90d_pct.toFixed(1) }}%
+          <span v-if="!isTargetPaused(target) && target._preferredCheck?.uptime_90d_pct >= 0" class="soc-uptime"
+            :style="{ color: uptimeColor(target._preferredCheck?.uptime_90d_pct) }">
+            {{ target._preferredCheck?.uptime_90d_pct.toFixed(1) }}%
           </span>
           <div class="soc-header-badges">
             <span :class="['soc-cat-badge', categoryClass(target.category)]">{{ target.category }}</span>
@@ -313,22 +336,22 @@ onUnmounted(() => {
           </div>
         </div>
         <!-- Compact bars -->
-        <div v-if="getPreferredCheck(target)" class="soc-bars">
-          <template v-if="historyError[getPreferredCheck(target)?.id]">
+        <div v-if="target._preferredCheck" class="soc-bars">
+          <template v-if="historyError[target._preferredCheck?.id]">
             <div class="soc-history-error" title="History data unavailable">
               <span class="soc-history-error-icon">!</span>
             </div>
           </template>
           <template v-else>
             <div class="soc-bar-track">
-              <div v-for="(day, i) in (historyData[getPreferredCheck(target)?.id]?.bar90d || empty90d)" :key="'90d-' + i"
+              <div v-for="(day, i) in (historyData[target._preferredCheck?.id]?.bar90d || empty90d)" :key="'90d-' + i"
                 class="soc-bar-tick"
                 :style="{ background: uptimeColor(day.uptime_pct) }"
                 :title="formatTooltip90d(day)">
               </div>
             </div>
             <div class="soc-bar-track soc-bar-4h">
-              <div v-for="(r, i) in (historyData[getPreferredCheck(target)?.id]?.bar4h || empty4h)" :key="'4h-' + i"
+              <div v-for="(r, i) in (historyData[target._preferredCheck?.id]?.bar4h || empty4h)" :key="'4h-' + i"
                 class="soc-bar-tick"
                 :style="{ background: statusColor(r.status) }"
                 :title="formatTooltip4h(r)">
