@@ -873,3 +873,79 @@ func TestGetFiringRulesIgnoresPausedDisabled(t *testing.T) {
 		t.Fatalf("firing rules len = %d, want 0 (disabled target should be excluded)", len(rules))
 	}
 }
+
+func TestMigration017_CompositeIndex(t *testing.T) {
+	s := newTestStore(t)
+	var version int
+	err := s.db.QueryRow("SELECT version FROM schema_version").Scan(&version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if version != 17 {
+		t.Fatalf("schema_version = %d, want 17", version)
+	}
+
+	// Verify index exists
+	var count int
+	err = s.db.QueryRow(`
+		SELECT COUNT(*) FROM sqlite_master
+		WHERE type='index' AND name='idx_check_results_check_id_checked_at'
+	`).Scan(&count)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("composite index count = %d, want 1", count)
+	}
+}
+
+func TestGetRecentResultsSlim(t *testing.T) {
+	s := newTestStore(t)
+	checkID := uuid.New().String()
+	targetID := uuid.New().String()
+	s.db.Exec("INSERT INTO targets (id, name, host) VALUES (?, 'test', '1.1.1.1')", targetID)
+	s.db.Exec("INSERT INTO checks (id, target_id, type, name, config, interval_s) VALUES (?, ?, 'ping', 'ping', '{}', 300)", checkID, targetID)
+
+	now := time.Now()
+	for i := 0; i < 5; i++ {
+		r := &CheckResult{
+			CheckID:    checkID,
+			Status:     "up",
+			ResponseMs: int64(100 + i),
+			Message:    "should not appear",
+			Metrics:    `{"big":"data"}`,
+			CheckedAt:  now.Add(time.Duration(-i) * time.Minute),
+		}
+		if err := s.SaveResult(r); err != nil {
+			t.Fatalf("SaveResult: %v", err)
+		}
+	}
+
+	results, err := s.GetRecentResultsSlim(checkID, 24)
+	if err != nil {
+		t.Fatalf("GetRecentResultsSlim: %v", err)
+	}
+	if len(results) != 5 {
+		t.Fatalf("results len = %d, want 5", len(results))
+	}
+
+	// Verify only slim fields are populated
+	for _, r := range results {
+		if r.Status != "up" {
+			t.Errorf("status = %q, want up", r.Status)
+		}
+		if r.ResponseMs < 100 {
+			t.Errorf("response_ms = %d, want >= 100", r.ResponseMs)
+		}
+		if r.CheckedAt.IsZero() {
+			t.Error("checked_at is zero")
+		}
+	}
+
+	// Verify ASC order
+	for i := 1; i < len(results); i++ {
+		if results[i].CheckedAt.Before(results[i-1].CheckedAt) {
+			t.Fatalf("results not in ASC order at index %d", i)
+		}
+	}
+}

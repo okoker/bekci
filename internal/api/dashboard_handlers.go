@@ -183,7 +183,7 @@ func (s *Server) handleCheckHistory(w http.ResponseWriter, r *http.Request) {
 
 	switch rangeParam {
 	case "4h":
-		results, err := s.store.GetRecentResults(checkID, 4)
+		results, err := s.store.GetRecentResultsSlim(checkID, 4)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "failed to get results")
 			return

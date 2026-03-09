@@ -74,6 +74,7 @@ func (s *Store) migrate() error {
 		s.migration014,
 		s.migration015,
 		s.migration016,
+		s.migration017,
 	}
 
 	for i := current; i < len(migrations); i++ {
@@ -548,6 +549,15 @@ func (s *Store) migration016() error {
 		INSERT OR IGNORE INTO settings (key, value) VALUES ('signal_number',   '');
 		INSERT OR IGNORE INTO settings (key, value) VALUES ('signal_username', '');
 		INSERT OR IGNORE INTO settings (key, value) VALUES ('signal_password', '');
+	`)
+	return err
+}
+
+// migration017 adds composite index on check_results for faster lookups.
+func (s *Store) migration017() error {
+	_, err := s.db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_check_results_check_id_checked_at
+		ON check_results(check_id, checked_at DESC);
 	`)
 	return err
 }
