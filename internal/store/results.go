@@ -193,10 +193,10 @@ type BatchCheckSummary struct {
 // GetBatchLastResultAndUptime returns last result + 90d uptime for all checks in one query.
 func (s *Store) GetBatchLastResultAndUptime() (map[string]*BatchCheckSummary, error) {
 	rows, err := s.db.Query(`
-		WITH latest AS (
-			SELECT check_id, status, message, response_ms,
-				ROW_NUMBER() OVER (PARTITION BY check_id ORDER BY checked_at DESC) as rn
+		WITH latest_at AS (
+			SELECT check_id, MAX(checked_at) as max_at
 			FROM check_results
+			GROUP BY check_id
 		),
 		uptime AS (
 			SELECT check_id,
@@ -208,11 +208,11 @@ func (s *Store) GetBatchLastResultAndUptime() (map[string]*BatchCheckSummary, er
 			WHERE checked_at >= datetime('now', '-90 days')
 			GROUP BY check_id
 		)
-		SELECT l.check_id, l.status, l.message, l.response_ms,
+		SELECT cr.check_id, cr.status, cr.message, cr.response_ms,
 			COALESCE(u.uptime_pct, -1)
-		FROM latest l
-		LEFT JOIN uptime u ON l.check_id = u.check_id
-		WHERE l.rn = 1
+		FROM latest_at la
+		JOIN check_results cr ON cr.check_id = la.check_id AND cr.checked_at = la.max_at
+		LEFT JOIN uptime u ON cr.check_id = u.check_id
 	`)
 	if err != nil {
 		return nil, err
