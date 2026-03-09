@@ -105,6 +105,28 @@ func (s *Store) GetRuleState(ruleID string) (*RuleState, error) {
 	return rs, err
 }
 
+// ListAllRuleStates returns all rule states keyed by rule_id.
+func (s *Store) ListAllRuleStates() (map[string]*RuleState, error) {
+	rows, err := s.db.Query(`
+		SELECT rule_id, current_state, last_change, last_evaluated
+		FROM rule_states
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	states := make(map[string]*RuleState)
+	for rows.Next() {
+		rs := &RuleState{}
+		if err := rows.Scan(&rs.RuleID, &rs.CurrentState, &rs.LastChange, &rs.LastEvaluated); err != nil {
+			return nil, err
+		}
+		states[rs.RuleID] = rs
+	}
+	return states, rows.Err()
+}
+
 func (s *Store) UpdateRuleState(ruleID, newState string) error {
 	_, err := s.db.Exec(`
 		INSERT INTO rule_states (rule_id, current_state, last_change, last_evaluated)

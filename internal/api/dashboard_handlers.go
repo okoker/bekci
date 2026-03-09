@@ -2,7 +2,6 @@ package api
 
 import (
 	"fmt"
-	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -63,6 +62,22 @@ func (s *Server) buildDashboardTargets() ([]dashboardTarget, error) {
 		}
 	}
 
+	// Batch: all rule states, checks, and results in 3 queries (replaces N+1 pattern)
+	ruleStates, err := s.store.ListAllRuleStates()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load rule states: %w", err)
+	}
+
+	allChecks, err := s.store.ListAllChecks()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load checks: %w", err)
+	}
+
+	checkSummaries, err := s.store.GetBatchLastResultAndUptime()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load check summaries: %w", err)
+	}
+
 	var result []dashboardTarget
 	for _, t := range targets {
 		// Hide disabled targets from dashboard/SOC
@@ -81,23 +96,16 @@ func (s *Server) buildDashboardTargets() ([]dashboardTarget, error) {
 		// Paused targets show as "paused" state
 		if t.PausedAt != nil {
 			dt.Paused = true
-			s := t.PausedAt.Format("2006-01-02T15:04:05Z")
-			dt.PausedAt = &s
+			ps := t.PausedAt.Format("2006-01-02T15:04:05Z")
+			dt.PausedAt = &ps
 			dt.State = "paused"
 		} else if t.RuleID != nil {
-			// Per-target health from rule_states
-			rs, err := s.store.GetRuleState(*t.RuleID)
-			if err == nil && rs != nil {
+			if rs, ok := ruleStates[*t.RuleID]; ok {
 				dt.State = rs.CurrentState
 			}
 		}
 
-		checks, err := s.store.ListChecksByTarget(t.ID)
-		if err != nil {
-			continue
-		}
-
-		for _, c := range checks {
+		for _, c := range allChecks[t.ID] {
 			dc := dashboardCheck{
 				ID:        c.ID,
 				Name:      c.Name,
@@ -106,18 +114,11 @@ func (s *Server) buildDashboardTargets() ([]dashboardTarget, error) {
 				IntervalS: c.IntervalS,
 			}
 
-			last, err := s.store.GetLastResult(c.ID)
-			if err == nil && last != nil {
-				dc.LastStatus = last.Status
-				dc.LastMessage = last.Message
-				dc.ResponseMs = last.ResponseMs
-			}
-
-			pct, err := s.store.GetUptimePercent(c.ID, 90)
-			if err == nil {
-				dc.Uptime90d = pct
-			} else {
-				slog.Warn("Failed to fetch uptime percent", "check_id", c.ID, "error", err)
+			if summary, ok := checkSummaries[c.ID]; ok {
+				dc.LastStatus = summary.Status
+				dc.LastMessage = summary.Message
+				dc.ResponseMs = summary.ResponseMs
+				dc.Uptime90d = summary.Uptime90d
 			}
 
 			dt.Checks = append(dt.Checks, dc)

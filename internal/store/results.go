@@ -181,6 +181,55 @@ func (s *Store) GetUptimePercent(checkID string, days int) (float64, error) {
 	return pct, err
 }
 
+// BatchCheckSummary holds the last result + 90d uptime for a check.
+type BatchCheckSummary struct {
+	CheckID    string
+	Status     string
+	Message    string
+	ResponseMs int64
+	Uptime90d  float64
+}
+
+// GetBatchLastResultAndUptime returns last result + 90d uptime for all checks in one query.
+func (s *Store) GetBatchLastResultAndUptime() (map[string]*BatchCheckSummary, error) {
+	rows, err := s.db.Query(`
+		WITH latest AS (
+			SELECT check_id, status, message, response_ms,
+				ROW_NUMBER() OVER (PARTITION BY check_id ORDER BY checked_at DESC) as rn
+			FROM check_results
+		),
+		uptime AS (
+			SELECT check_id,
+				COALESCE(
+					ROUND(100.0 * SUM(CASE WHEN status = 'up' THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0), 2),
+					-1
+				) as uptime_pct
+			FROM check_results
+			WHERE checked_at >= datetime('now', '-90 days')
+			GROUP BY check_id
+		)
+		SELECT l.check_id, l.status, l.message, l.response_ms,
+			COALESCE(u.uptime_pct, -1)
+		FROM latest l
+		LEFT JOIN uptime u ON l.check_id = u.check_id
+		WHERE l.rn = 1
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[string]*BatchCheckSummary)
+	for rows.Next() {
+		cs := &BatchCheckSummary{}
+		if err := rows.Scan(&cs.CheckID, &cs.Status, &cs.Message, &cs.ResponseMs, &cs.Uptime90d); err != nil {
+			return nil, err
+		}
+		result[cs.CheckID] = cs
+	}
+	return result, rows.Err()
+}
+
 // PurgeOldResults deletes results older than the given number of days.
 func (s *Store) PurgeOldResults(days int) (int64, error) {
 	res, err := s.db.Exec(`

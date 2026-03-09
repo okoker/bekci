@@ -63,6 +63,30 @@ func (s *Store) ListChecksByTarget(targetID string) ([]Check, error) {
 	return checks, rows.Err()
 }
 
+// ListAllChecks returns all checks grouped by target_id.
+func (s *Store) ListAllChecks() (map[string][]Check, error) {
+	rows, err := s.db.Query(`
+		SELECT id, target_id, type, name, config, interval_s, enabled, created_at, updated_at
+		FROM checks ORDER BY name ASC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	byTarget := make(map[string][]Check)
+	for rows.Next() {
+		var c Check
+		var enabled int
+		if err := rows.Scan(&c.ID, &c.TargetID, &c.Type, &c.Name, &c.Config, &c.IntervalS, &enabled, &c.CreatedAt, &c.UpdatedAt); err != nil {
+			return nil, err
+		}
+		c.Enabled = enabled == 1
+		byTarget[c.TargetID] = append(byTarget[c.TargetID], c)
+	}
+	return byTarget, rows.Err()
+}
+
 // UpdateCheckConfig updates the config JSON for a check.
 func (s *Store) UpdateCheckConfig(id, config string) error {
 	_, err := s.db.Exec(`UPDATE checks SET config = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, config, id)

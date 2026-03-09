@@ -949,3 +949,126 @@ func TestGetRecentResultsSlim(t *testing.T) {
 		}
 	}
 }
+
+func TestListAllRuleStates(t *testing.T) {
+	s := newTestStore(t)
+
+	// Create two targets with rules
+	t1, conds1 := makeTarget("target1")
+	t2, conds2 := makeTarget("target2")
+	if err := s.CreateTargetWithConditions(t1, conds1, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CreateTargetWithConditions(t2, conds2, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	// Set rule states
+	if t1.RuleID != nil {
+		s.UpdateRuleState(*t1.RuleID, "healthy")
+	}
+	if t2.RuleID != nil {
+		s.UpdateRuleState(*t2.RuleID, "unhealthy")
+	}
+
+	states, err := s.ListAllRuleStates()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(states) < 2 {
+		t.Fatalf("expected at least 2 rule states, got %d", len(states))
+	}
+	if t1.RuleID != nil {
+		if rs, ok := states[*t1.RuleID]; !ok || rs.CurrentState != "healthy" {
+			t.Errorf("target1 rule state: got %v, want healthy", rs)
+		}
+	}
+	if t2.RuleID != nil {
+		if rs, ok := states[*t2.RuleID]; !ok || rs.CurrentState != "unhealthy" {
+			t.Errorf("target2 rule state: got %v, want unhealthy", rs)
+		}
+	}
+}
+
+func TestListAllChecks(t *testing.T) {
+	s := newTestStore(t)
+
+	t1, conds1 := makeTarget("target1")
+	t2, conds2 := makeTarget("target2")
+	if err := s.CreateTargetWithConditions(t1, conds1, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CreateTargetWithConditions(t2, conds2, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	allChecks, err := s.ListAllChecks()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(allChecks[t1.ID]) == 0 {
+		t.Error("expected checks for target1")
+	}
+	if len(allChecks[t2.ID]) == 0 {
+		t.Error("expected checks for target2")
+	}
+
+	// Total checks should match both targets
+	total := len(allChecks[t1.ID]) + len(allChecks[t2.ID])
+	if total < 2 {
+		t.Errorf("expected at least 2 total checks, got %d", total)
+	}
+}
+
+func TestGetBatchLastResultAndUptime(t *testing.T) {
+	s := newTestStore(t)
+
+	t1, conds1 := makeTarget("target1")
+	if err := s.CreateTargetWithConditions(t1, conds1, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	checks, _ := s.ListChecksByTarget(t1.ID)
+	if len(checks) == 0 {
+		t.Fatal("no checks created")
+	}
+	checkID := checks[0].ID
+
+	// Save some results
+	now := time.Now()
+	for i := 0; i < 10; i++ {
+		status := "up"
+		if i == 9 {
+			status = "down" // last result is down
+		}
+		s.SaveResult(&CheckResult{
+			CheckID:    checkID,
+			Status:     status,
+			ResponseMs: int64(100 + i),
+			Message:    fmt.Sprintf("result %d", i),
+			CheckedAt:  now.Add(time.Duration(i) * time.Minute),
+		})
+	}
+
+	summaries, err := s.GetBatchLastResultAndUptime()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	summary, ok := summaries[checkID]
+	if !ok {
+		t.Fatal("no summary for check")
+	}
+
+	if summary.Status != "down" {
+		t.Errorf("last status: got %s, want down", summary.Status)
+	}
+	if summary.ResponseMs != 109 {
+		t.Errorf("last response_ms: got %d, want 109", summary.ResponseMs)
+	}
+	if summary.Uptime90d != 90.0 {
+		t.Errorf("uptime: got %.1f, want 90.0 (9/10 up)", summary.Uptime90d)
+	}
+}
