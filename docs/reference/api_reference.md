@@ -741,7 +741,17 @@ Returns enabled targets with their checks, last status, response time, and 90-da
 | `range` | `4h` | Raw results for last 4 hours |
 | `range` | `90d` (or empty) | Daily uptime percentages for last 90 days |
 
-**Response (200) -- range=4h:** Array of CheckResult objects (same as GET /api/checks/{id}/results).
+**Response (200) -- range=4h:** Slim format (3 fields only, for bar rendering):
+```json
+[
+  {
+    "status": "up",
+    "response_ms": 45,
+    "checked_at": "2026-01-15T10:00:00Z"
+  }
+]
+```
+> Note: Unlike GET /api/checks/{id}/results (which returns full CheckResult with 7 fields), this endpoint returns only the fields needed for history bar rendering.
 
 **Response (200) -- range=90d (default):**
 ```json

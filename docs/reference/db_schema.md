@@ -1,6 +1,6 @@
 # Database Schema Reference
 
-**Current schema version:** 16
+**Current schema version:** 17
 **Engine:** SQLite 3 with WAL journal mode
 **Driver:** `github.com/mattn/go-sqlite3` (CGO required)
 
@@ -146,6 +146,7 @@ High-volume time-series data. Purged by `PurgeOldResults(days)`.
 **Indexes:**
 - `idx_check_results_check_id` ON check_results(check_id)
 - `idx_check_results_checked_at` ON check_results(checked_at)
+- `idx_check_results_check_id_checked_at` ON check_results(check_id, checked_at DESC) *(migration017)*
 
 ### rules
 
@@ -295,6 +296,7 @@ Append-only audit trail. Purged by `PurgeOldAuditEntries(days)` (runs at startup
 | 014 | migration014   | Add `condition_group` (INTEGER DEFAULT 0) and `group_operator` (TEXT DEFAULT 'AND') to `rule_conditions`. Backfill `group_operator` from parent rule's `operator`. |
 | 015 | migration015   | Add `paused_at` (DATETIME DEFAULT NULL) to `targets`. Create `target_pause_history` table with index on `target_id`. |
 | 016 | migration016   | Seed Signal alerting settings: `signal_api_url`, `signal_number`, `signal_username`, `signal_password`. |
+| 017 | migration017   | Create composite index `idx_check_results_check_id_checked_at` on check_results(check_id, checked_at DESC) for dashboard/history performance. |
 
 **Note:** Function declarations appear out of order in the source file (e.g. migration005 before migration004, migration008 before migration007), but the `migrations` slice defines the correct sequential execution order: 001 through 016, strictly in order.
 
