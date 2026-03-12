@@ -21,6 +21,7 @@ docs/*
 # Claude Code
 CLAUDE.md
 .claude/
+.worktrees/
 
 # Frontend
 frontend/node_modules/
