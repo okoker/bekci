@@ -160,12 +160,14 @@ func (a *AlertService) Dispatch(ruleID, oldState, newState string) {
 				a.store.SetSettings(map[string]string{
 					"webhook_last_error": now.UTC().Format(time.RFC3339) + " — " + err.Error(),
 				})
+				a.auditWebhook("webhook_dispatch", target.Name, alertType+" — error: "+err.Error(), "failure")
 			} else {
 				slog.Info("Alerter: webhook sent", "target", target.Name, "type", alertType)
 				a.store.SetSettings(map[string]string{
 					"webhook_last_error":   "",
 					"webhook_last_success": now.UTC().Format(time.RFC3339),
 				})
+				a.auditWebhook("webhook_dispatch", target.Name, alertType, "success")
 			}
 			summary := "[Webhook] " + target.Name + " " + alertType
 			if err := a.store.LogAlert(targetID, ruleID, "", alertType, summary); err != nil {
@@ -293,12 +295,14 @@ func (a *AlertService) CheckRealerts() {
 					a.store.SetSettings(map[string]string{
 						"webhook_last_error": now.UTC().Format(time.RFC3339) + " — " + err.Error(),
 					})
+					a.auditWebhook("webhook_dispatch", target.Name, "re-alert — error: "+err.Error(), "failure")
 				} else {
 					slog.Info("Alerter: webhook re-alert sent", "target", target.Name)
 					a.store.SetSettings(map[string]string{
 						"webhook_last_error":   "",
 						"webhook_last_success": now.UTC().Format(time.RFC3339),
 					})
+					a.auditWebhook("webhook_dispatch", target.Name, "re-alert", "success")
 				}
 				summary := "[Webhook RE-ALERT] " + target.Name
 				if err := a.store.LogAlert(fr.TargetID, fr.RuleID, "", "re-alert", summary); err != nil {
@@ -307,6 +311,19 @@ func (a *AlertService) CheckRealerts() {
 			}
 		}
 	}
+}
+
+// auditWebhook logs a webhook event to the audit log for visibility.
+func (a *AlertService) auditWebhook(action, target, detail, status string) {
+	_ = a.store.CreateAuditEntry(&store.AuditEntry{
+		UserID:       "system",
+		Username:     "system",
+		Action:       action,
+		ResourceType: "webhook",
+		ResourceID:   target,
+		Detail:       detail,
+		Status:       status,
+	})
 }
 
 // getWebhookAuth reads webhook authentication settings from the store.
