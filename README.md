@@ -19,7 +19,7 @@ Web-managed monitoring platform written in Go + Vue 3. Multi-check monitoring wi
 - **User Management** — Create, suspend, reset passwords, last-admin protection
 - **Backup & Restore** — Config backup (JSON, web UI restore) + full database backup (tar.gz, optional AES-256-GCM encryption, CLI restore). Server-side backup storage with download/delete management.
 - **Audit Log** — Comprehensive audit trail for all admin/operator actions
-- **Fail2Ban** — Integration for login brute-force protection
+- **Fail2Ban** — Integration for login brute-force protection, clickable ban detail tables with source IP, timestamps, and expiry
 - **Settings** — Runtime-configurable session timeout, history retention, alerting, SLA thresholds
 - **Single Binary** — Vue 3 frontend embedded in Go binary via `go:embed`
 - **Docker Ready** — Multi-stage Dockerfile, single container, single port
@@ -153,7 +153,7 @@ Complete SQLite snapshot including all historical data (check results, audit log
 | Settings | read, update | any / admin |
 | Backup | config backup/restore, full backup (download/save/list/delete), passphrase | admin |
 | Audit | log | operator+ |
-| System | health, fail2ban | any / admin |
+| System | health, fail2ban status, fail2ban bans | any / admin |
 
 Full API reference: [`docs/reference/api_reference.md`](docs/reference/api_reference.md)
 
@@ -187,7 +187,7 @@ docker-compose.yml         Single-service deployment
 | Backend | Go 1.24, net/http (stdlib router), SQLite WAL |
 | Frontend | Vue 3, Vite, Vue Router, Pinia, Chart.js |
 | Auth | JWT HS256 in HttpOnly cookie, bcrypt |
-| Alerting | Resend API (email), Signal REST API (messaging), Generic webhook (JSON POST) |
+| Alerting | Resend API (email), Signal REST API (messaging), Generic webhook (JSON POST, Bearer/Basic auth) |
 | Encryption | AES-256-GCM, Argon2id KDF |
 | Deploy | Docker multi-stage (node + go + alpine) or bare-metal |
 

@@ -11,7 +11,7 @@
 | Reverse Proxy | Nginx 1.18 (prod only) — SSL termination, security headers, gzip |
 | Email | Resend API |
 | Signal | Signal Messenger via signal-cli REST API |
-| Webhook | Generic JSON POST to any HTTP endpoint (SOAR, Slack, etc.) |
+| Webhook | Generic JSON POST to any HTTP endpoint (SOAR, Slack, etc.), Bearer or Basic auth |
 | Network | ICMP ping via pro-bing (requires NET_RAW capability) |
 | Config | YAML base + env var overrides (`BEKCI_` prefix) + auto-generated defaults |
 | Deploy | Docker multi-stage build (local) or bare-metal via Makefile (prod) |
@@ -162,3 +162,4 @@ Single bundle (no code splitting, no lazy-loaded routes). All routes and depende
 - **Production** is bare-metal Ubuntu. Binary runs as `bekci` user via systemd. Nginx on port 443 handles SSL + gzip + security headers, proxies to Go on 65000. No Docker, no npm.
 - **CGO is required everywhere** — go-sqlite3 needs it. Cannot use `CGO_ENABLED=0`.
 - **ICMP ping requires NET_RAW** — Docker gets it via `cap_add`. Production uses systemd `AmbientCapabilities` (not `setcap` on the binary).
+- **Fail2Ban integration** — Live jail status via `sudo fail2ban-client` (requires sudoers config). Historical ban records read from fail2ban's own SQLite DB (`/var/lib/fail2ban/fail2ban.sqlite3`, read-only). DB retention controlled by fail2ban's `dbpurgeage` setting.
