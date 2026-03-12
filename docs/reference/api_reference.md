@@ -903,7 +903,7 @@ Sends a test Signal message to the specified phone number. Requires Signal gatew
 
 ### POST /api/settings/test-webhook
 
-Sends a test webhook payload to the configured webhook URL. Requires webhook to be enabled with a URL configured.
+Sends a test webhook payload to the configured webhook URL. Uses the configured auth type (none, Bearer, or Basic). Requires webhook to be enabled with a URL configured.
 
 **Request:** No body required.
 
@@ -1063,7 +1063,9 @@ Update one or more settings. Only known keys are accepted. Sending masked values
 }
 ```
 
-**Audit actions:** `login`, `login_failed`, `logout`, `create_user`, `update_user`, `suspend_user`, `activate_user`, `reset_password`, `change_password`, `change_password_failed`, `update_profile`, `create_target`, `update_target`, `delete_target`, `pause_target`, `unpause_target`, `set_alert_recipients`, `update_settings`, `restore_backup`, `export_backup`, `export_full_backup`, `save_full_backup`, `download_saved_backup`, `delete_saved_backup`, `run_check`, `test_email`, `test_signal`, `test_webhook`.
+**Audit actions:** `login`, `login_failed`, `logout`, `create_user`, `update_user`, `suspend_user`, `activate_user`, `reset_password`, `change_password`, `change_password_failed`, `update_profile`, `create_target`, `update_target`, `delete_target`, `pause_target`, `unpause_target`, `set_alert_recipients`, `update_settings`, `restore_backup`, `export_backup`, `export_full_backup`, `save_full_backup`, `download_saved_backup`, `delete_saved_backup`, `run_check`, `test_email`, `test_signal`, `test_webhook`, `webhook_dispatch`.
+
+**`webhook_dispatch`** is logged by the system (user=system) for all webhook events. Detail contains the event type: `test`, `firing`, `recovery`, `re-alert`, or `{type} — error: {message}` on failure.
 
 **Status values:** `success`, `failure`. All mutating actions log both success and failure (with detail). Login and change_password also log dedicated failure actions (`login_failed`, `change_password_failed`).
 
