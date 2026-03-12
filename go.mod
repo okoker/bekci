@@ -12,6 +12,7 @@ require (
 )
 
 require (
+	github.com/gosnmp/gosnmp v1.43.2 // indirect
 	golang.org/x/net v0.49.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/sys v0.41.0 // indirect
