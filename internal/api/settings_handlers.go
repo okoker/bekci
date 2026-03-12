@@ -209,7 +209,7 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Don't overwrite masked values
-	if v, ok := req["resend_api_key"]; ok && (strings.Contains(v, "••••••••") || strings.Contains(v, "****")) {
+	if v, ok := req["resend_api_key"]; ok && (strings.Contains(v, "••••••••") || strings.HasSuffix(v, "****")) {
 		delete(req, "resend_api_key")
 	}
 	if v, ok := req["signal_password"]; ok && v == "••••••••" {
