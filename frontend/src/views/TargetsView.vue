@@ -37,6 +37,8 @@ const checkTypes = [
   { value: 'dns', label: 'DNS' },
   { value: 'page_hash', label: 'Page Hash' },
   { value: 'tls_cert', label: 'TLS Certificate' },
+  { value: 'snmp_v2c', label: 'SNMP v2c' },
+  { value: 'snmp_v3', label: 'SNMP v3' },
 ]
 
 function getEmptyForm() {
@@ -55,6 +57,8 @@ function getDefaultConfig(type_) {
     case 'dns': return { query: '', record_type: 'A', expect_value: '', nameserver: '' }
     case 'page_hash': return { scheme: 'https', endpoint: '/', baseline_hash: '', timeout_s: 10 }
     case 'tls_cert': return { port: 443, warn_days: 30, timeout_s: 10 }
+    case 'snmp_v2c': return { port: 161, timeout_s: 5 }
+    case 'snmp_v3': return { port: 161, timeout_s: 5 }
     default: return {}
   }
 }
@@ -927,6 +931,20 @@ onMounted(() => loadTargets())
                           <input type="number" v-model.number="cond.config.warn_days" min="1" />
                         </div>
                       </div>
+                    </template>
+
+                    <template v-if="cond.check_type === 'snmp_v2c' || cond.check_type === 'snmp_v3'">
+                      <div class="form-row">
+                        <div class="form-group">
+                          <label>Port</label>
+                          <input type="number" v-model.number="cond.config.port" placeholder="161" />
+                        </div>
+                        <div class="form-group">
+                          <label>Timeout (s)</label>
+                          <input type="number" v-model.number="cond.config.timeout_s" placeholder="5" />
+                        </div>
+                      </div>
+                      <p class="text-muted input-hint">SNMP credentials are configured globally in Settings.</p>
                     </template>
 
                     <!-- Alert criteria divider -->
