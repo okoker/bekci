@@ -140,7 +140,7 @@ No npm on server — `cmd/bekci/frontend_dist/` is committed to git. Go binary e
 | vue | ^3.5.25 | UI framework (Composition API, `<script setup>`) |
 | vite | ^7.3.1 | Build tool + dev server |
 | @vitejs/plugin-vue | ^6.0.2 | Vue 3 SFC support for Vite |
-| vue-router | ^4.6.4 | Client-side routing (8 routes, no lazy loading) |
+| vue-router | ^4.6.4 | Client-side routing (10 routes, no lazy loading) |
 | pinia | ^3.0.4 | State management |
 | axios | ^1.13.5 | HTTP client (withCredentials for cookie auth) |
 | chart.js | ^4.5.1 | Charts (SLA page) |

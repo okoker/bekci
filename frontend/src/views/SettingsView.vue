@@ -1,12 +1,17 @@
 <script setup>
 import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import api from '../api'
 
+const props = defineProps({
+  initialTab: { type: String, default: '' }
+})
+
 const auth = useAuthStore()
 const router = useRouter()
-const activeTab = ref('general')
+const route = useRoute()
+const activeTab = ref(props.initialTab || 'general')
 
 // ── General tab state ──
 const settings = ref({})
@@ -30,6 +35,7 @@ const slaKeys = [
 ]
 
 const boolSettings = new Set(['soc_public'])
+const showSlaInfo = ref(false)
 
 // Keys shown on the General tab (filter alerting keys out)
 const generalKeys = new Set(Object.keys(labels))
@@ -407,6 +413,13 @@ const alertForm = ref({
   webhook_basic_username: '',
   webhook_basic_password: '',
   webhook_skip_tls: 'false',
+})
+
+// Track which alerting sections are expanded (first open by default)
+const alertSections = ref({ general: true, email: false, signal: false, webhook: false })
+
+// SNMP credentials (separate from alerting)
+const snmpForm = ref({
   snmp_v2c_community: 'public',
   snmp_v3_username: '',
   snmp_v3_security_level: 'authPriv',
@@ -415,6 +428,10 @@ const alertForm = ref({
   snmp_v3_privacy_protocol: 'AES',
   snmp_v3_privacy_passphrase: '',
 })
+const snmpExpanded = ref(false)
+const snmpSaving = ref(false)
+const snmpError = ref('')
+const snmpSuccess = ref('')
 
 function loadAlertSettings() {
   // Pull alerting keys from the shared settings ref
@@ -441,13 +458,6 @@ function loadAlertSettings() {
     webhook_basic_username: s.webhook_basic_username || '',
     webhook_basic_password: s.webhook_basic_password || '',
     webhook_skip_tls: s.webhook_skip_tls || 'false',
-    snmp_v2c_community: s.snmp_v2c_community || 'public',
-    snmp_v3_username: s.snmp_v3_username || '',
-    snmp_v3_security_level: s.snmp_v3_security_level || 'authPriv',
-    snmp_v3_auth_protocol: s.snmp_v3_auth_protocol || 'SHA',
-    snmp_v3_auth_passphrase: s.snmp_v3_auth_passphrase || '',
-    snmp_v3_privacy_protocol: s.snmp_v3_privacy_protocol || 'AES',
-    snmp_v3_privacy_passphrase: s.snmp_v3_privacy_passphrase || '',
   }
   // Pre-populate test phone from logged-in user's profile
   if (!signalTestPhone.value) {
@@ -463,13 +473,32 @@ function loadAlertSettings() {
   }).catch(() => {})
 }
 
-async function saveAlertSettings() {
+async function saveAlertGeneral() {
   alertError.value = ''
   alertSuccess.value = ''
   alertSaving.value = true
   try {
     await api.put('/settings', {
       alert_method: alertForm.value.alert_method,
+      alert_cooldown_s: String(alertForm.value.alert_cooldown_s),
+      alert_realert_s: String(alertForm.value.alert_realert_s),
+    })
+    alertSuccess.value = 'Alert settings saved'
+    await loadSettings()
+    loadAlertSettings()
+  } catch (e) {
+    alertError.value = e.response?.data?.error || 'Failed to save alert settings'
+  } finally {
+    alertSaving.value = false
+  }
+}
+
+async function saveEmailSettings() {
+  alertError.value = ''
+  alertSuccess.value = ''
+  alertSaving.value = true
+  try {
+    await api.put('/settings', {
       email_provider: alertForm.value.email_provider,
       resend_api_key: alertForm.value.resend_api_key,
       alert_from_email: alertForm.value.alert_from_email,
@@ -477,12 +506,44 @@ async function saveAlertSettings() {
       smtp_port: alertForm.value.smtp_port,
       smtp_username: alertForm.value.smtp_username,
       smtp_password: alertForm.value.smtp_password,
-      alert_cooldown_s: String(alertForm.value.alert_cooldown_s),
-      alert_realert_s: String(alertForm.value.alert_realert_s),
+    })
+    alertSuccess.value = 'Email settings saved'
+    await loadSettings()
+    loadAlertSettings()
+  } catch (e) {
+    alertError.value = e.response?.data?.error || 'Failed to save email settings'
+  } finally {
+    alertSaving.value = false
+  }
+}
+
+async function saveSignalSettings() {
+  alertError.value = ''
+  alertSuccess.value = ''
+  alertSaving.value = true
+  try {
+    await api.put('/settings', {
       signal_api_url: alertForm.value.signal_api_url,
       signal_number: alertForm.value.signal_number,
       signal_username: alertForm.value.signal_username,
       signal_password: alertForm.value.signal_password,
+    })
+    alertSuccess.value = 'Signal settings saved'
+    await loadSettings()
+    loadAlertSettings()
+  } catch (e) {
+    alertError.value = e.response?.data?.error || 'Failed to save signal settings'
+  } finally {
+    alertSaving.value = false
+  }
+}
+
+async function saveWebhookSettings() {
+  alertError.value = ''
+  alertSuccess.value = ''
+  alertSaving.value = true
+  try {
+    await api.put('/settings', {
       webhook_enabled: alertForm.value.webhook_enabled,
       webhook_url: alertForm.value.webhook_url,
       webhook_auth_type: alertForm.value.webhook_auth_type,
@@ -490,22 +551,51 @@ async function saveAlertSettings() {
       webhook_basic_username: alertForm.value.webhook_basic_username,
       webhook_basic_password: alertForm.value.webhook_basic_password,
       webhook_skip_tls: alertForm.value.webhook_skip_tls,
-      snmp_v2c_community: alertForm.value.snmp_v2c_community,
-      snmp_v3_username: alertForm.value.snmp_v3_username,
-      snmp_v3_security_level: alertForm.value.snmp_v3_security_level,
-      snmp_v3_auth_protocol: alertForm.value.snmp_v3_auth_protocol,
-      snmp_v3_auth_passphrase: alertForm.value.snmp_v3_auth_passphrase,
-      snmp_v3_privacy_protocol: alertForm.value.snmp_v3_privacy_protocol,
-      snmp_v3_privacy_passphrase: alertForm.value.snmp_v3_privacy_passphrase,
     })
-    alertSuccess.value = 'Alert settings saved'
-    // Reload to get masked API key
+    alertSuccess.value = 'Webhook settings saved'
     await loadSettings()
     loadAlertSettings()
   } catch (e) {
-    alertError.value = e.response?.data?.error || 'Failed to save alert settings'
+    alertError.value = e.response?.data?.error || 'Failed to save webhook settings'
   } finally {
     alertSaving.value = false
+  }
+}
+
+function loadSnmpSettings() {
+  const s = settings.value
+  snmpForm.value = {
+    snmp_v2c_community: s.snmp_v2c_community || 'public',
+    snmp_v3_username: s.snmp_v3_username || '',
+    snmp_v3_security_level: s.snmp_v3_security_level || 'authPriv',
+    snmp_v3_auth_protocol: s.snmp_v3_auth_protocol || 'SHA',
+    snmp_v3_auth_passphrase: s.snmp_v3_auth_passphrase || '',
+    snmp_v3_privacy_protocol: s.snmp_v3_privacy_protocol || 'AES',
+    snmp_v3_privacy_passphrase: s.snmp_v3_privacy_passphrase || '',
+  }
+}
+
+async function saveSnmpSettings() {
+  snmpError.value = ''
+  snmpSuccess.value = ''
+  snmpSaving.value = true
+  try {
+    await api.put('/settings', {
+      snmp_v2c_community: snmpForm.value.snmp_v2c_community,
+      snmp_v3_username: snmpForm.value.snmp_v3_username,
+      snmp_v3_security_level: snmpForm.value.snmp_v3_security_level,
+      snmp_v3_auth_protocol: snmpForm.value.snmp_v3_auth_protocol,
+      snmp_v3_auth_passphrase: snmpForm.value.snmp_v3_auth_passphrase,
+      snmp_v3_privacy_protocol: snmpForm.value.snmp_v3_privacy_protocol,
+      snmp_v3_privacy_passphrase: snmpForm.value.snmp_v3_privacy_passphrase,
+    })
+    snmpSuccess.value = 'SNMP settings saved'
+    await loadSettings()
+    loadSnmpSettings()
+  } catch (e) {
+    snmpError.value = e.response?.data?.error || 'Failed to save SNMP settings'
+  } finally {
+    snmpSaving.value = false
   }
 }
 
@@ -712,8 +802,19 @@ watch(activeTab, (tab) => {
   }
 })
 
-onMounted(() => {
-  loadSettings()
+// Sync activeTab when route changes (e.g. /users, /audit-log, /settings)
+watch(() => route.path, (path) => {
+  if (path === '/users') activeTab.value = 'users'
+  else if (path === '/audit-log') activeTab.value = 'audit'
+  else if (path === '/settings') activeTab.value = props.initialTab || 'general'
+})
+
+onMounted(async () => {
+  await loadSettings()
+  loadSnmpSettings()
+  // Trigger initial data load for routed tabs
+  if (activeTab.value === 'users') loadUsers()
+  if (activeTab.value === 'audit') { auditPage.value = 1; loadAuditLog() }
 })
 
 onUnmounted(() => {
@@ -723,9 +824,9 @@ onUnmounted(() => {
 
 <template>
   <div class="page">
-    <h2>Settings</h2>
+    <h2>{{ activeTab === 'users' ? 'Users' : activeTab === 'audit' ? 'Audit Log' : 'Settings' }}</h2>
 
-    <div class="tabs">
+    <div v-if="activeTab !== 'users' && activeTab !== 'audit'" class="tabs">
       <button
         class="tab-btn"
         :class="{ active: activeTab === 'general' }"
@@ -745,21 +846,9 @@ onUnmounted(() => {
       <button
         v-if="auth.isAdmin"
         class="tab-btn"
-        :class="{ active: activeTab === 'users' }"
-        @click="activeTab = 'users'"
-      >Users</button>
-      <button
-        v-if="auth.isAdmin"
-        class="tab-btn"
         :class="{ active: activeTab === 'backup' }"
         @click="activeTab = 'backup'"
       >Backup &amp; Restore</button>
-      <button
-        v-if="auth.isOperator"
-        class="tab-btn"
-        :class="{ active: activeTab === 'audit' }"
-        @click="activeTab = 'audit'"
-      >Audit Log</button>
       <button
         v-if="auth.isAdmin"
         class="tab-btn"
@@ -802,6 +891,76 @@ onUnmounted(() => {
         </form>
       </div>
 
+      <!-- SNMP Credentials -->
+      <div v-if="auth.isAdmin" class="card collapsible-card" :class="{ expanded: snmpExpanded }" style="margin-top: 1rem;">
+        <div class="collapsible-header" @click="snmpExpanded = !snmpExpanded">
+          <div class="collapsible-title-row">
+            <span class="collapse-arrow" :class="{ open: snmpExpanded }">&#9654;</span>
+            <h3 style="margin: 0;">SNMP Credentials</h3>
+          </div>
+          <span class="collapsible-hint">{{ snmpExpanded ? 'collapse' : 'expand' }}</span>
+        </div>
+        <p class="text-muted">Credentials used by all SNMP v2c and v3 checks.</p>
+        <div class="collapsible-body" :class="{ open: snmpExpanded }">
+          <div class="collapsible-inner">
+        <div v-if="snmpError" class="error-msg">{{ snmpError }}</div>
+        <div v-if="snmpSuccess" class="success-msg" @click="snmpSuccess = ''">{{ snmpSuccess }}</div>
+
+        <h4>SNMP v2c</h4>
+        <div class="form-group">
+          <label>Community String</label>
+          <input v-model="snmpForm.snmp_v2c_community" placeholder="public" />
+        </div>
+
+        <h4>SNMP v3</h4>
+        <div class="form-group">
+          <label>Username</label>
+          <input v-model="snmpForm.snmp_v3_username" placeholder="SNMPv3 username" />
+        </div>
+        <div class="form-group">
+          <label>Security Level</label>
+          <select v-model="snmpForm.snmp_v3_security_level">
+            <option value="noAuthNoPriv">No Auth, No Privacy</option>
+            <option value="authNoPriv">Auth, No Privacy</option>
+            <option value="authPriv">Auth + Privacy</option>
+          </select>
+        </div>
+        <template v-if="snmpForm.snmp_v3_security_level !== 'noAuthNoPriv'">
+          <div class="form-group">
+            <label>Auth Protocol</label>
+            <select v-model="snmpForm.snmp_v3_auth_protocol">
+              <option value="MD5">MD5</option>
+              <option value="SHA">SHA</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Auth Passphrase</label>
+            <input type="password" v-model="snmpForm.snmp_v3_auth_passphrase" placeholder="Auth passphrase" />
+          </div>
+        </template>
+        <template v-if="snmpForm.snmp_v3_security_level === 'authPriv'">
+          <div class="form-group">
+            <label>Privacy Protocol</label>
+            <select v-model="snmpForm.snmp_v3_privacy_protocol">
+              <option value="DES">DES</option>
+              <option value="AES">AES</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Privacy Passphrase</label>
+            <input type="password" v-model="snmpForm.snmp_v3_privacy_passphrase" placeholder="Privacy passphrase" />
+          </div>
+        </template>
+
+        <div class="form-actions">
+          <button type="button" class="btn btn-primary" :disabled="snmpSaving" @click="saveSnmpSettings">
+            {{ snmpSaving ? 'Saving...' : 'Save' }}
+          </button>
+        </div>
+          </div>
+        </div>
+      </div>
+
     </div>
 
     <!-- ── SLA Tab ── -->
@@ -812,7 +971,7 @@ onUnmounted(() => {
       <div class="card sla-tab-card">
         <div class="sla-intro">
           <h3>SLA Compliance Thresholds</h3>
-          <p class="text-muted">Define minimum uptime targets per category. Each target's preferred check 90-day uptime is compared against its category threshold. Targets below the threshold display an <span class="sla-badge-example sla-badge-unhealthy-ex">UNHEALTHY</span> badge on the Dashboard and SOC views.</p>
+          <p class="text-muted">Define minimum uptime targets per category. Each target's preferred check 90-day uptime is compared against its category threshold.</p>
         </div>
 
         <form @submit.prevent="saveSettings">
@@ -846,6 +1005,44 @@ onUnmounted(() => {
             <p v-else class="text-muted">Only admins can modify SLA settings.</p>
           </div>
         </form>
+
+        <div class="privileges-bar">
+          <button type="button" class="privileges-btn" @click="showSlaInfo = !showSlaInfo">
+            <span class="privileges-btn-icon">?</span>
+            {{ showSlaInfo ? 'Hide badge guide' : 'Badge guide' }}
+            <span class="privileges-chevron" :class="{ open: showSlaInfo }">&#9662;</span>
+          </button>
+        </div>
+
+        <div v-if="showSlaInfo" class="card privileges-card sla-info-card">
+          <table class="privileges-table sla-info-table">
+            <thead>
+              <tr>
+                <th>Badge</th>
+                <th>Meaning</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="sla-badge-example sla-badge-up-ex">UP</span></td>
+                <td>The target's most recent check succeeded. The target is currently reachable and responding normally.</td>
+              </tr>
+              <tr>
+                <td><span class="sla-badge-example sla-badge-down-ex">DOWN</span></td>
+                <td>The target's most recent check failed. The target is currently unreachable or not responding as expected.</td>
+              </tr>
+              <tr>
+                <td><span class="sla-badge-example sla-badge-healthy-ex">HEALTHY</span></td>
+                <td>The target's 90-day uptime percentage meets or exceeds its category's SLA threshold. Long-term reliability is on track.</td>
+              </tr>
+              <tr>
+                <td><span class="sla-badge-example sla-badge-unhealthy-ex">UNHEALTHY</span></td>
+                <td>The target's 90-day uptime percentage has dropped below its category's SLA threshold. Long-term reliability is degraded.</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="text-muted sla-info-note">UP/DOWN reflects the <strong>current</strong> state of a single check. HEALTHY/UNHEALTHY reflects <strong>long-term</strong> reliability over 90 days. A target can be <span class="sla-badge-example sla-badge-up-ex">UP</span> right now but still <span class="sla-badge-example sla-badge-unhealthy-ex">UNHEALTHY</span> if past outages have pulled its overall uptime below the SLA threshold.</p>
+        </div>
       </div>
     </div>
 
@@ -1216,10 +1413,17 @@ onUnmounted(() => {
       <div v-if="alertError" class="error-msg">{{ alertError }}</div>
       <div v-if="alertSuccess" class="success-msg" @click="alertSuccess = ''">{{ alertSuccess }}</div>
 
-      <form @submit.prevent="saveAlertSettings">
         <!-- General alerting settings -->
-        <div class="card" style="margin-bottom: 1rem;">
-          <h3>General</h3>
+        <div class="card collapsible-card" :class="{ expanded: alertSections.general }" style="margin-bottom: 1rem;">
+          <div class="collapsible-header" @click="alertSections.general = !alertSections.general">
+            <div class="collapsible-title-row">
+              <span class="collapse-arrow" :class="{ open: alertSections.general }">&#9654;</span>
+              <h3 style="margin: 0;">Alert Method &amp; Timing</h3>
+            </div>
+            <span class="collapsible-hint">{{ alertSections.general ? 'collapse' : 'expand' }}</span>
+          </div>
+          <div class="collapsible-body" :class="{ open: alertSections.general }">
+            <div class="collapsible-inner">
           <div class="form-group">
             <label>Alert Method</label>
             <select v-model="alertForm.alert_method">
@@ -1242,12 +1446,27 @@ onUnmounted(() => {
               <span class="text-muted input-hint">Repeat alert if still down (0 = disabled)</span>
             </div>
           </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn btn-primary" :disabled="alertSaving" @click="saveAlertGeneral">
+              {{ alertSaving ? 'Saving...' : 'Save' }}
+            </button>
+          </div>
+            </div>
+          </div>
         </div>
 
         <!-- Email settings -->
-        <div class="card" style="margin-bottom: 1rem;">
-          <h3>Email Alerting</h3>
-
+        <div class="card collapsible-card" :class="{ expanded: alertSections.email }" style="margin-bottom: 1rem;">
+          <div class="collapsible-header" @click="alertSections.email = !alertSections.email">
+            <div class="collapsible-title-row">
+              <span class="collapse-arrow" :class="{ open: alertSections.email }">&#9654;</span>
+              <h3 style="margin: 0;">Email Alerting</h3>
+            </div>
+            <span class="collapsible-hint">{{ alertSections.email ? 'collapse' : 'expand' }}</span>
+          </div>
+          <div class="collapsible-body" :class="{ open: alertSections.email }">
+            <div class="collapsible-inner">
           <div class="form-group">
             <label>Email Provider</label>
             <select v-model="alertForm.email_provider">
@@ -1296,17 +1515,33 @@ onUnmounted(() => {
           </div>
 
           <div class="form-actions">
+            <button type="button" class="btn btn-primary" :disabled="alertSaving" @click="saveEmailSettings">
+              {{ alertSaving ? 'Saving...' : 'Save' }}
+            </button>
+          </div>
+          <hr class="section-divider" />
+          <div class="form-actions">
             <input v-model="emailTestRecipient" type="email" placeholder="recipient@example.com" class="test-phone-input" />
             <button type="button" class="btn" :disabled="alertTesting" @click="sendTestEmail">
               {{ alertTesting ? 'Sending...' : 'Send Test Email' }}
             </button>
             <span v-if="emailTestResult" :class="emailTestError ? 'inline-error' : 'inline-success'">{{ emailTestResult }}</span>
           </div>
+            </div>
+          </div>
         </div>
 
         <!-- Signal settings -->
-        <div class="card" style="margin-bottom: 1rem;">
-          <h3>Signal Alerting</h3>
+        <div class="card collapsible-card" :class="{ expanded: alertSections.signal }" style="margin-bottom: 1rem;">
+          <div class="collapsible-header" @click="alertSections.signal = !alertSections.signal">
+            <div class="collapsible-title-row">
+              <span class="collapse-arrow" :class="{ open: alertSections.signal }">&#9654;</span>
+              <h3 style="margin: 0;">Signal Alerting</h3>
+            </div>
+            <span class="collapsible-hint">{{ alertSections.signal ? 'collapse' : 'expand' }}</span>
+          </div>
+          <div class="collapsible-body" :class="{ open: alertSections.signal }">
+            <div class="collapsible-inner">
           <p class="text-muted">Uses a Signal REST API gateway. Requires gateway URL and credentials.</p>
 
           <div class="form-group">
@@ -1331,16 +1566,32 @@ onUnmounted(() => {
           </div>
 
           <div class="form-actions">
+            <button type="button" class="btn btn-primary" :disabled="alertSaving" @click="saveSignalSettings">
+              {{ alertSaving ? 'Saving...' : 'Save' }}
+            </button>
+          </div>
+          <hr class="section-divider" />
+          <div class="form-actions">
             <input v-model="signalTestPhone" type="tel" placeholder="+1234567890" class="test-phone-input" />
             <button type="button" class="btn" :disabled="signalTesting || !signalTestPhone" @click="sendTestSignal">
               {{ signalTesting ? 'Sending...' : 'Send Test Signal' }}
             </button>
           </div>
+            </div>
+          </div>
         </div>
 
         <!-- Webhook settings -->
-        <div class="card" style="margin-bottom: 1rem;">
-          <h3>Webhook Alerting</h3>
+        <div class="card collapsible-card" :class="{ expanded: alertSections.webhook }" style="margin-bottom: 1rem;">
+          <div class="collapsible-header" @click="alertSections.webhook = !alertSections.webhook">
+            <div class="collapsible-title-row">
+              <span class="collapse-arrow" :class="{ open: alertSections.webhook }">&#9654;</span>
+              <h3 style="margin: 0;">Webhook Alerting</h3>
+            </div>
+            <span class="collapsible-hint">{{ alertSections.webhook ? 'collapse' : 'expand' }}</span>
+          </div>
+          <div class="collapsible-body" :class="{ open: alertSections.webhook }">
+            <div class="collapsible-inner">
           <p class="text-muted">Send JSON alerts to any HTTP endpoint (SOAR, Slack, etc.)</p>
 
           <div v-if="webhookLastError" class="webhook-warning">
@@ -1404,6 +1655,12 @@ onUnmounted(() => {
           </div>
 
           <div class="form-actions">
+            <button type="button" class="btn btn-primary" :disabled="alertSaving" @click="saveWebhookSettings">
+              {{ alertSaving ? 'Saving...' : 'Save' }}
+            </button>
+          </div>
+          <hr class="section-divider" />
+          <div class="form-actions">
             <button type="button" class="btn"
               @click="sendTestWebhook"
               :disabled="webhookTesting || alertForm.webhook_enabled !== 'true' || !alertForm.webhook_url">
@@ -1411,64 +1668,9 @@ onUnmounted(() => {
             </button>
             <span v-if="webhookTestResult" :class="webhookTestError ? 'inline-error' : 'inline-success'">{{ webhookTestResult }}</span>
           </div>
+            </div>
+          </div>
         </div>
-
-          <!-- SNMP Section -->
-          <h3>SNMP</h3>
-          <p class="text-muted">Credentials used by all SNMP v2c and v3 checks.</p>
-
-          <h4>SNMP v2c</h4>
-          <div class="form-group">
-            <label>Community String</label>
-            <input v-model="alertForm.snmp_v2c_community" placeholder="public" />
-          </div>
-
-          <h4>SNMP v3</h4>
-          <div class="form-group">
-            <label>Username</label>
-            <input v-model="alertForm.snmp_v3_username" placeholder="SNMPv3 username" />
-          </div>
-          <div class="form-group">
-            <label>Security Level</label>
-            <select v-model="alertForm.snmp_v3_security_level">
-              <option value="noAuthNoPriv">No Auth, No Privacy</option>
-              <option value="authNoPriv">Auth, No Privacy</option>
-              <option value="authPriv">Auth + Privacy</option>
-            </select>
-          </div>
-          <template v-if="alertForm.snmp_v3_security_level !== 'noAuthNoPriv'">
-            <div class="form-group">
-              <label>Auth Protocol</label>
-              <select v-model="alertForm.snmp_v3_auth_protocol">
-                <option value="MD5">MD5</option>
-                <option value="SHA">SHA</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Auth Passphrase</label>
-              <input type="password" v-model="alertForm.snmp_v3_auth_passphrase" placeholder="Auth passphrase" />
-            </div>
-          </template>
-          <template v-if="alertForm.snmp_v3_security_level === 'authPriv'">
-            <div class="form-group">
-              <label>Privacy Protocol</label>
-              <select v-model="alertForm.snmp_v3_privacy_protocol">
-                <option value="DES">DES</option>
-                <option value="AES">AES</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Privacy Passphrase</label>
-              <input type="password" v-model="alertForm.snmp_v3_privacy_passphrase" placeholder="Privacy passphrase" />
-            </div>
-          </template>
-
-        <div class="form-actions">
-          <button type="submit" class="btn btn-primary" :disabled="alertSaving">
-            {{ alertSaving ? 'Saving...' : 'Save All' }}
-          </button>
-        </div>
-      </form>
     </div>
 
     <!-- ── Fail2Ban Tab ── -->
@@ -1891,9 +2093,33 @@ onUnmounted(() => {
   border-radius: 10px;
   vertical-align: middle;
 }
+.sla-badge-up-ex {
+  background: #dcfce7;
+  color: #166534;
+}
+.sla-badge-down-ex {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.sla-badge-healthy-ex {
+  background: #dcfce7;
+  color: #166534;
+}
 .sla-badge-unhealthy-ex {
   background: #fed7aa;
   color: #9a3412;
+}
+.sla-info-card {
+  margin-top: 0;
+}
+.sla-info-table td:first-child {
+  white-space: nowrap;
+  width: 90px;
+}
+.sla-info-note {
+  margin: 0.75rem 0 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
 }
 .sla-cards-grid {
   display: grid;
@@ -2054,6 +2280,11 @@ onUnmounted(() => {
   display: block;
   font-size: 0.75rem;
   margin-top: 0.25rem;
+}
+.section-divider {
+  border: none;
+  border-top: 1px solid #e2e8f0;
+  margin: 1rem 0 0.5rem;
 }
 .form-actions {
   display: flex;

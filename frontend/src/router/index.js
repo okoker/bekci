@@ -15,12 +15,12 @@ const routes = [
   { path: '/', name: 'Dashboard', component: DashboardView, meta: { requiresAuth: true } },
   { path: '/sla', name: 'SLA', component: SlaView, meta: { requiresAuth: true } },
   { path: '/targets', name: 'Targets', component: TargetsView, meta: { requiresAuth: true } },
-  { path: '/users', redirect: '/settings' },
+  { path: '/users', name: 'Users', component: SettingsView, meta: { requiresAuth: true, requiresAdmin: true }, props: { initialTab: 'users' } },
   { path: '/settings', name: 'Settings', component: SettingsView, meta: { requiresAuth: true } },
   { path: '/profile', name: 'Profile', component: ProfileView, meta: { requiresAuth: true } },
   { path: '/soc', name: 'SOC', component: SocView, meta: { public: true } },
   { path: '/alerts', name: 'Alerts', component: AlertsView, meta: { requiresAuth: true } },
-  { path: '/audit-log', redirect: '/settings' },
+  { path: '/audit-log', name: 'AuditLog', component: SettingsView, meta: { requiresAuth: true, requiresOperator: true }, props: { initialTab: 'audit' } },
 ]
 
 const router = createRouter({
