@@ -598,8 +598,19 @@ func (s *Store) migration018() error {
 		INSERT OR IGNORE INTO settings (key, value) VALUES ('snmp_v3_auth_passphrase', '');
 		INSERT OR IGNORE INTO settings (key, value) VALUES ('snmp_v3_privacy_protocol', 'AES');
 		INSERT OR IGNORE INTO settings (key, value) VALUES ('snmp_v3_privacy_passphrase', '');
-
-		PRAGMA foreign_key_check;
 	`)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Verify FK integrity after table rebuild
+	rows, err := s.db.Query(`PRAGMA foreign_key_check`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	if rows.Next() {
+		return fmt.Errorf("foreign key check failed after checks table rebuild")
+	}
+	return rows.Err()
 }
