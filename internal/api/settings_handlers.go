@@ -24,6 +24,13 @@ var knownSettings = map[string]bool{
 	"signal_number":   true,
 	"signal_username": true,
 	"signal_password": true,
+	// Webhook settings
+	"webhook_enabled":      true,
+	"webhook_url":          true,
+	"webhook_bearer_token": true,
+	"webhook_skip_tls":     true,
+	"webhook_last_error":   true,
+	"webhook_last_success": true,
 	// SLA thresholds (per category, float 0–100)
 	"sla_network":           true,
 	"sla_security":          true,
@@ -34,7 +41,9 @@ var knownSettings = map[string]bool{
 
 // Boolean settings that accept "true"/"false" instead of positive integers.
 var boolSettings = map[string]bool{
-	"soc_public": true,
+	"soc_public":      true,
+	"webhook_enabled": true,
+	"webhook_skip_tls": true,
 }
 
 // String settings that accept arbitrary text (not validated as positive integers).
@@ -44,8 +53,12 @@ var stringSettings = map[string]bool{
 	"alert_from_email": true,
 	"signal_api_url":   true,
 	"signal_number":    true,
-	"signal_username":  true,
-	"signal_password":  true,
+	"signal_username":      true,
+	"signal_password":      true,
+	"webhook_url":          true,
+	"webhook_bearer_token": true,
+	"webhook_last_error":   true,
+	"webhook_last_success": true,
 }
 
 // Zero-allowed integer settings (allow 0 as a valid value, e.g. to disable re-alerting).
@@ -91,6 +104,9 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	if v, ok := settings["signal_password"]; ok && v != "" {
 		settings["signal_password"] = "••••••••"
 	}
+	if v, ok := settings["webhook_bearer_token"]; ok && v != "" {
+		settings["webhook_bearer_token"] = "••••••••"
+	}
 	writeJSON(w, http.StatusOK, settings)
 }
 
@@ -125,6 +141,11 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusBadRequest, "alert_method must be '', 'email', 'signal', or 'email+signal'")
 				return
 			}
+		} else if key == "webhook_url" {
+			if val != "" && !strings.HasPrefix(val, "http://") && !strings.HasPrefix(val, "https://") {
+				writeError(w, http.StatusBadRequest, "webhook_url must start with http:// or https://")
+				return
+			}
 		} else if stringSettings[key] {
 			// Accept any string (including empty for clearing API keys)
 			continue
@@ -157,6 +178,9 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if v, ok := req["signal_password"]; ok && v == "••••••••" {
 		delete(req, "signal_password")
+	}
+	if v, ok := req["webhook_bearer_token"]; ok && v == "••••••••" {
+		delete(req, "webhook_bearer_token")
 	}
 
 	if err := s.store.SetSettings(req); err != nil {
