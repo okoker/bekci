@@ -5,14 +5,14 @@
 | Layer | Technology |
 |-------|-----------|
 | Backend | Go 1.25 (go.mod min 1.24), net/http stdlib router (Go 1.22+ method routing), SQLite WAL |
-| Database | SQLite 3 via go-sqlite3 (CGO required), WAL mode, auto-migrate (17 migrations) |
+| Database | SQLite 3 via go-sqlite3 (CGO required), WAL mode, auto-migrate (18 migrations) |
 | Frontend | Vue 3, Vite 7, Vue Router 4, Pinia 3, Axios, Chart.js + vue-chartjs |
 | Auth | JWT HS256 (golang-jwt/v5) in HttpOnly cookie (`token`), bcrypt cost 12 |
 | Reverse Proxy | Nginx 1.18 (prod only) — SSL termination, security headers, gzip |
 | Email | Resend API |
 | Signal | Signal Messenger via signal-cli REST API |
 | Webhook | Generic JSON POST to any HTTP endpoint (SOAR, Slack, etc.), Bearer or Basic auth |
-| Network | ICMP ping via pro-bing (requires NET_RAW capability) |
+| Network | ICMP ping via pro-bing (requires NET_RAW capability), SNMP via gosnmp |
 | Config | YAML base + env var overrides (`BEKCI_` prefix) + auto-generated defaults |
 | Deploy | Docker multi-stage build (local) or bare-metal via Makefile (prod) |
 
@@ -130,6 +130,7 @@ No npm on server — `cmd/bekci/frontend_dist/` is committed to git. Go binary e
 | google/uuid | 1.6.0 | UUID generation (target IDs, check IDs, etc.) |
 | mattn/go-sqlite3 | 1.14.19 | SQLite driver (requires CGO) |
 | prometheus-community/pro-bing | 0.8.0 | ICMP ping |
+| gosnmp/gosnmp | latest | SNMP v2c/v3 queries |
 | golang.org/x/crypto | 0.48.0 | Bcrypt password hashing, Argon2id KDF (backup encryption) |
 | gopkg.in/yaml.v3 | 3.0.1 | Config file parsing |
 

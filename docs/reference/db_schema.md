@@ -1,6 +1,6 @@
 # Database Schema Reference
 
-**Current schema version:** 17
+**Current schema version:** 18
 **Engine:** SQLite 3 with WAL journal mode
 **Driver:** `github.com/mattn/go-sqlite3` (CGO required)
 
@@ -86,6 +86,13 @@ Key-value config store.
 | signal_number          |         | migration016 |
 | signal_username        |         | migration016 |
 | signal_password        |         | migration016 |
+| snmp_v2c_community     |         | migration018 |
+| snmp_v3_username       |         | migration018 |
+| snmp_v3_security_level |         | migration018 |
+| snmp_v3_auth_protocol  |         | migration018 |
+| snmp_v3_auth_passphrase|         | migration018 |
+| snmp_v3_privacy_protocol|        | migration018 |
+| snmp_v3_privacy_passphrase|      | migration018 |
 
 ### targets
 
@@ -118,7 +125,7 @@ Key-value config store.
 |------------|----------|--------------------------------------------------------------|
 | id         | TEXT     | **PK**                                                       |
 | target_id  | TEXT     | NOT NULL, FK -> targets(id) ON DELETE CASCADE                |
-| type       | TEXT     | NOT NULL, CHECK(type IN ('http','tcp','ping','dns','page_hash','tls_cert')) |
+| type       | TEXT     | NOT NULL, CHECK(type IN ('http','tcp','ping','dns','page_hash','tls_cert','snmp_v2c','snmp_v3')) |
 | name       | TEXT     | NOT NULL                                                     |
 | config     | TEXT     | NOT NULL DEFAULT '{}'                                        |
 | interval_s | INTEGER  | NOT NULL DEFAULT 300                                         |
@@ -297,8 +304,9 @@ Append-only audit trail. Purged by `PurgeOldAuditEntries(days)` (runs at startup
 | 015 | migration015   | Add `paused_at` (DATETIME DEFAULT NULL) to `targets`. Create `target_pause_history` table with index on `target_id`. |
 | 016 | migration016   | Seed Signal alerting settings: `signal_api_url`, `signal_number`, `signal_username`, `signal_password`. |
 | 017 | migration017   | Create composite index `idx_check_results_check_id_checked_at` on check_results(check_id, checked_at DESC) for dashboard/history performance. |
+| 018 | migration018   | Rebuild `checks` table to add `snmp_v2c` and `snmp_v3` to type CHECK constraint. Seed 7 SNMP settings (`snmp_v2c_community`, `snmp_v3_username`, `snmp_v3_security_level`, `snmp_v3_auth_protocol`, `snmp_v3_auth_passphrase`, `snmp_v3_privacy_protocol`, `snmp_v3_privacy_passphrase`). |
 
-**Note:** Function declarations appear out of order in the source file (e.g. migration005 before migration004, migration008 before migration007), but the `migrations` slice defines the correct sequential execution order: 001 through 016, strictly in order.
+**Note:** Function declarations appear out of order in the source file (e.g. migration005 before migration004, migration008 before migration007), but the `migrations` slice defines the correct sequential execution order: 001 through 018, strictly in order.
 
 ---
 

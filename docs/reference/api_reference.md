@@ -995,7 +995,14 @@ Returns all settings as key-value map. Sensitive values (e.g. `resend_api_key`, 
   "sla_security": "99.9",
   "sla_physical_security": "99.9",
   "sla_key_services": "99.9",
-  "sla_other": "99.9"
+  "sla_other": "99.9",
+  "snmp_v2c_community": "public",
+  "snmp_v3_username": "",
+  "snmp_v3_security_level": "",
+  "snmp_v3_auth_protocol": "",
+  "snmp_v3_auth_passphrase": "••••••••",
+  "snmp_v3_privacy_protocol": "",
+  "snmp_v3_privacy_passphrase": "••••••••"
 }
 ```
 
