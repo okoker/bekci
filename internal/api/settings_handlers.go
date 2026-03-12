@@ -25,12 +25,15 @@ var knownSettings = map[string]bool{
 	"signal_username": true,
 	"signal_password": true,
 	// Webhook settings
-	"webhook_enabled":      true,
-	"webhook_url":          true,
-	"webhook_bearer_token": true,
-	"webhook_skip_tls":     true,
-	"webhook_last_error":   true,
-	"webhook_last_success": true,
+	"webhook_enabled":        true,
+	"webhook_url":            true,
+	"webhook_auth_type":      true,
+	"webhook_bearer_token":   true,
+	"webhook_basic_username": true,
+	"webhook_basic_password": true,
+	"webhook_skip_tls":       true,
+	"webhook_last_error":     true,
+	"webhook_last_success":   true,
 	// SLA thresholds (per category, float 0–100)
 	"sla_network":           true,
 	"sla_security":          true,
@@ -55,10 +58,13 @@ var stringSettings = map[string]bool{
 	"signal_number":    true,
 	"signal_username":      true,
 	"signal_password":      true,
-	"webhook_url":          true,
-	"webhook_bearer_token": true,
-	"webhook_last_error":   true,
-	"webhook_last_success": true,
+	"webhook_url":            true,
+	"webhook_auth_type":      true,
+	"webhook_bearer_token":   true,
+	"webhook_basic_username": true,
+	"webhook_basic_password": true,
+	"webhook_last_error":     true,
+	"webhook_last_success":   true,
 }
 
 // Zero-allowed integer settings (allow 0 as a valid value, e.g. to disable re-alerting).
@@ -107,6 +113,9 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	if v, ok := settings["webhook_bearer_token"]; ok && v != "" {
 		settings["webhook_bearer_token"] = "••••••••"
 	}
+	if v, ok := settings["webhook_basic_password"]; ok && v != "" {
+		settings["webhook_basic_password"] = "••••••••"
+	}
 	writeJSON(w, http.StatusOK, settings)
 }
 
@@ -146,6 +155,11 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusBadRequest, "webhook_url must start with http:// or https://")
 				return
 			}
+		} else if key == "webhook_auth_type" {
+			if val != "" && val != "bearer" && val != "basic" {
+				writeError(w, http.StatusBadRequest, "webhook_auth_type must be '', 'bearer', or 'basic'")
+				return
+			}
 		} else if stringSettings[key] {
 			// Accept any string (including empty for clearing API keys)
 			continue
@@ -181,6 +195,9 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if v, ok := req["webhook_bearer_token"]; ok && v == "••••••••" {
 		delete(req, "webhook_bearer_token")
+	}
+	if v, ok := req["webhook_basic_password"]; ok && v == "••••••••" {
+		delete(req, "webhook_basic_password")
 	}
 
 	if err := s.store.SetSettings(req); err != nil {

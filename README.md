@@ -11,7 +11,7 @@ Web-managed monitoring platform written in Go + Vue 3. Multi-check monitoring wi
 - **6 Check Types** — Ping (ICMP), HTTP/HTTPS, TCP, DNS, Page Hash, TLS Certificate
 - **Unified Targets** — Create a target with conditions (check + alert criteria) in one step
 - **Rules Engine** — Condition groups with AND/OR logic, configurable fail count and fail window thresholds
-- **Alerting** — Email (Resend API), Signal messaging, and generic webhook (JSON POST to any HTTP endpoint), with cooldown, re-alert, and recovery notifications
+- **Alerting** — Email (Resend API), Signal messaging, and generic webhook (JSON POST to any HTTP endpoint, Bearer or Basic auth), with cooldown, re-alert, and recovery notifications
 - **Dashboard** — 90-day + 4-hour uptime bars, per-target health state, problems sorted to top, 30s auto-refresh
 - **SLA Compliance** — Per-category SLA thresholds, dedicated SLA page with Chart.js daily uptime charts
 - **SOC View** — Flat status page for security operations center displays (optionally public)

@@ -391,7 +391,10 @@ const alertForm = ref({
   signal_password: '',
   webhook_enabled: 'false',
   webhook_url: '',
+  webhook_auth_type: '',
   webhook_bearer_token: '',
+  webhook_basic_username: '',
+  webhook_basic_password: '',
   webhook_skip_tls: 'false',
 })
 
@@ -410,7 +413,10 @@ function loadAlertSettings() {
     signal_password: s.signal_password || '',
     webhook_enabled: s.webhook_enabled || 'false',
     webhook_url: s.webhook_url || '',
+    webhook_auth_type: s.webhook_auth_type || '',
     webhook_bearer_token: s.webhook_bearer_token || '',
+    webhook_basic_username: s.webhook_basic_username || '',
+    webhook_basic_password: s.webhook_basic_password || '',
     webhook_skip_tls: s.webhook_skip_tls || 'false',
   }
   // Pre-populate test phone from logged-in user's profile
@@ -441,7 +447,10 @@ async function saveAlertSettings() {
       signal_password: alertForm.value.signal_password,
       webhook_enabled: alertForm.value.webhook_enabled,
       webhook_url: alertForm.value.webhook_url,
+      webhook_auth_type: alertForm.value.webhook_auth_type,
       webhook_bearer_token: alertForm.value.webhook_bearer_token,
+      webhook_basic_username: alertForm.value.webhook_basic_username,
+      webhook_basic_password: alertForm.value.webhook_basic_password,
       webhook_skip_tls: alertForm.value.webhook_skip_tls,
     })
     alertSuccess.value = 'Alert settings saved'
@@ -1200,10 +1209,34 @@ onUnmounted(() => {
           </div>
 
           <div class="form-group">
-            <label>Bearer Token</label>
-            <input type="password" v-model="alertForm.webhook_bearer_token"
-              placeholder="Optional authentication token" autocomplete="off" />
+            <label>Authentication</label>
+            <select v-model="alertForm.webhook_auth_type">
+              <option value="">None</option>
+              <option value="bearer">Bearer Token</option>
+              <option value="basic">Basic Auth (username/password)</option>
+            </select>
           </div>
+
+          <template v-if="alertForm.webhook_auth_type === 'bearer'">
+            <div class="form-group">
+              <label>Bearer Token</label>
+              <input type="password" v-model="alertForm.webhook_bearer_token"
+                placeholder="Authentication token" autocomplete="off" />
+            </div>
+          </template>
+
+          <template v-if="alertForm.webhook_auth_type === 'basic'">
+            <div class="form-group">
+              <label>Username</label>
+              <input type="text" v-model="alertForm.webhook_basic_username"
+                placeholder="Username" autocomplete="off" />
+            </div>
+            <div class="form-group">
+              <label>Password</label>
+              <input type="password" v-model="alertForm.webhook_basic_password"
+                placeholder="Password" autocomplete="off" />
+            </div>
+          </template>
 
           <div class="form-group">
             <label class="checkbox-label">

@@ -27,8 +27,16 @@ type FailingCheck struct {
 	Detail string `json:"detail"`
 }
 
-// SendWebhook POSTs a JSON payload to the given URL with optional Bearer auth and TLS skip.
-func SendWebhook(url, bearerToken string, skipTLS bool, payload WebhookPayload) error {
+// WebhookAuth holds authentication configuration for webhook requests.
+type WebhookAuth struct {
+	Type          string // "" (none), "bearer", "basic"
+	BearerToken   string
+	BasicUsername string
+	BasicPassword string
+}
+
+// SendWebhook POSTs a JSON payload to the given URL with optional auth and TLS skip.
+func SendWebhook(url string, auth WebhookAuth, skipTLS bool, payload WebhookPayload) error {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("marshal webhook payload: %w", err)
@@ -39,8 +47,16 @@ func SendWebhook(url, bearerToken string, skipTLS bool, payload WebhookPayload) 
 		return fmt.Errorf("create webhook request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if bearerToken != "" {
-		req.Header.Set("Authorization", "Bearer "+bearerToken)
+
+	switch auth.Type {
+	case "bearer":
+		if auth.BearerToken != "" {
+			req.Header.Set("Authorization", "Bearer "+auth.BearerToken)
+		}
+	case "basic":
+		if auth.BasicUsername != "" {
+			req.SetBasicAuth(auth.BasicUsername, auth.BasicPassword)
+		}
 	}
 
 	transport := &http.Transport{}

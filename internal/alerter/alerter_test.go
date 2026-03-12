@@ -841,7 +841,8 @@ func TestSendWebhookSuccess(t *testing.T) {
 		Timestamp: "2026-03-12T14:30:00Z",
 	}
 
-	err := SendWebhook(srv.URL, "my-token", false, payload)
+	auth := WebhookAuth{Type: "bearer", BearerToken: "my-token"}
+	err := SendWebhook(srv.URL, auth, false, payload)
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -878,12 +879,12 @@ func TestSendWebhookNoToken(t *testing.T) {
 	defer srv.Close()
 
 	payload := WebhookPayload{Event: "firing", Target: "t", Timestamp: "now"}
-	err := SendWebhook(srv.URL, "", false, payload)
+	err := SendWebhook(srv.URL, WebhookAuth{}, false, payload)
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
 	if gotReq.Header.Get("Authorization") != "" {
-		t.Fatalf("expected no Authorization header when token is empty, got: %s", gotReq.Header.Get("Authorization"))
+		t.Fatalf("expected no Authorization header when no auth, got: %s", gotReq.Header.Get("Authorization"))
 	}
 }
 
@@ -895,7 +896,7 @@ func TestSendWebhookFailure(t *testing.T) {
 	defer srv.Close()
 
 	payload := WebhookPayload{Event: "firing", Target: "t", Timestamp: "now"}
-	err := SendWebhook(srv.URL, "token", false, payload)
+	err := SendWebhook(srv.URL, WebhookAuth{Type: "bearer", BearerToken: "token"}, false, payload)
 	if err == nil {
 		t.Fatal("expected error for 500 response")
 	}
@@ -906,9 +907,35 @@ func TestSendWebhookFailure(t *testing.T) {
 
 func TestSendWebhookConnectionRefused(t *testing.T) {
 	payload := WebhookPayload{Event: "firing", Target: "t", Timestamp: "now"}
-	err := SendWebhook("http://127.0.0.1:1", "token", false, payload)
+	err := SendWebhook("http://127.0.0.1:1", WebhookAuth{}, false, payload)
 	if err == nil {
 		t.Fatal("expected error for connection refused")
+	}
+}
+
+// T-AL31: SendWebhook with Basic Auth sends correct Authorization header
+func TestSendWebhookBasicAuth(t *testing.T) {
+	var gotReq *http.Request
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotReq = r
+		w.WriteHeader(200)
+	}))
+	defer srv.Close()
+
+	payload := WebhookPayload{Event: "firing", Target: "t", Timestamp: "now"}
+	auth := WebhookAuth{Type: "basic", BasicUsername: "xsoar", BasicPassword: "s3cret"}
+	err := SendWebhook(srv.URL, auth, false, payload)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	user, pass, ok := gotReq.BasicAuth()
+	if !ok {
+		t.Fatal("expected Basic auth header to be present")
+	}
+	if user != "xsoar" || pass != "s3cret" {
+		t.Fatalf("expected xsoar:s3cret, got %s:%s", user, pass)
 	}
 }
 
@@ -927,7 +954,21 @@ func configureWebhookAlertingWithToken(t *testing.T, s *store.Store, webhookURL,
 	if err := s.SetSettings(map[string]string{
 		"webhook_enabled":      "true",
 		"webhook_url":          webhookURL,
+		"webhook_auth_type":    "bearer",
 		"webhook_bearer_token": token,
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func configureWebhookAlertingWithBasicAuth(t *testing.T, s *store.Store, webhookURL, user, pass string) {
+	t.Helper()
+	if err := s.SetSettings(map[string]string{
+		"webhook_enabled":        "true",
+		"webhook_url":            webhookURL,
+		"webhook_auth_type":      "basic",
+		"webhook_basic_username": user,
+		"webhook_basic_password": pass,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -1120,5 +1161,68 @@ func TestSendTestWebhookSuccess(t *testing.T) {
 	}
 	if payload.Event != "test" {
 		t.Fatalf("expected event=test, got %q", payload.Event)
+	}
+}
+
+// T-AL32: Dispatch with Basic Auth sends correct credentials
+func TestDispatchWebhookBasicAuth(t *testing.T) {
+	s := newTestStore(t)
+	target := createAlertTarget(t, s, "webhook-basic")
+	recipient := createAlertUser(t, s, "wh-basic-user", "wh-basic@example.com", "")
+	svc := New(s)
+
+	var gotReq *http.Request
+	var hitCount int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hitCount++
+		gotReq = r
+		w.WriteHeader(200)
+	}))
+	defer srv.Close()
+
+	configureWebhookAlertingWithBasicAuth(t, s, srv.URL, "xsoar-user", "xsoar-pass")
+	if err := s.SetTargetRecipients(target.ID, []string{recipient.ID}); err != nil {
+		t.Fatal(err)
+	}
+
+	svc.Dispatch(*target.RuleID, "healthy", "unhealthy")
+
+	if hitCount != 1 {
+		t.Fatalf("expected 1 webhook request, got %d", hitCount)
+	}
+
+	user, pass, ok := gotReq.BasicAuth()
+	if !ok {
+		t.Fatal("expected Basic auth header in dispatch")
+	}
+	if user != "xsoar-user" || pass != "xsoar-pass" {
+		t.Fatalf("expected xsoar-user:xsoar-pass, got %s:%s", user, pass)
+	}
+}
+
+// T-AL33: SendTestWebhook with Basic Auth sends correct credentials
+func TestSendTestWebhookBasicAuth(t *testing.T) {
+	s := newTestStore(t)
+	svc := New(s)
+
+	var gotReq *http.Request
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotReq = r
+		w.WriteHeader(200)
+	}))
+	defer srv.Close()
+
+	configureWebhookAlertingWithBasicAuth(t, s, srv.URL, "test-user", "test-pass")
+
+	if err := svc.SendTestWebhook(); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	user, pass, ok := gotReq.BasicAuth()
+	if !ok {
+		t.Fatal("expected Basic auth header in test webhook")
+	}
+	if user != "test-user" || pass != "test-pass" {
+		t.Fatalf("expected test-user:test-pass, got %s:%s", user, pass)
 	}
 }

@@ -140,7 +140,7 @@ func (a *AlertService) Dispatch(ruleID, oldState, newState string) {
 	if webhookEnabled == "true" {
 		webhookURL, _ := a.store.GetSetting("webhook_url")
 		if webhookURL != "" {
-			token, _ := a.store.GetSetting("webhook_bearer_token")
+			auth := a.getWebhookAuth()
 			skipTLSStr, _ := a.store.GetSetting("webhook_skip_tls")
 			skipTLS := skipTLSStr == "true"
 
@@ -155,7 +155,7 @@ func (a *AlertService) Dispatch(ruleID, oldState, newState string) {
 				Timestamp:     now.UTC().Format(time.RFC3339),
 			}
 
-			if err := SendWebhook(webhookURL, token, skipTLS, payload); err != nil {
+			if err := SendWebhook(webhookURL, auth, skipTLS, payload); err != nil {
 				slog.Error("Alerter: webhook failed", "target", target.Name, "error", err)
 				a.store.SetSettings(map[string]string{
 					"webhook_last_error": now.UTC().Format(time.RFC3339) + " — " + err.Error(),
@@ -273,7 +273,7 @@ func (a *AlertService) CheckRealerts() {
 		if webhookEnabled == "true" {
 			webhookURL, _ := a.store.GetSetting("webhook_url")
 			if webhookURL != "" {
-				token, _ := a.store.GetSetting("webhook_bearer_token")
+				auth := a.getWebhookAuth()
 				skipTLSStr, _ := a.store.GetSetting("webhook_skip_tls")
 				skipTLS := skipTLSStr == "true"
 
@@ -288,7 +288,7 @@ func (a *AlertService) CheckRealerts() {
 					Timestamp:     now.UTC().Format(time.RFC3339),
 				}
 
-				if err := SendWebhook(webhookURL, token, skipTLS, payload); err != nil {
+				if err := SendWebhook(webhookURL, auth, skipTLS, payload); err != nil {
 					slog.Error("Alerter: webhook re-alert failed", "target", target.Name, "error", err)
 					a.store.SetSettings(map[string]string{
 						"webhook_last_error": now.UTC().Format(time.RFC3339) + " — " + err.Error(),
@@ -307,6 +307,20 @@ func (a *AlertService) CheckRealerts() {
 			}
 		}
 	}
+}
+
+// getWebhookAuth reads webhook authentication settings from the store.
+func (a *AlertService) getWebhookAuth() WebhookAuth {
+	authType, _ := a.store.GetSetting("webhook_auth_type")
+	auth := WebhookAuth{Type: authType}
+	switch authType {
+	case "bearer":
+		auth.BearerToken, _ = a.store.GetSetting("webhook_bearer_token")
+	case "basic":
+		auth.BasicUsername, _ = a.store.GetSetting("webhook_basic_username")
+		auth.BasicPassword, _ = a.store.GetSetting("webhook_basic_password")
+	}
+	return auth
 }
 
 // getFailingChecks returns failing check details for a target.
@@ -389,7 +403,7 @@ func (a *AlertService) SendTestWebhook() error {
 		return ErrWebhookNotConfigured
 	}
 
-	token, _ := a.store.GetSetting("webhook_bearer_token")
+	auth := a.getWebhookAuth()
 	skipTLSStr, _ := a.store.GetSetting("webhook_skip_tls")
 	skipTLS := skipTLSStr == "true"
 
@@ -403,5 +417,5 @@ func (a *AlertService) SendTestWebhook() error {
 		Timestamp:     time.Now().UTC().Format(time.RFC3339),
 	}
 
-	return SendWebhook(url, token, skipTLS, payload)
+	return SendWebhook(url, auth, skipTLS, payload)
 }

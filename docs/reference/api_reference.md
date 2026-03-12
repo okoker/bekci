@@ -1000,7 +1000,10 @@ Update one or more settings. Only known keys are accepted. Sending masked values
 | `signal_password` | string | any string (masked in GET as `"••••••••"`) |
 | `webhook_enabled` | boolean string | `"true"` or `"false"` |
 | `webhook_url` | string | must start with `http://` or `https://` (empty to clear) |
-| `webhook_bearer_token` | string | any string (masked in GET as `"••••••••"`) |
+| `webhook_auth_type` | string | `""` (none), `"bearer"`, or `"basic"` |
+| `webhook_bearer_token` | string | any string (masked in GET as `"••••••••"`), used when auth_type=bearer |
+| `webhook_basic_username` | string | any string, used when auth_type=basic |
+| `webhook_basic_password` | string | any string (masked in GET as `"••••••••"`), used when auth_type=basic |
 | `webhook_skip_tls` | boolean string | `"true"` or `"false"` |
 | `webhook_last_error` | string | auto-set by system (read-only in practice) |
 | `webhook_last_success` | string | auto-set by system (read-only in practice) |
