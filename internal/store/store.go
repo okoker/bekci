@@ -75,6 +75,7 @@ func (s *Store) migrate() error {
 		s.migration015,
 		s.migration016,
 		s.migration017,
+		s.migration018,
 	}
 
 	for i := current; i < len(migrations); i++ {
@@ -558,6 +559,47 @@ func (s *Store) migration017() error {
 	_, err := s.db.Exec(`
 		CREATE INDEX IF NOT EXISTS idx_check_results_check_id_checked_at
 		ON check_results(check_id, checked_at DESC);
+	`)
+	return err
+}
+
+// migration018 adds snmp_v2c and snmp_v3 check types, seeds SNMP settings.
+func (s *Store) migration018() error {
+	if _, err := s.db.Exec(`PRAGMA foreign_keys = OFF`); err != nil {
+		return err
+	}
+	defer s.db.Exec(`PRAGMA foreign_keys = ON`)
+
+	_, err := s.db.Exec(`
+		CREATE TABLE checks_new (
+			id          TEXT PRIMARY KEY,
+			target_id   TEXT NOT NULL REFERENCES targets(id) ON DELETE CASCADE,
+			type        TEXT NOT NULL CHECK(type IN ('http','tcp','ping','dns','page_hash','tls_cert','snmp_v2c','snmp_v3')),
+			name        TEXT NOT NULL,
+			config      TEXT NOT NULL DEFAULT '{}',
+			interval_s  INTEGER NOT NULL DEFAULT 300,
+			enabled     INTEGER NOT NULL DEFAULT 1,
+			created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+		);
+
+		INSERT INTO checks_new (id, target_id, type, name, config, interval_s, enabled, created_at, updated_at)
+			SELECT id, target_id, type, name, config, interval_s, enabled, created_at, updated_at FROM checks;
+
+		DROP TABLE checks;
+		ALTER TABLE checks_new RENAME TO checks;
+
+		CREATE INDEX idx_checks_target_id ON checks(target_id);
+
+		INSERT OR IGNORE INTO settings (key, value) VALUES ('snmp_v2c_community', 'public');
+		INSERT OR IGNORE INTO settings (key, value) VALUES ('snmp_v3_username', '');
+		INSERT OR IGNORE INTO settings (key, value) VALUES ('snmp_v3_security_level', 'authPriv');
+		INSERT OR IGNORE INTO settings (key, value) VALUES ('snmp_v3_auth_protocol', 'SHA');
+		INSERT OR IGNORE INTO settings (key, value) VALUES ('snmp_v3_auth_passphrase', '');
+		INSERT OR IGNORE INTO settings (key, value) VALUES ('snmp_v3_privacy_protocol', 'AES');
+		INSERT OR IGNORE INTO settings (key, value) VALUES ('snmp_v3_privacy_passphrase', '');
+
+		PRAGMA foreign_key_check;
 	`)
 	return err
 }
