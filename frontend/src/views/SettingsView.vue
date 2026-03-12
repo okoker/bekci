@@ -558,7 +558,9 @@ const f2bJails = ref([])
 const f2bError = ref('')
 const f2bLoading = ref(false)
 const f2bFetchedAt = ref(null)
-const f2bExpandedJails = ref(new Set())
+const f2bDetailView = ref(null)   // null | {type: 'active'|'history', jail: string|null}
+const f2bDetailData = ref([])
+const f2bDetailLoading = ref(false)
 let f2bTimer = null
 
 async function loadFail2Ban() {
@@ -583,14 +585,68 @@ async function loadFail2Ban() {
   }
 }
 
-function toggleJailIPs(name) {
-  const s = new Set(f2bExpandedJails.value)
-  if (s.has(name)) {
-    s.delete(name)
-  } else {
-    s.add(name)
+async function toggleF2BDetail(type, jail) {
+  // Toggle off if clicking same thing
+  if (f2bDetailView.value &&
+      f2bDetailView.value.type === type &&
+      f2bDetailView.value.jail === jail) {
+    f2bDetailView.value = null
+    f2bDetailData.value = []
+    return
   }
-  f2bExpandedJails.value = s
+
+  f2bDetailView.value = { type, jail }
+  f2bDetailLoading.value = true
+  f2bDetailData.value = []
+
+  try {
+    if (type === 'active') {
+      // For active bans, get IPs from existing status data, enrich with DB timestamps
+      const activeIPs = []
+      const jails = jail ? f2bJails.value.filter(j => j.name === jail) : f2bJails.value
+      for (const j of jails) {
+        for (const ip of (j.banned_ips || [])) {
+          activeIPs.push({ jail: j.name, ip })
+        }
+      }
+      // Fetch DB data to get timestamps for these IPs
+      const url = jail ? `/fail2ban/bans?jail=${encodeURIComponent(jail)}` : '/fail2ban/bans'
+      const { data } = await api.get(url)
+      const dbBans = data.bans || []
+      // Match active IPs with latest DB record for timestamps
+      const enriched = activeIPs.map(a => {
+        const match = dbBans.find(b => b.ip === a.ip && b.jail === a.jail)
+        return match || { jail: a.jail, ip: a.ip, banned_at: null, expires_at: null, ban_count: 0 }
+      })
+      f2bDetailData.value = enriched
+    } else {
+      // Historical: straight from DB
+      const url = jail ? `/fail2ban/bans?jail=${encodeURIComponent(jail)}` : '/fail2ban/bans'
+      const { data } = await api.get(url)
+      f2bDetailData.value = data.bans || []
+    }
+  } catch {
+    f2bDetailData.value = []
+  } finally {
+    f2bDetailLoading.value = false
+  }
+}
+
+function f2bDetailLabel() {
+  if (!f2bDetailView.value) return ''
+  const { type, jail } = f2bDetailView.value
+  if (type === 'active') return jail ? `Active Bans — ${jail}` : 'All Active Bans'
+  return jail ? `Ban History — ${jail}` : 'All Ban History'
+}
+
+function fmtBanDate(iso) {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  return d.toLocaleDateString('en-GB') + ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+}
+
+function showJailColumn() {
+  return !f2bDetailView.value?.jail
 }
 
 function startF2BPolling() {
@@ -1359,54 +1415,82 @@ onUnmounted(() => {
 
         <div v-if="f2bError" class="error-msg">{{ f2bError }}</div>
 
-        <table v-if="f2bJails.length > 0">
+        <table v-if="f2bJails.length > 0" class="f2b-summary-table">
           <thead>
             <tr>
               <th>Jail</th>
-              <th>Active Bans</th>
-              <th>Bans (total)</th>
+              <th class="f2b-clickable" @click="toggleF2BDetail('active', null)"
+                  :class="{ 'f2b-col-active': f2bDetailView?.type === 'active' && f2bDetailView?.jail === null }">
+                Active Bans
+              </th>
+              <th class="f2b-clickable" @click="toggleF2BDetail('history', null)"
+                  :class="{ 'f2b-col-active': f2bDetailView?.type === 'history' && f2bDetailView?.jail === null }">
+                Bans (total)
+              </th>
               <th>Failed (window)</th>
               <th>Failed (total)</th>
-              <th></th>
             </tr>
           </thead>
           <tbody>
-            <template v-for="jail in f2bJails" :key="jail.name">
-              <tr>
-                <td><strong>{{ jail.name }}</strong></td>
-                <td>
-                  <span class="badge" :class="jail.currently_banned > 0 ? 'badge-banned' : 'badge-clear'">
-                    {{ jail.currently_banned }}
-                  </span>
-                </td>
-                <td>{{ jail.total_banned }}</td>
-                <td>
-                  <span :class="{ 'f2b-warn': jail.currently_failed > 0 }">
-                    {{ jail.currently_failed }}
-                  </span>
-                </td>
-                <td>{{ jail.total_failed }}</td>
-                <td>
-                  <button
-                    v-if="jail.banned_ips && jail.banned_ips.length > 0"
-                    class="btn btn-sm"
-                    @click="toggleJailIPs(jail.name)"
-                  >
-                    {{ f2bExpandedJails.has(jail.name) ? 'Hide IPs' : 'Show IPs' }}
-                  </button>
-                  <span v-else class="text-muted">No bans</span>
-                </td>
-              </tr>
-              <tr v-if="f2bExpandedJails.has(jail.name) && jail.banned_ips && jail.banned_ips.length > 0">
-                <td colspan="6" class="f2b-ips-cell">
-                  <div class="f2b-ips">
-                    <span v-for="ip in jail.banned_ips" :key="ip" class="f2b-ip">{{ ip }}</span>
-                  </div>
-                </td>
-              </tr>
-            </template>
+            <tr v-for="jail in f2bJails" :key="jail.name">
+              <td><strong>{{ jail.name }}</strong></td>
+              <td>
+                <span v-if="jail.currently_banned > 0"
+                      class="badge badge-banned f2b-clickable"
+                      :class="{ 'f2b-cell-active': f2bDetailView?.type === 'active' && f2bDetailView?.jail === jail.name }"
+                      @click="toggleF2BDetail('active', jail.name)">
+                  {{ jail.currently_banned }}
+                </span>
+                <span v-else class="badge badge-clear">0</span>
+              </td>
+              <td>
+                <span v-if="jail.total_banned > 0"
+                      class="f2b-clickable f2b-clickable-text"
+                      :class="{ 'f2b-cell-active': f2bDetailView?.type === 'history' && f2bDetailView?.jail === jail.name }"
+                      @click="toggleF2BDetail('history', jail.name)">
+                  {{ jail.total_banned }}
+                </span>
+                <span v-else>0</span>
+              </td>
+              <td>
+                <span :class="{ 'f2b-warn': jail.currently_failed > 0 }">
+                  {{ jail.currently_failed }}
+                </span>
+              </td>
+              <td>{{ jail.total_failed }}</td>
+            </tr>
           </tbody>
         </table>
+
+        <!-- Detail table -->
+        <div v-if="f2bDetailView" class="f2b-detail">
+          <div class="f2b-detail-header">
+            <strong>{{ f2bDetailLabel() }}</strong>
+            <button class="btn btn-sm" @click="f2bDetailView = null; f2bDetailData = []">Close</button>
+          </div>
+          <div v-if="f2bDetailLoading" class="text-muted" style="padding: 0.75rem;">Loading...</div>
+          <div v-else-if="f2bDetailData.length === 0" class="text-muted" style="padding: 0.75rem;">No records found.</div>
+          <table v-else class="f2b-detail-table">
+            <thead>
+              <tr>
+                <th>Source IP</th>
+                <th v-if="showJailColumn()">Jail</th>
+                <th>Banned At</th>
+                <th>Expires At</th>
+                <th>Ban Count</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(ban, idx) in f2bDetailData" :key="idx">
+                <td class="f2b-ip-cell">{{ ban.ip }}</td>
+                <td v-if="showJailColumn()">{{ ban.jail }}</td>
+                <td>{{ fmtBanDate(ban.banned_at) }}</td>
+                <td>{{ fmtBanDate(ban.expires_at) }}</td>
+                <td>{{ ban.ban_count }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
         <p v-if="!f2bError && f2bJails.length === 0 && !f2bLoading" class="text-muted">
           No jails found.
@@ -1930,9 +2014,7 @@ onUnmounted(() => {
   align-items: center;
   margin-bottom: 1rem;
 }
-.f2b-header h3 {
-  margin: 0;
-}
+.f2b-header h3 { margin: 0; }
 .f2b-actions {
   display: flex;
   align-items: center;
@@ -1954,21 +2036,75 @@ onUnmounted(() => {
   color: #d97706;
   font-weight: 600;
 }
-.f2b-ips-cell {
-  background: #fef2f2;
-  padding: 0.75rem !important;
+.f2b-clickable {
+  cursor: pointer;
 }
-.f2b-ips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
+.f2b-clickable:hover {
+  text-decoration: underline;
 }
-.f2b-ip {
-  font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
-  font-size: 0.8rem;
-  background: #fee2e2;
-  color: #991b1b;
-  padding: 0.125rem 0.5rem;
+.f2b-clickable-text {
+  color: #3b82f6;
+  font-weight: 600;
+}
+.f2b-col-active,
+.f2b-cell-active {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
   border-radius: 4px;
+}
+/* Detail panel */
+.f2b-detail {
+  margin-top: 1rem;
+  border-top: 3px solid #3b82f6;
+  background: #0f172a;
+  border-radius: 0 0 8px 8px;
+  overflow: hidden;
+}
+.f2b-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: #1e293b;
+  color: #e2e8f0;
+  border-bottom: 1px solid #334155;
+}
+.f2b-detail-header .btn {
+  color: #94a3b8;
+  border-color: #475569;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.6rem;
+}
+.f2b-detail-header .btn:hover {
+  background: #334155;
+  color: #e2e8f0;
+}
+.f2b-detail-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.f2b-detail-table thead th {
+  background: #1e293b;
+  color: #94a3b8;
+  padding: 0.5rem 1rem;
+  text-align: left;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid #334155;
+}
+.f2b-detail-table tbody td {
+  padding: 0.5rem 1rem;
+  color: #e2e8f0;
+  border-bottom: 1px solid #1e293b;
+}
+.f2b-detail-table tbody tr:hover {
+  background: #1e293b;
+}
+.f2b-ip-cell {
+  font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+  color: #f87171 !important;
 }
 </style>
