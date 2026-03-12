@@ -375,6 +375,10 @@ const alertTesting = ref(false)
 const signalTesting = ref(false)
 const signalTestPhone = ref('')
 
+const webhookTesting = ref(false)
+const webhookLastError = ref('')
+const webhookLastSuccess = ref('')
+
 const alertForm = ref({
   alert_method: 'email',
   resend_api_key: '',
@@ -385,6 +389,10 @@ const alertForm = ref({
   signal_number: '',
   signal_username: '',
   signal_password: '',
+  webhook_enabled: 'false',
+  webhook_url: '',
+  webhook_bearer_token: '',
+  webhook_skip_tls: 'false',
 })
 
 function loadAlertSettings() {
@@ -400,11 +408,20 @@ function loadAlertSettings() {
     signal_number: s.signal_number || '',
     signal_username: s.signal_username || '',
     signal_password: s.signal_password || '',
+    webhook_enabled: s.webhook_enabled || 'false',
+    webhook_url: s.webhook_url || '',
+    webhook_bearer_token: s.webhook_bearer_token || '',
+    webhook_skip_tls: s.webhook_skip_tls || 'false',
   }
   // Pre-populate test phone from logged-in user's profile
   if (!signalTestPhone.value) {
     signalTestPhone.value = auth.user?.phone || ''
   }
+  // Load webhook status
+  api.get('/settings/webhook-status').then(res => {
+    webhookLastError.value = res.data.last_error || ''
+    webhookLastSuccess.value = res.data.last_success || ''
+  }).catch(() => {})
 }
 
 async function saveAlertSettings() {
@@ -422,6 +439,10 @@ async function saveAlertSettings() {
       signal_number: alertForm.value.signal_number,
       signal_username: alertForm.value.signal_username,
       signal_password: alertForm.value.signal_password,
+      webhook_enabled: alertForm.value.webhook_enabled,
+      webhook_url: alertForm.value.webhook_url,
+      webhook_bearer_token: alertForm.value.webhook_bearer_token,
+      webhook_skip_tls: alertForm.value.webhook_skip_tls,
     })
     alertSuccess.value = 'Alert settings saved'
     // Reload to get masked API key
@@ -463,6 +484,23 @@ async function sendTestSignal() {
     alertError.value = e.response?.data?.error || 'Failed to send test signal'
   } finally {
     signalTesting.value = false
+  }
+}
+
+async function sendTestWebhook() {
+  webhookTesting.value = true
+  alertError.value = ''
+  alertSuccess.value = ''
+  try {
+    const res = await api.post('/settings/test-webhook')
+    alertSuccess.value = res.data.message
+    const statusRes = await api.get('/settings/webhook-status')
+    webhookLastError.value = statusRes.data.last_error || ''
+    webhookLastSuccess.value = statusRes.data.last_success || ''
+  } catch (err) {
+    alertError.value = err.response?.data?.error || 'Failed to send test webhook'
+  } finally {
+    webhookTesting.value = false
   }
 }
 
@@ -1136,6 +1174,56 @@ onUnmounted(() => {
           </div>
         </div>
 
+        <!-- Webhook settings -->
+        <div class="card" style="margin-bottom: 1rem;">
+          <h3>Webhook Alerting</h3>
+          <p class="text-muted">Send JSON alerts to any HTTP endpoint (SOAR, Slack, etc.)</p>
+
+          <div v-if="webhookLastError" class="webhook-warning">
+            <span class="warning-icon">!</span>
+            Last webhook delivery failed: {{ webhookLastError }}
+          </div>
+
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox"
+                :checked="alertForm.webhook_enabled === 'true'"
+                @change="alertForm.webhook_enabled = $event.target.checked ? 'true' : 'false'" />
+              Enabled
+            </label>
+          </div>
+
+          <div class="form-group">
+            <label>Webhook URL</label>
+            <input type="text" v-model="alertForm.webhook_url"
+              placeholder="https://soar.example.com/webhook" />
+          </div>
+
+          <div class="form-group">
+            <label>Bearer Token</label>
+            <input type="password" v-model="alertForm.webhook_bearer_token"
+              placeholder="Optional authentication token" autocomplete="off" />
+          </div>
+
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox"
+                :checked="alertForm.webhook_skip_tls === 'true'"
+                @change="alertForm.webhook_skip_tls = $event.target.checked ? 'true' : 'false'" />
+              Skip TLS Verification
+            </label>
+            <span class="text-muted input-hint">Allow self-signed certificates</span>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn"
+              @click="sendTestWebhook"
+              :disabled="webhookTesting || alertForm.webhook_enabled !== 'true' || !alertForm.webhook_url">
+              {{ webhookTesting ? 'Sending...' : 'Send Test Webhook' }}
+            </button>
+          </div>
+        </div>
+
         <div class="form-actions">
           <button type="submit" class="btn btn-primary" :disabled="alertSaving">
             {{ alertSaving ? 'Saving...' : 'Save All' }}
@@ -1217,6 +1305,33 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+/* ── Webhook warning ── */
+.webhook-warning {
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 16px;
+  color: #92400e;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.webhook-warning .warning-icon {
+  background: #f59e0b;
+  color: white;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
 /* ── Tabs ── */
 .tabs {
   display: flex;
