@@ -143,3 +143,29 @@ func (s *Server) handleTestSignal(w http.ResponseWriter, r *http.Request) {
 	s.audit(r, "test_signal", "settings", "", "to="+req.Phone, "success")
 	writeJSON(w, http.StatusOK, map[string]string{"message": "test signal sent to " + req.Phone})
 }
+
+func (s *Server) handleTestWebhook(w http.ResponseWriter, r *http.Request) {
+	if s.alerter == nil {
+		s.audit(r, "test_webhook", "settings", "", "alerter unavailable", "failure")
+		writeError(w, http.StatusServiceUnavailable, "alerter not initialized")
+		return
+	}
+
+	if err := s.alerter.SendTestWebhook(); err != nil {
+		s.audit(r, "test_webhook", "settings", "", "error="+err.Error(), "failure")
+		writeError(w, http.StatusInternalServerError, "failed to send test webhook: "+err.Error())
+		return
+	}
+
+	s.audit(r, "test_webhook", "settings", "", "", "success")
+	writeJSON(w, http.StatusOK, map[string]string{"message": "test webhook sent successfully"})
+}
+
+func (s *Server) handleWebhookStatus(w http.ResponseWriter, r *http.Request) {
+	lastErr, _ := s.store.GetSetting("webhook_last_error")
+	lastOK, _ := s.store.GetSetting("webhook_last_success")
+	writeJSON(w, http.StatusOK, map[string]string{
+		"last_error":   lastErr,
+		"last_success": lastOK,
+	})
+}

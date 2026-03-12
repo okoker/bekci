@@ -159,6 +159,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/alerts", anyAuth(s.handleListAlerts))
 	mux.Handle("POST /api/settings/test-email", adminAuth(s.handleTestEmail))
 	mux.Handle("POST /api/settings/test-signal", adminAuth(s.handleTestSignal))
+	mux.Handle("POST /api/settings/test-webhook", adminAuth(s.handleTestWebhook))
+	mux.Handle("GET /api/settings/webhook-status", adminAuth(s.handleWebhookStatus))
 
 	// SLA
 	mux.Handle("GET /api/sla/history", anyAuth(s.handleSLAHistory))

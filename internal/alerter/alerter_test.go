@@ -1081,3 +1081,44 @@ func TestDispatchWebhookFailureSetsLastError(t *testing.T) {
 		t.Fatal("expected webhook_last_error to be set after failure")
 	}
 }
+
+func TestSendTestWebhookNotConfigured(t *testing.T) {
+	s := newTestStore(t)
+	svc := New(s)
+
+	err := svc.SendTestWebhook()
+	if !errors.Is(err, ErrWebhookNotConfigured) {
+		t.Fatalf("expected ErrWebhookNotConfigured, got: %v", err)
+	}
+}
+
+func TestSendTestWebhookSuccess(t *testing.T) {
+	s := newTestStore(t)
+	svc := New(s)
+
+	var gotBody []byte
+	var hitCount int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hitCount++
+		gotBody, _ = io.ReadAll(r.Body)
+		w.WriteHeader(200)
+	}))
+	defer srv.Close()
+
+	configureWebhookAlerting(t, s, srv.URL)
+
+	if err := svc.SendTestWebhook(); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if hitCount != 1 {
+		t.Fatalf("expected 1 webhook request, got %d", hitCount)
+	}
+
+	var payload WebhookPayload
+	if err := json.Unmarshal(gotBody, &payload); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if payload.Event != "test" {
+		t.Fatalf("expected event=test, got %q", payload.Event)
+	}
+}

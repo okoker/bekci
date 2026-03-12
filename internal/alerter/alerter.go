@@ -377,3 +377,31 @@ func (a *AlertService) SendTestSignal(toPhone string) error {
 	msg := "\u2705 [Bekci] Test Signal message.\nYour Signal alerting is configured correctly."
 	return SendSignal(sigURL, sigUser, sigPass, sigNumber, []string{toPhone}, msg)
 }
+
+// ErrWebhookNotConfigured is returned when webhook settings are incomplete.
+var ErrWebhookNotConfigured = errors.New("webhook not configured: set webhook_enabled and webhook_url")
+
+// SendTestWebhook sends a test webhook to verify the configuration.
+func (a *AlertService) SendTestWebhook() error {
+	enabled, _ := a.store.GetSetting("webhook_enabled")
+	url, _ := a.store.GetSetting("webhook_url")
+	if enabled != "true" || url == "" {
+		return ErrWebhookNotConfigured
+	}
+
+	token, _ := a.store.GetSetting("webhook_bearer_token")
+	skipTLSStr, _ := a.store.GetSetting("webhook_skip_tls")
+	skipTLS := skipTLSStr == "true"
+
+	payload := WebhookPayload{
+		Event:         "test",
+		Target:        "Bekci Test",
+		TargetAddress: "127.0.0.1",
+		Category:      "Test",
+		Message:       "This is a test webhook from Bekci.",
+		FailingChecks: []FailingCheck{},
+		Timestamp:     time.Now().UTC().Format(time.RFC3339),
+	}
+
+	return SendWebhook(url, token, skipTLS, payload)
+}
