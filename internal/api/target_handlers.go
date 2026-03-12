@@ -36,6 +36,7 @@ var validCategories = map[string]bool{
 var validCheckTypes = map[string]bool{
 	"http": true, "tcp": true, "ping": true,
 	"dns": true, "page_hash": true, "tls_cert": true,
+	"snmp_v2c": true, "snmp_v3": true,
 }
 
 type targetRequest struct {

@@ -39,6 +39,14 @@ var knownSettings = map[string]bool{
 	"webhook_skip_tls":       true,
 	"webhook_last_error":     true,
 	"webhook_last_success":   true,
+	// SNMP settings
+	"snmp_v2c_community":         true,
+	"snmp_v3_username":           true,
+	"snmp_v3_security_level":     true,
+	"snmp_v3_auth_protocol":      true,
+	"snmp_v3_auth_passphrase":    true,
+	"snmp_v3_privacy_protocol":   true,
+	"snmp_v3_privacy_passphrase": true,
 	// SLA thresholds (per category, float 0–100)
 	"sla_network":           true,
 	"sla_security":          true,
@@ -75,6 +83,14 @@ var stringSettings = map[string]bool{
 	"webhook_basic_password": true,
 	"webhook_last_error":     true,
 	"webhook_last_success":   true,
+	// SNMP settings
+	"snmp_v2c_community":         true,
+	"snmp_v3_username":           true,
+	"snmp_v3_security_level":     true,
+	"snmp_v3_auth_protocol":      true,
+	"snmp_v3_auth_passphrase":    true,
+	"snmp_v3_privacy_protocol":   true,
+	"snmp_v3_privacy_passphrase": true,
 }
 
 // Zero-allowed integer settings (allow 0 as a valid value, e.g. to disable re-alerting).
@@ -133,6 +149,12 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	if v, ok := settings["smtp_password"]; ok && v != "" {
 		settings["smtp_password"] = "••••••••"
 	}
+	if v, ok := settings["snmp_v3_auth_passphrase"]; ok && v != "" {
+		settings["snmp_v3_auth_passphrase"] = "••••••••"
+	}
+	if v, ok := settings["snmp_v3_privacy_passphrase"]; ok && v != "" {
+		settings["snmp_v3_privacy_passphrase"] = "••••••••"
+	}
 	writeJSON(w, http.StatusOK, settings)
 }
 
@@ -182,6 +204,21 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusBadRequest, "webhook_auth_type must be '', 'bearer', or 'basic'")
 				return
 			}
+		} else if key == "snmp_v3_security_level" {
+			if val != "" && val != "noAuthNoPriv" && val != "authNoPriv" && val != "authPriv" {
+				writeError(w, http.StatusBadRequest, "snmp_v3_security_level must be 'noAuthNoPriv', 'authNoPriv', or 'authPriv'")
+				return
+			}
+		} else if key == "snmp_v3_auth_protocol" {
+			if val != "" && val != "MD5" && val != "SHA" {
+				writeError(w, http.StatusBadRequest, "snmp_v3_auth_protocol must be 'MD5' or 'SHA'")
+				return
+			}
+		} else if key == "snmp_v3_privacy_protocol" {
+			if val != "" && val != "DES" && val != "AES" {
+				writeError(w, http.StatusBadRequest, "snmp_v3_privacy_protocol must be 'DES' or 'AES'")
+				return
+			}
 		} else if stringSettings[key] {
 			// Accept any string (including empty for clearing API keys)
 			continue
@@ -223,6 +260,12 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if v, ok := req["smtp_password"]; ok && v == "••••••••" {
 		delete(req, "smtp_password")
+	}
+	if v, ok := req["snmp_v3_auth_passphrase"]; ok && v == "••••••••" {
+		delete(req, "snmp_v3_auth_passphrase")
+	}
+	if v, ok := req["snmp_v3_privacy_passphrase"]; ok && v == "••••••••" {
+		delete(req, "snmp_v3_privacy_passphrase")
 	}
 
 	if err := s.store.SetSettings(req); err != nil {
