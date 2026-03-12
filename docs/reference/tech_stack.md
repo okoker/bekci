@@ -11,6 +11,7 @@
 | Reverse Proxy | Nginx 1.18 (prod only) — SSL termination, security headers, gzip |
 | Email | Resend API |
 | Signal | Signal Messenger via signal-cli REST API |
+| Webhook | Generic JSON POST to any HTTP endpoint (SOAR, Slack, etc.) |
 | Network | ICMP ping via pro-bing (requires NET_RAW capability) |
 | Config | YAML base + env var overrides (`BEKCI_` prefix) + auto-generated defaults |
 | Deploy | Docker multi-stage build (local) or bare-metal via Makefile (prod) |

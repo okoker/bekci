@@ -11,7 +11,7 @@ Web-managed monitoring platform written in Go + Vue 3. Multi-check monitoring wi
 - **6 Check Types** — Ping (ICMP), HTTP/HTTPS, TCP, DNS, Page Hash, TLS Certificate
 - **Unified Targets** — Create a target with conditions (check + alert criteria) in one step
 - **Rules Engine** — Condition groups with AND/OR logic, configurable fail count and fail window thresholds
-- **Alerting** — Email (Resend API) and Signal messaging, with cooldown, re-alert, and recovery notifications
+- **Alerting** — Email (Resend API), Signal messaging, and generic webhook (JSON POST to any HTTP endpoint), with cooldown, re-alert, and recovery notifications
 - **Dashboard** — 90-day + 4-hour uptime bars, per-target health state, problems sorted to top, 30s auto-refresh
 - **SLA Compliance** — Per-category SLA thresholds, dedicated SLA page with Chart.js daily uptime charts
 - **SOC View** — Flat status page for security operations center displays (optionally public)
@@ -148,7 +148,7 @@ Complete SQLite snapshot including all historical data (check results, audit log
 | Dashboard | status, history | any |
 | SLA | history | any |
 | SOC | status, history | configurable |
-| Alerts | list, test-email, test-signal | any / admin |
+| Alerts | list, test-email, test-signal, test-webhook, webhook-status | any / admin |
 | Users | CRUD, suspend, reset password | operator+ / admin |
 | Settings | read, update | any / admin |
 | Backup | config backup/restore, full backup (download/save/list/delete), passphrase | admin |
@@ -171,7 +171,7 @@ internal/
   checker/                 6 check types (http, tcp, ping, dns, page_hash, tls_cert)
   scheduler/               DB-driven, per-check timers, event channel
   engine/                  Rules evaluator (condition groups, fail thresholds)
-  alerter/                 Email (Resend) + Signal dispatch, cooldown, re-alert
+  alerter/                 Email (Resend) + Signal + Webhook dispatch, cooldown, re-alert
   crypto/                  AES-256-GCM encryption, diceware passphrase generator
 frontend/                  Vue 3 + Vite SPA
 docs/reference/            System documentation (API, DB schema, RBAC, backup)
@@ -187,7 +187,7 @@ docker-compose.yml         Single-service deployment
 | Backend | Go 1.24, net/http (stdlib router), SQLite WAL |
 | Frontend | Vue 3, Vite, Vue Router, Pinia, Chart.js |
 | Auth | JWT HS256 in HttpOnly cookie, bcrypt |
-| Alerting | Resend API (email), Signal REST API (messaging) |
+| Alerting | Resend API (email), Signal REST API (messaging), Generic webhook (JSON POST) |
 | Encryption | AES-256-GCM, Argon2id KDF |
 | Deploy | Docker multi-stage (node + go + alpine) or bare-metal |
 
