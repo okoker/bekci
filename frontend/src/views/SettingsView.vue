@@ -381,10 +381,19 @@ const webhookTestError = ref(false)
 const webhookLastError = ref('')
 const webhookLastSuccess = ref('')
 
+const emailTestRecipient = ref('')
+const emailTestResult = ref('')
+const emailTestError = ref(false)
+
 const alertForm = ref({
   alert_method: 'email',
+  email_provider: 'resend',
   resend_api_key: '',
   alert_from_email: '',
+  smtp_host: 'smtp.office365.com',
+  smtp_port: '587',
+  smtp_username: '',
+  smtp_password: '',
   alert_cooldown_s: '1800',
   alert_realert_s: '3600',
   signal_api_url: '',
@@ -405,8 +414,13 @@ function loadAlertSettings() {
   const s = settings.value
   alertForm.value = {
     alert_method: s.alert_method || 'email',
+    email_provider: s.email_provider || 'resend',
     resend_api_key: s.resend_api_key || '',
     alert_from_email: s.alert_from_email || '',
+    smtp_host: s.smtp_host || 'smtp.office365.com',
+    smtp_port: s.smtp_port || '587',
+    smtp_username: s.smtp_username || '',
+    smtp_password: s.smtp_password || '',
     alert_cooldown_s: s.alert_cooldown_s || '1800',
     alert_realert_s: s.alert_realert_s || '3600',
     signal_api_url: s.signal_api_url || '',
@@ -425,6 +439,9 @@ function loadAlertSettings() {
   if (!signalTestPhone.value) {
     signalTestPhone.value = auth.user?.phone || ''
   }
+  if (!emailTestRecipient.value) {
+    emailTestRecipient.value = auth.user?.email || ''
+  }
   // Load webhook status
   api.get('/settings/webhook-status').then(res => {
     webhookLastError.value = res.data.last_error || ''
@@ -439,8 +456,13 @@ async function saveAlertSettings() {
   try {
     await api.put('/settings', {
       alert_method: alertForm.value.alert_method,
+      email_provider: alertForm.value.email_provider,
       resend_api_key: alertForm.value.resend_api_key,
       alert_from_email: alertForm.value.alert_from_email,
+      smtp_host: alertForm.value.smtp_host,
+      smtp_port: alertForm.value.smtp_port,
+      smtp_username: alertForm.value.smtp_username,
+      smtp_password: alertForm.value.smtp_password,
       alert_cooldown_s: String(alertForm.value.alert_cooldown_s),
       alert_realert_s: String(alertForm.value.alert_realert_s),
       signal_api_url: alertForm.value.signal_api_url,
@@ -469,12 +491,20 @@ async function saveAlertSettings() {
 async function sendTestEmail() {
   alertError.value = ''
   alertSuccess.value = ''
+  emailTestResult.value = ''
+  emailTestError.value = false
   alertTesting.value = true
   try {
-    const { data } = await api.post('/settings/test-email')
-    alertSuccess.value = data.message || 'Test email sent'
+    const { data } = await api.post('/settings/test-email', { email: emailTestRecipient.value })
+    const msg = data.message || 'Test email sent'
+    alertSuccess.value = msg
+    emailTestResult.value = msg
+    emailTestError.value = false
   } catch (e) {
-    alertError.value = e.response?.data?.error || 'Failed to send test email'
+    const msg = e.response?.data?.error || 'Failed to send test email'
+    alertError.value = msg
+    emailTestResult.value = msg
+    emailTestError.value = true
   } finally {
     alertTesting.value = false
   }
@@ -502,16 +532,22 @@ async function sendTestWebhook() {
   webhookTesting.value = true
   webhookTestResult.value = ''
   webhookTestError.value = false
+  alertError.value = ''
+  alertSuccess.value = ''
   try {
     const res = await api.post('/settings/test-webhook')
-    webhookTestResult.value = res.data.message || 'Test webhook sent successfully'
+    const msg = res.data.message || 'Test webhook sent successfully'
+    webhookTestResult.value = msg
     webhookTestError.value = false
+    alertSuccess.value = msg
     const statusRes = await api.get('/settings/webhook-status')
     webhookLastError.value = statusRes.data.last_error || ''
     webhookLastSuccess.value = statusRes.data.last_success || ''
   } catch (err) {
-    webhookTestResult.value = err.response?.data?.error || 'Failed to send test webhook'
+    const msg = err.response?.data?.error || 'Failed to send test webhook'
+    webhookTestResult.value = msg
     webhookTestError.value = true
+    alertError.value = msg
   } finally {
     webhookTesting.value = false
   }
@@ -1134,12 +1170,48 @@ onUnmounted(() => {
         <!-- Email settings -->
         <div class="card" style="margin-bottom: 1rem;">
           <h3>Email Alerting</h3>
-          <p class="text-muted">Uses the Resend API. Requires a valid API key and sender address.</p>
 
           <div class="form-group">
-            <label>Resend API Key</label>
-            <input v-model="alertForm.resend_api_key" type="password" placeholder="re_..." autocomplete="off" />
+            <label>Email Provider</label>
+            <select v-model="alertForm.email_provider">
+              <option value="resend">Resend</option>
+              <option value="ms365">Microsoft 365 (SMTP)</option>
+            </select>
           </div>
+
+          <!-- Resend fields -->
+          <template v-if="alertForm.email_provider === 'resend'">
+            <p class="text-muted">Uses the Resend API. Requires a valid API key and sender address.</p>
+            <div class="form-group">
+              <label>Resend API Key</label>
+              <input v-model="alertForm.resend_api_key" type="password" placeholder="re_..." autocomplete="off" />
+            </div>
+          </template>
+
+          <!-- MS365 SMTP fields -->
+          <template v-if="alertForm.email_provider === 'ms365'">
+            <p class="text-muted">Uses SMTP AUTH to send via Microsoft 365 or any SMTP server.</p>
+            <div class="form-row">
+              <div class="form-group">
+                <label>SMTP Host</label>
+                <input v-model="alertForm.smtp_host" type="text" placeholder="smtp.office365.com" />
+              </div>
+              <div class="form-group" style="max-width: 120px;">
+                <label>Port</label>
+                <input v-model="alertForm.smtp_port" type="text" placeholder="587" />
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Username</label>
+                <input v-model="alertForm.smtp_username" type="text" placeholder="alerts@company.com" autocomplete="off" />
+              </div>
+              <div class="form-group">
+                <label>Password</label>
+                <input v-model="alertForm.smtp_password" type="password" autocomplete="off" />
+              </div>
+            </div>
+          </template>
 
           <div class="form-group">
             <label>From Email Address</label>
@@ -1147,9 +1219,11 @@ onUnmounted(() => {
           </div>
 
           <div class="form-actions">
+            <input v-model="emailTestRecipient" type="email" placeholder="recipient@example.com" class="test-phone-input" />
             <button type="button" class="btn" :disabled="alertTesting" @click="sendTestEmail">
               {{ alertTesting ? 'Sending...' : 'Send Test Email' }}
             </button>
+            <span v-if="emailTestResult" :class="emailTestError ? 'inline-error' : 'inline-success'">{{ emailTestResult }}</span>
           </div>
         </div>
 
@@ -1258,9 +1332,7 @@ onUnmounted(() => {
               :disabled="webhookTesting || alertForm.webhook_enabled !== 'true' || !alertForm.webhook_url">
               {{ webhookTesting ? 'Sending...' : 'Send Test Webhook' }}
             </button>
-          </div>
-          <div v-if="webhookTestResult" :class="webhookTestError ? 'error-msg' : 'success-msg'" style="margin-top: 8px;">
-            {{ webhookTestResult }}
+            <span v-if="webhookTestResult" :class="webhookTestError ? 'inline-error' : 'inline-success'">{{ webhookTestResult }}</span>
           </div>
         </div>
 
@@ -1345,6 +1417,19 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+/* ── Inline test feedback ── */
+.inline-success {
+  color: #16a34a;
+  font-size: 0.85rem;
+  margin-left: 0.75rem;
+  white-space: nowrap;
+}
+.inline-error {
+  color: #dc2626;
+  font-size: 0.85rem;
+  margin-left: 0.75rem;
+  white-space: nowrap;
+}
 /* ── Webhook warning ── */
 .webhook-warning {
   background: #fef3c7;
