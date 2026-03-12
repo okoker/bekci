@@ -1909,6 +1909,18 @@ onUnmounted(() => {
 .test-phone-input {
   width: 180px;
   flex-shrink: 0;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  background: #fff;
+  color: #1e293b;
+  font-family: inherit;
+}
+.test-phone-input:focus {
+  outline: none;
+  border-color: #ea580c;
+  box-shadow: 0 0 0 2px rgba(234, 88, 12, 0.15);
 }
 
 /* ── Fail2Ban tab ── */
