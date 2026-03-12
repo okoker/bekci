@@ -1742,7 +1742,7 @@ onUnmounted(() => {
             <button class="btn btn-sm" @click="f2bDetailView = null; f2bDetailData = []">Close</button>
           </div>
           <div v-if="f2bDetailLoading" class="text-muted" style="padding: 0.75rem;">Loading...</div>
-          <div v-else-if="f2bDetailData.length === 0" class="text-muted" style="padding: 0.75rem;">No records found.</div>
+          <div v-else-if="f2bDetailData.length === 0" class="text-muted" style="padding: 0.75rem;">No records found. <span style="font-size:0.8em;opacity:0.7">(History limited by fail2ban retention policy)</span></div>
           <table v-else class="f2b-detail-table">
             <thead>
               <tr>
@@ -2357,8 +2357,8 @@ onUnmounted(() => {
 /* Detail panel */
 .f2b-detail {
   margin-top: 1rem;
-  border-top: 3px solid #3b82f6;
-  background: #0f172a;
+  border-top: 3px solid #e67e22;
+  background: #fef9f4;
   border-radius: 0 0 8px 8px;
   overflow: hidden;
 }
@@ -2367,19 +2367,19 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem 1rem;
-  background: #1e293b;
-  color: #e2e8f0;
-  border-bottom: 1px solid #334155;
+  background: #fdf0e2;
+  color: #7c3a0a;
+  border-bottom: 1px solid #f5d5b0;
 }
 .f2b-detail-header .btn {
-  color: #94a3b8;
-  border-color: #475569;
+  color: #9a5c28;
+  border-color: #e0b888;
   font-size: 0.75rem;
   padding: 0.2rem 0.6rem;
 }
 .f2b-detail-header .btn:hover {
-  background: #334155;
-  color: #e2e8f0;
+  background: #f5d5b0;
+  color: #7c3a0a;
 }
 .f2b-detail-table {
   width: 100%;
@@ -2387,26 +2387,26 @@ onUnmounted(() => {
   font-size: 0.85rem;
 }
 .f2b-detail-table thead th {
-  background: #1e293b;
-  color: #94a3b8;
+  background: #fdf0e2;
+  color: #9a5c28;
   padding: 0.5rem 1rem;
   text-align: left;
   font-weight: 600;
   text-transform: uppercase;
   font-size: 0.7rem;
   letter-spacing: 0.05em;
-  border-bottom: 1px solid #334155;
+  border-bottom: 1px solid #f5d5b0;
 }
 .f2b-detail-table tbody td {
   padding: 0.5rem 1rem;
-  color: #e2e8f0;
-  border-bottom: 1px solid #1e293b;
+  color: #4a2c0a;
+  border-bottom: 1px solid #fdf0e2;
 }
 .f2b-detail-table tbody tr:hover {
-  background: #1e293b;
+  background: #fdf0e2;
 }
 .f2b-ip-cell {
   font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
-  color: #f87171 !important;
+  color: #c0392b !important;
 }
 </style>
