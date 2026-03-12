@@ -134,7 +134,7 @@ func (s *Server) handleFail2BanBans(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db, err := sql.Open("sqlite3", defaultFail2BanDB+"?mode=ro")
+	db, err := sql.Open("sqlite3", defaultFail2BanDB+"?_query_only=true")
 	if err != nil {
 		writeError(w, http.StatusServiceUnavailable, "fail2ban database not available")
 		return
@@ -172,6 +172,10 @@ func (s *Server) handleFail2BanBans(w http.ResponseWriter, r *http.Request) {
 			ExpiresAt: expiresAt.Format(time.RFC3339),
 			BanCount:  bancount,
 		})
+	}
+	if err := rows.Err(); err != nil {
+		writeError(w, http.StatusServiceUnavailable, "failed to read fail2ban database")
+		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"bans": bans})
