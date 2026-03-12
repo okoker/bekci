@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -87,25 +88,35 @@ func (s *Server) handleTestEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := s.store.GetUserByID(claims.Subject)
-	if err != nil || user == nil {
-		writeError(w, http.StatusNotFound, "user not found")
-		return
+	// Accept optional email override from request body
+	var req struct {
+		Email string `json:"email"`
 	}
-	if user.Email == "" {
-		s.audit(r, "test_email", "settings", "", "no email configured", "failure")
-		writeError(w, http.StatusBadRequest, "your account has no email address configured")
+	_ = json.NewDecoder(r.Body).Decode(&req)
+
+	toEmail := req.Email
+	if toEmail == "" {
+		user, err := s.store.GetUserByID(claims.Subject)
+		if err != nil || user == nil {
+			writeError(w, http.StatusNotFound, "user not found")
+			return
+		}
+		toEmail = user.Email
+	}
+	if toEmail == "" {
+		s.audit(r, "test_email", "settings", "", "no email provided", "failure")
+		writeError(w, http.StatusBadRequest, "no email address provided — set one in your profile or enter one")
 		return
 	}
 
-	if err := s.alerter.SendTestEmail(user.Email); err != nil {
-		s.audit(r, "test_email", "settings", "", "to="+user.Email+" error="+err.Error(), "failure")
+	if err := s.alerter.SendTestEmail(toEmail); err != nil {
+		s.audit(r, "test_email", "settings", "", "to="+toEmail+" error="+err.Error(), "failure")
 		writeError(w, http.StatusInternalServerError, "failed to send test email: "+err.Error())
 		return
 	}
 
-	s.audit(r, "test_email", "settings", "", "to="+user.Email, "success")
-	writeJSON(w, http.StatusOK, map[string]string{"message": "test email sent to " + user.Email})
+	s.audit(r, "test_email", "settings", "", "to="+toEmail, "success")
+	writeJSON(w, http.StatusOK, map[string]string{"message": "test email sent to " + toEmail})
 }
 
 func (s *Server) handleTestSignal(w http.ResponseWriter, r *http.Request) {
