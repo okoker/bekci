@@ -407,6 +407,13 @@ const alertForm = ref({
   webhook_basic_username: '',
   webhook_basic_password: '',
   webhook_skip_tls: 'false',
+  snmp_v2c_community: 'public',
+  snmp_v3_username: '',
+  snmp_v3_security_level: 'authPriv',
+  snmp_v3_auth_protocol: 'SHA',
+  snmp_v3_auth_passphrase: '',
+  snmp_v3_privacy_protocol: 'AES',
+  snmp_v3_privacy_passphrase: '',
 })
 
 function loadAlertSettings() {
@@ -434,6 +441,13 @@ function loadAlertSettings() {
     webhook_basic_username: s.webhook_basic_username || '',
     webhook_basic_password: s.webhook_basic_password || '',
     webhook_skip_tls: s.webhook_skip_tls || 'false',
+    snmp_v2c_community: s.snmp_v2c_community || 'public',
+    snmp_v3_username: s.snmp_v3_username || '',
+    snmp_v3_security_level: s.snmp_v3_security_level || 'authPriv',
+    snmp_v3_auth_protocol: s.snmp_v3_auth_protocol || 'SHA',
+    snmp_v3_auth_passphrase: s.snmp_v3_auth_passphrase || '',
+    snmp_v3_privacy_protocol: s.snmp_v3_privacy_protocol || 'AES',
+    snmp_v3_privacy_passphrase: s.snmp_v3_privacy_passphrase || '',
   }
   // Pre-populate test phone from logged-in user's profile
   if (!signalTestPhone.value) {
@@ -476,6 +490,13 @@ async function saveAlertSettings() {
       webhook_basic_username: alertForm.value.webhook_basic_username,
       webhook_basic_password: alertForm.value.webhook_basic_password,
       webhook_skip_tls: alertForm.value.webhook_skip_tls,
+      snmp_v2c_community: alertForm.value.snmp_v2c_community,
+      snmp_v3_username: alertForm.value.snmp_v3_username,
+      snmp_v3_security_level: alertForm.value.snmp_v3_security_level,
+      snmp_v3_auth_protocol: alertForm.value.snmp_v3_auth_protocol,
+      snmp_v3_auth_passphrase: alertForm.value.snmp_v3_auth_passphrase,
+      snmp_v3_privacy_protocol: alertForm.value.snmp_v3_privacy_protocol,
+      snmp_v3_privacy_passphrase: alertForm.value.snmp_v3_privacy_passphrase,
     })
     alertSuccess.value = 'Alert settings saved'
     // Reload to get masked API key
@@ -1391,6 +1412,56 @@ onUnmounted(() => {
             <span v-if="webhookTestResult" :class="webhookTestError ? 'inline-error' : 'inline-success'">{{ webhookTestResult }}</span>
           </div>
         </div>
+
+          <!-- SNMP Section -->
+          <h3>SNMP</h3>
+          <p class="text-muted">Credentials used by all SNMP v2c and v3 checks.</p>
+
+          <h4>SNMP v2c</h4>
+          <div class="form-group">
+            <label>Community String</label>
+            <input v-model="alertForm.snmp_v2c_community" placeholder="public" />
+          </div>
+
+          <h4>SNMP v3</h4>
+          <div class="form-group">
+            <label>Username</label>
+            <input v-model="alertForm.snmp_v3_username" placeholder="SNMPv3 username" />
+          </div>
+          <div class="form-group">
+            <label>Security Level</label>
+            <select v-model="alertForm.snmp_v3_security_level">
+              <option value="noAuthNoPriv">No Auth, No Privacy</option>
+              <option value="authNoPriv">Auth, No Privacy</option>
+              <option value="authPriv">Auth + Privacy</option>
+            </select>
+          </div>
+          <template v-if="alertForm.snmp_v3_security_level !== 'noAuthNoPriv'">
+            <div class="form-group">
+              <label>Auth Protocol</label>
+              <select v-model="alertForm.snmp_v3_auth_protocol">
+                <option value="MD5">MD5</option>
+                <option value="SHA">SHA</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Auth Passphrase</label>
+              <input type="password" v-model="alertForm.snmp_v3_auth_passphrase" placeholder="Auth passphrase" />
+            </div>
+          </template>
+          <template v-if="alertForm.snmp_v3_security_level === 'authPriv'">
+            <div class="form-group">
+              <label>Privacy Protocol</label>
+              <select v-model="alertForm.snmp_v3_privacy_protocol">
+                <option value="DES">DES</option>
+                <option value="AES">AES</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Privacy Passphrase</label>
+              <input type="password" v-model="alertForm.snmp_v3_privacy_passphrase" placeholder="Privacy passphrase" />
+            </div>
+          </template>
 
         <div class="form-actions">
           <button type="submit" class="btn btn-primary" :disabled="alertSaving">
