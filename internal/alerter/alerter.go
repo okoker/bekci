@@ -82,9 +82,21 @@ func (a *AlertService) Dispatch(ruleID, oldState, newState string) {
 	now := time.Now()
 
 	// Send emails
-	if method == "email" || method == "email+signal" {
+	if (method == "email" || method == "email+signal") && fromEmail != "" {
 		subject, htmlBody := RenderEmailAlert(target.Name, target.Host, newState, nil, now)
 		provider, _ := a.store.GetSetting("email_provider")
+
+		// Read SMTP settings once (outside the loop)
+		var smtpHost, smtpPort, smtpUser, smtpPass string
+		if provider == "ms365" {
+			smtpHost, _ = a.store.GetSetting("smtp_host")
+			smtpPort, _ = a.store.GetSetting("smtp_port")
+			smtpUser, _ = a.store.GetSetting("smtp_username")
+			smtpPass, _ = a.store.GetSetting("smtp_password")
+			if smtpPort == "" {
+				smtpPort = "587"
+			}
+		}
 
 		for _, user := range recipients {
 			if user.Email == "" {
@@ -92,13 +104,6 @@ func (a *AlertService) Dispatch(ruleID, oldState, newState string) {
 			}
 			var sendErr error
 			if provider == "ms365" {
-				smtpHost, _ := a.store.GetSetting("smtp_host")
-				smtpPort, _ := a.store.GetSetting("smtp_port")
-				smtpUser, _ := a.store.GetSetting("smtp_username")
-				smtpPass, _ := a.store.GetSetting("smtp_password")
-				if smtpPort == "" {
-					smtpPort = "587"
-				}
 				sendErr = SendEmailSMTP(smtpHost, smtpPort, smtpUser, smtpPass, fromEmail, []string{user.Email}, subject, htmlBody)
 			} else {
 				if apiKey == "" {
@@ -233,10 +238,22 @@ func (a *AlertService) CheckRealerts() {
 
 		now := time.Now()
 
-		if method == "email" || method == "email+signal" {
+		if (method == "email" || method == "email+signal") && fromEmail != "" {
 			subject, htmlBody := RenderEmailAlert(target.Name, target.Host, "unhealthy", nil, now)
 			subject = "[RE-ALERT] " + subject[8:] // replace [ALERT] with [RE-ALERT]
 			provider, _ := a.store.GetSetting("email_provider")
+
+			// Read SMTP settings once (outside the loop)
+			var smtpHost, smtpPort, smtpUser, smtpPass string
+			if provider == "ms365" {
+				smtpHost, _ = a.store.GetSetting("smtp_host")
+				smtpPort, _ = a.store.GetSetting("smtp_port")
+				smtpUser, _ = a.store.GetSetting("smtp_username")
+				smtpPass, _ = a.store.GetSetting("smtp_password")
+				if smtpPort == "" {
+					smtpPort = "587"
+				}
+			}
 
 			for _, user := range recipients {
 				if user.Email == "" {
@@ -244,13 +261,6 @@ func (a *AlertService) CheckRealerts() {
 				}
 				var sendErr error
 				if provider == "ms365" {
-					smtpHost, _ := a.store.GetSetting("smtp_host")
-					smtpPort, _ := a.store.GetSetting("smtp_port")
-					smtpUser, _ := a.store.GetSetting("smtp_username")
-					smtpPass, _ := a.store.GetSetting("smtp_password")
-					if smtpPort == "" {
-						smtpPort = "587"
-					}
 					sendErr = SendEmailSMTP(smtpHost, smtpPort, smtpUser, smtpPass, fromEmail, []string{user.Email}, subject, htmlBody)
 				} else {
 					if apiKey == "" {
