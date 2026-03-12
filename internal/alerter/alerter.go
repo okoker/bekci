@@ -82,22 +82,37 @@ func (a *AlertService) Dispatch(ruleID, oldState, newState string) {
 	now := time.Now()
 
 	// Send emails
-	if (method == "email" || method == "email+signal") && apiKey != "" && fromEmail != "" {
+	if method == "email" || method == "email+signal" {
 		subject, htmlBody := RenderEmailAlert(target.Name, target.Host, newState, nil, now)
+		provider, _ := a.store.GetSetting("email_provider")
 
 		for _, user := range recipients {
 			if user.Email == "" {
 				continue
 			}
-			err := SendEmail(apiKey, fromEmail, []string{user.Email}, subject, htmlBody)
-			if err != nil {
+			var sendErr error
+			if provider == "ms365" {
+				smtpHost, _ := a.store.GetSetting("smtp_host")
+				smtpPort, _ := a.store.GetSetting("smtp_port")
+				smtpUser, _ := a.store.GetSetting("smtp_username")
+				smtpPass, _ := a.store.GetSetting("smtp_password")
+				if smtpPort == "" {
+					smtpPort = "587"
+				}
+				sendErr = SendEmailSMTP(smtpHost, smtpPort, smtpUser, smtpPass, fromEmail, []string{user.Email}, subject, htmlBody)
+			} else {
+				if apiKey == "" {
+					continue
+				}
+				sendErr = SendEmail(apiKey, fromEmail, []string{user.Email}, subject, htmlBody)
+			}
+			if sendErr != nil {
 				slog.Error("Alerter: failed to send email",
-					"target", target.Name, "recipient", user.Username, "error", err)
+					"target", target.Name, "recipient", user.Username, "error", sendErr)
 			} else {
 				slog.Info("Alerter: email sent",
 					"target", target.Name, "recipient", user.Username, "type", alertType)
 			}
-			// Log regardless of send success (so we know we tried)
 			if err := a.store.LogAlert(targetID, ruleID, user.ID, alertType, subject); err != nil {
 				slog.Error("Alerter: failed to log alert", "target_id", targetID, "rule_id", ruleID, "error", err)
 			}
@@ -218,18 +233,34 @@ func (a *AlertService) CheckRealerts() {
 
 		now := time.Now()
 
-		if (method == "email" || method == "email+signal") && apiKey != "" && fromEmail != "" {
+		if method == "email" || method == "email+signal" {
 			subject, htmlBody := RenderEmailAlert(target.Name, target.Host, "unhealthy", nil, now)
 			subject = "[RE-ALERT] " + subject[8:] // replace [ALERT] with [RE-ALERT]
+			provider, _ := a.store.GetSetting("email_provider")
 
 			for _, user := range recipients {
 				if user.Email == "" {
 					continue
 				}
-				err := SendEmail(apiKey, fromEmail, []string{user.Email}, subject, htmlBody)
-				if err != nil {
+				var sendErr error
+				if provider == "ms365" {
+					smtpHost, _ := a.store.GetSetting("smtp_host")
+					smtpPort, _ := a.store.GetSetting("smtp_port")
+					smtpUser, _ := a.store.GetSetting("smtp_username")
+					smtpPass, _ := a.store.GetSetting("smtp_password")
+					if smtpPort == "" {
+						smtpPort = "587"
+					}
+					sendErr = SendEmailSMTP(smtpHost, smtpPort, smtpUser, smtpPass, fromEmail, []string{user.Email}, subject, htmlBody)
+				} else {
+					if apiKey == "" {
+						continue
+					}
+					sendErr = SendEmail(apiKey, fromEmail, []string{user.Email}, subject, htmlBody)
+				}
+				if sendErr != nil {
 					slog.Error("Alerter: re-alert email failed",
-						"target", target.Name, "recipient", user.Username, "error", err)
+						"target", target.Name, "recipient", user.Username, "error", sendErr)
 				} else {
 					slog.Info("Alerter: re-alert email sent",
 						"target", target.Name, "recipient", user.Username)
@@ -369,10 +400,9 @@ func (a *AlertService) getFailingChecks(targetID, state string) []FailingCheck {
 
 // SendTestEmail sends a test email to verify the configuration.
 func (a *AlertService) SendTestEmail(toEmail string) error {
-	apiKey, _ := a.store.GetSetting("resend_api_key")
+	provider, _ := a.store.GetSetting("email_provider")
 	fromEmail, _ := a.store.GetSetting("alert_from_email")
-
-	if apiKey == "" || fromEmail == "" {
+	if fromEmail == "" {
 		return ErrNotConfigured
 	}
 
@@ -388,6 +418,25 @@ func (a *AlertService) SendTestEmail(toEmail string) error {
 </body>
 </html>`
 
+	if provider == "ms365" {
+		smtpHost, _ := a.store.GetSetting("smtp_host")
+		smtpPort, _ := a.store.GetSetting("smtp_port")
+		smtpUser, _ := a.store.GetSetting("smtp_username")
+		smtpPass, _ := a.store.GetSetting("smtp_password")
+		if smtpHost == "" || smtpUser == "" || smtpPass == "" {
+			return ErrNotConfigured
+		}
+		if smtpPort == "" {
+			smtpPort = "587"
+		}
+		return SendEmailSMTP(smtpHost, smtpPort, smtpUser, smtpPass, fromEmail, []string{toEmail}, subject, html)
+	}
+
+	// Default: Resend
+	apiKey, _ := a.store.GetSetting("resend_api_key")
+	if apiKey == "" {
+		return ErrNotConfigured
+	}
 	return SendEmail(apiKey, fromEmail, []string{toEmail}, subject, html)
 }
 

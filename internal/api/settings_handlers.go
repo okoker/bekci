@@ -15,10 +15,15 @@ var knownSettings = map[string]bool{
 	"soc_public":             true,
 	// Alerting settings
 	"alert_method":     true,
+	"email_provider":   true,
 	"resend_api_key":   true,
 	"alert_from_email": true,
 	"alert_cooldown_s": true,
 	"alert_realert_s":  true,
+	"smtp_host":        true,
+	"smtp_port":        true,
+	"smtp_username":    true,
+	"smtp_password":    true,
 	// Signal settings
 	"signal_api_url":  true,
 	"signal_number":   true,
@@ -52,8 +57,13 @@ var boolSettings = map[string]bool{
 // String settings that accept arbitrary text (not validated as positive integers).
 var stringSettings = map[string]bool{
 	"alert_method":     true,
+	"email_provider":   true,
 	"resend_api_key":   true,
 	"alert_from_email": true,
+	"smtp_host":        true,
+	"smtp_port":        true,
+	"smtp_username":    true,
+	"smtp_password":    true,
 	"signal_api_url":   true,
 	"signal_number":    true,
 	"signal_username":      true,
@@ -116,6 +126,9 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	if v, ok := settings["webhook_basic_password"]; ok && v != "" {
 		settings["webhook_basic_password"] = "••••••••"
 	}
+	if v, ok := settings["smtp_password"]; ok && v != "" {
+		settings["smtp_password"] = "••••••••"
+	}
 	writeJSON(w, http.StatusOK, settings)
 }
 
@@ -148,6 +161,11 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		} else if key == "alert_method" {
 			if val != "" && val != "email" && val != "signal" && val != "email+signal" {
 				writeError(w, http.StatusBadRequest, "alert_method must be '', 'email', 'signal', or 'email+signal'")
+				return
+			}
+		} else if key == "email_provider" {
+			if val != "" && val != "resend" && val != "ms365" {
+				writeError(w, http.StatusBadRequest, "email_provider must be '', 'resend', or 'ms365'")
 				return
 			}
 		} else if key == "webhook_url" {
@@ -198,6 +216,9 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if v, ok := req["webhook_basic_password"]; ok && v == "••••••••" {
 		delete(req, "webhook_basic_password")
+	}
+	if v, ok := req["smtp_password"]; ok && v == "••••••••" {
+		delete(req, "smtp_password")
 	}
 
 	if err := s.store.SetSettings(req); err != nil {
