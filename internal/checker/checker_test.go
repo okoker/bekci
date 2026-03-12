@@ -346,6 +346,60 @@ func TestPageHashCheckHashMismatch(t *testing.T) {
 	}
 }
 
+func TestSNMPv2cTimeout(t *testing.T) {
+	// Connect to a non-routable address to trigger timeout
+	cfg, _ := json.Marshal(map[string]any{
+		"port":      161,
+		"timeout_s": 1,
+		"community": "public",
+	})
+	r := Run("snmp_v2c", "192.0.2.1", string(cfg))
+	if r.Status != "down" {
+		t.Fatalf("expected down for non-routable host, got %s", r.Status)
+	}
+}
+
+func TestSNMPv3MissingUsername(t *testing.T) {
+	cfg, _ := json.Marshal(map[string]any{
+		"port":      161,
+		"timeout_s": 1,
+		"username":  "",
+	})
+	r := Run("snmp_v3", "192.0.2.1", string(cfg))
+	if r.Status != "down" {
+		t.Fatalf("expected down for missing username, got %s", r.Status)
+	}
+	if !strings.Contains(r.Message, "not configured") {
+		t.Fatalf("expected 'not configured' message, got: %s", r.Message)
+	}
+}
+
+func TestSNMPv3Timeout(t *testing.T) {
+	cfg, _ := json.Marshal(map[string]any{
+		"port":            161,
+		"timeout_s":       1,
+		"username":        "testuser",
+		"security_level":  "authPriv",
+		"auth_protocol":   "SHA",
+		"auth_passphrase": "testpass12345678",
+		"privacy_protocol":   "AES",
+		"privacy_passphrase": "testpass12345678",
+	})
+	r := Run("snmp_v3", "192.0.2.1", string(cfg))
+	if r.Status != "down" {
+		t.Fatalf("expected down for non-routable host, got %s", r.Status)
+	}
+}
+
+func TestSNMPDispatcherRouting(t *testing.T) {
+	for _, ct := range []string{"snmp_v2c", "snmp_v3"} {
+		r := Run(ct, "192.0.2.1", `{"port":161,"timeout_s":1,"community":"public","username":"u","auth_passphrase":"testpass12345678","privacy_passphrase":"testpass12345678"}`)
+		if strings.Contains(r.Message, "unknown check type") {
+			t.Fatalf("check type %s was not routed by dispatcher", ct)
+		}
+	}
+}
+
 func jsonPort(s string) int {
 	var p int
 	fmt.Sscanf(s, "%d", &p)
