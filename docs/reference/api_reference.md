@@ -826,6 +826,8 @@ Response formats are identical to their Dashboard counterparts.
 | GET | `/api/alerts` | any | List alert history (paginated) |
 | POST | `/api/settings/test-email` | admin | Send test email to current user |
 | POST | `/api/settings/test-signal` | admin | Send test Signal message to a phone number |
+| POST | `/api/settings/test-webhook` | admin | Send test webhook to configured endpoint |
+| GET | `/api/settings/webhook-status` | admin | Get webhook delivery status |
 
 ### GET /api/alerts
 
@@ -899,6 +901,37 @@ Sends a test Signal message to the specified phone number. Requires Signal gatew
 | Signal send failed | 500 |
 | Alerter not initialized | 503 |
 
+### POST /api/settings/test-webhook
+
+Sends a test webhook payload to the configured webhook URL. Requires webhook to be enabled with a URL configured.
+
+**Request:** No body required.
+
+**Response (200):**
+```json
+{ "message": "test webhook sent successfully" }
+```
+
+| Error | Code |
+|-------|------|
+| Webhook not configured | 500 |
+| Webhook send failed | 500 |
+| Alerter not initialized | 503 |
+
+### GET /api/settings/webhook-status
+
+Returns the last webhook delivery error and success timestamps.
+
+**Response (200):**
+```json
+{
+  "last_error": "2026-03-12T14:30:00Z — webhook error 500: server error",
+  "last_success": "2026-03-12T14:00:00Z"
+}
+```
+
+Both fields are empty strings when no webhook has been sent yet.
+
 ---
 
 ## Settings
@@ -965,6 +998,12 @@ Update one or more settings. Only known keys are accepted. Sending masked values
 | `signal_number` | string | any string (sender phone number) |
 | `signal_username` | string | any string |
 | `signal_password` | string | any string (masked in GET as `"••••••••"`) |
+| `webhook_enabled` | boolean string | `"true"` or `"false"` |
+| `webhook_url` | string | must start with `http://` or `https://` (empty to clear) |
+| `webhook_bearer_token` | string | any string (masked in GET as `"••••••••"`) |
+| `webhook_skip_tls` | boolean string | `"true"` or `"false"` |
+| `webhook_last_error` | string | auto-set by system (read-only in practice) |
+| `webhook_last_success` | string | auto-set by system (read-only in practice) |
 | `sla_network` | float string | 0–100 (0 = disabled) |
 | `sla_security` | float string | 0–100 (0 = disabled) |
 | `sla_physical_security` | float string | 0–100 (0 = disabled) |
@@ -1021,7 +1060,7 @@ Update one or more settings. Only known keys are accepted. Sending masked values
 }
 ```
 
-**Audit actions:** `login`, `login_failed`, `logout`, `create_user`, `update_user`, `suspend_user`, `activate_user`, `reset_password`, `change_password`, `change_password_failed`, `update_profile`, `create_target`, `update_target`, `delete_target`, `pause_target`, `unpause_target`, `set_alert_recipients`, `update_settings`, `restore_backup`, `export_backup`, `export_full_backup`, `save_full_backup`, `download_saved_backup`, `delete_saved_backup`, `run_check`, `test_email`, `test_signal`.
+**Audit actions:** `login`, `login_failed`, `logout`, `create_user`, `update_user`, `suspend_user`, `activate_user`, `reset_password`, `change_password`, `change_password_failed`, `update_profile`, `create_target`, `update_target`, `delete_target`, `pause_target`, `unpause_target`, `set_alert_recipients`, `update_settings`, `restore_backup`, `export_backup`, `export_full_backup`, `save_full_backup`, `download_saved_backup`, `delete_saved_backup`, `run_check`, `test_email`, `test_signal`, `test_webhook`.
 
 **Status values:** `success`, `failure`. All mutating actions log both success and failure (with detail). Login and change_password also log dedicated failure actions (`login_failed`, `change_password_failed`).
 
