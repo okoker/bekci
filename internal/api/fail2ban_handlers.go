@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"database/sql"
 	"net/http"
 	"os/exec"
 	"regexp"
@@ -9,6 +10,16 @@ import (
 	"strings"
 	"time"
 )
+
+const defaultFail2BanDB = "/var/lib/fail2ban/fail2ban.sqlite3"
+
+type banRecord struct {
+	Jail      string `json:"jail"`
+	IP        string `json:"ip"`
+	BannedAt  string `json:"banned_at"`
+	ExpiresAt string `json:"expires_at"`
+	BanCount  int    `json:"ban_count"`
+}
 
 type jailStatus struct {
 	Name            string   `json:"name"`
@@ -114,6 +125,56 @@ func getJailStatus(ctx context.Context, name string) (jailStatus, error) {
 		}
 	}
 	return js, nil
+}
+
+func (s *Server) handleFail2BanBans(w http.ResponseWriter, r *http.Request) {
+	jailFilter := r.URL.Query().Get("jail")
+	if jailFilter != "" && !jailNameRe.MatchString(jailFilter) {
+		writeError(w, http.StatusBadRequest, "invalid jail name")
+		return
+	}
+
+	db, err := sql.Open("sqlite3", defaultFail2BanDB+"?mode=ro")
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, "fail2ban database not available")
+		return
+	}
+	defer db.Close()
+
+	query := "SELECT jail, ip, timeofban, bantime, bancount FROM bans ORDER BY timeofban DESC"
+	var args []any
+	if jailFilter != "" {
+		query = "SELECT jail, ip, timeofban, bantime, bancount FROM bans WHERE jail = ? ORDER BY timeofban DESC"
+		args = append(args, jailFilter)
+	}
+
+	rows, err := db.QueryContext(r.Context(), query, args...)
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, "failed to query fail2ban database")
+		return
+	}
+	defer rows.Close()
+
+	bans := make([]banRecord, 0)
+	for rows.Next() {
+		var jail, ip string
+		var timeofban, bantime int64
+		var bancount int
+		if err := rows.Scan(&jail, &ip, &timeofban, &bantime, &bancount); err != nil {
+			continue
+		}
+		bannedAt := time.Unix(timeofban, 0).UTC()
+		expiresAt := time.Unix(timeofban+bantime, 0).UTC()
+		bans = append(bans, banRecord{
+			Jail:      jail,
+			IP:        ip,
+			BannedAt:  bannedAt.Format(time.RFC3339),
+			ExpiresAt: expiresAt.Format(time.RFC3339),
+			BanCount:  bancount,
+		})
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"bans": bans})
 }
 
 // extractInt looks for a line like `|- Currently failed:\t5` and returns 5.

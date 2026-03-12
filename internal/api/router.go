@@ -115,6 +115,7 @@ func (s *Server) Handler() http.Handler {
 
 	// Fail2Ban status — admin only
 	mux.Handle("GET /api/fail2ban/status", adminAuth(s.handleFail2BanStatus))
+	mux.Handle("GET /api/fail2ban/bans", adminAuth(s.handleFail2BanBans))
 
 	// Auth helpers for monitoring routes
 	anyAuth := func(h http.HandlerFunc) http.Handler {
