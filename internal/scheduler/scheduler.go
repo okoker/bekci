@@ -219,8 +219,34 @@ func (s *Scheduler) runCheck(checkID string) {
 		return
 	}
 
+	// Inject SNMP credentials from settings into config
+	configJSON := check.Config
+	if check.Type == "snmp_v2c" || check.Type == "snmp_v3" {
+		var cfg map[string]any
+		if err := json.Unmarshal([]byte(check.Config), &cfg); err == nil {
+			if check.Type == "snmp_v2c" {
+				if community, err := s.store.GetSetting("snmp_v2c_community"); err == nil && community != "" {
+					cfg["community"] = community
+				}
+			} else {
+				keys := []string{"snmp_v3_username", "snmp_v3_security_level", "snmp_v3_auth_protocol",
+					"snmp_v3_auth_passphrase", "snmp_v3_privacy_protocol", "snmp_v3_privacy_passphrase"}
+				fieldNames := []string{"username", "security_level", "auth_protocol",
+					"auth_passphrase", "privacy_protocol", "privacy_passphrase"}
+				for i, key := range keys {
+					if val, err := s.store.GetSetting(key); err == nil && val != "" {
+						cfg[fieldNames[i]] = val
+					}
+				}
+			}
+			if updated, err := json.Marshal(cfg); err == nil {
+				configJSON = string(updated)
+			}
+		}
+	}
+
 	// Run the check
-	result := checker.Run(check.Type, target.Host, check.Config)
+	result := checker.Run(check.Type, target.Host, configJSON)
 
 	// Auto-persist baseline hash on first capture
 	if result.Metrics["baseline_captured"] == true {
