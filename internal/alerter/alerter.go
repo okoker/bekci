@@ -2,6 +2,7 @@ package alerter
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -31,15 +32,12 @@ func (a *AlertService) Dispatch(ruleID, oldState, newState string) {
 
 	// Read global settings
 	method, _ := a.store.GetSetting("alert_method")
-	if method == "" {
-		return // alerting disabled
-	}
 	apiKey, _ := a.store.GetSetting("resend_api_key")
 	fromEmail, _ := a.store.GetSetting("alert_from_email")
+	webhookEnabled, _ := a.store.GetSetting("webhook_enabled")
 
-	if method == "email" && (apiKey == "" || fromEmail == "") {
-		slog.Warn("Alerter: email alerting configured but resend_api_key or alert_from_email is empty")
-		return
+	if method == "" && webhookEnabled != "true" {
+		return // no alerting configured
 	}
 
 	// Check cooldown (skip for recovery alerts)
@@ -137,6 +135,44 @@ func (a *AlertService) Dispatch(ruleID, oldState, newState string) {
 			}
 		}
 	}
+
+	// Webhook (independent of alert_method)
+	if webhookEnabled == "true" {
+		webhookURL, _ := a.store.GetSetting("webhook_url")
+		if webhookURL != "" {
+			token, _ := a.store.GetSetting("webhook_bearer_token")
+			skipTLSStr, _ := a.store.GetSetting("webhook_skip_tls")
+			skipTLS := skipTLSStr == "true"
+
+			failingChecks := a.getFailingChecks(targetID, newState)
+			payload := WebhookPayload{
+				Event:         alertType,
+				Target:        target.Name,
+				TargetAddress: target.Host,
+				Category:      target.Category,
+				Message:       fmt.Sprintf("Target %s is %s", target.Name, newState),
+				FailingChecks: failingChecks,
+				Timestamp:     now.UTC().Format(time.RFC3339),
+			}
+
+			if err := SendWebhook(webhookURL, token, skipTLS, payload); err != nil {
+				slog.Error("Alerter: webhook failed", "target", target.Name, "error", err)
+				a.store.SetSettings(map[string]string{
+					"webhook_last_error": now.UTC().Format(time.RFC3339) + " — " + err.Error(),
+				})
+			} else {
+				slog.Info("Alerter: webhook sent", "target", target.Name, "type", alertType)
+				a.store.SetSettings(map[string]string{
+					"webhook_last_error":   "",
+					"webhook_last_success": now.UTC().Format(time.RFC3339),
+				})
+			}
+			summary := "[Webhook] " + target.Name + " " + alertType
+			if err := a.store.LogAlert(targetID, ruleID, "", alertType, summary); err != nil {
+				slog.Error("Alerter: failed to log webhook alert", "error", err)
+			}
+		}
+	}
 }
 
 // CheckRealerts checks for rules that are still firing and re-sends alerts if needed.
@@ -148,12 +184,11 @@ func (a *AlertService) CheckRealerts() {
 	}
 
 	method, _ := a.store.GetSetting("alert_method")
-	if method == "" {
-		return
-	}
 	apiKey, _ := a.store.GetSetting("resend_api_key")
 	fromEmail, _ := a.store.GetSetting("alert_from_email")
-	if method == "email" && (apiKey == "" || fromEmail == "") {
+	webhookEnabled, _ := a.store.GetSetting("webhook_enabled")
+
+	if method == "" && webhookEnabled != "true" {
 		return
 	}
 
@@ -233,7 +268,72 @@ func (a *AlertService) CheckRealerts() {
 				}
 			}
 		}
+
+		// Webhook re-alert (independent of alert_method)
+		if webhookEnabled == "true" {
+			webhookURL, _ := a.store.GetSetting("webhook_url")
+			if webhookURL != "" {
+				token, _ := a.store.GetSetting("webhook_bearer_token")
+				skipTLSStr, _ := a.store.GetSetting("webhook_skip_tls")
+				skipTLS := skipTLSStr == "true"
+
+				failingChecks := a.getFailingChecks(fr.TargetID, "unhealthy")
+				payload := WebhookPayload{
+					Event:         "re-alert",
+					Target:        target.Name,
+					TargetAddress: target.Host,
+					Category:      target.Category,
+					Message:       fmt.Sprintf("Target %s is still unhealthy", target.Name),
+					FailingChecks: failingChecks,
+					Timestamp:     now.UTC().Format(time.RFC3339),
+				}
+
+				if err := SendWebhook(webhookURL, token, skipTLS, payload); err != nil {
+					slog.Error("Alerter: webhook re-alert failed", "target", target.Name, "error", err)
+					a.store.SetSettings(map[string]string{
+						"webhook_last_error": now.UTC().Format(time.RFC3339) + " — " + err.Error(),
+					})
+				} else {
+					slog.Info("Alerter: webhook re-alert sent", "target", target.Name)
+					a.store.SetSettings(map[string]string{
+						"webhook_last_error":   "",
+						"webhook_last_success": now.UTC().Format(time.RFC3339),
+					})
+				}
+				summary := "[Webhook RE-ALERT] " + target.Name
+				if err := a.store.LogAlert(fr.TargetID, fr.RuleID, "", "re-alert", summary); err != nil {
+					slog.Error("Alerter: failed to log webhook re-alert", "error", err)
+				}
+			}
+		}
 	}
+}
+
+// getFailingChecks returns failing check details for a target.
+// For recovery events (healthy state), returns empty slice.
+func (a *AlertService) getFailingChecks(targetID, state string) []FailingCheck {
+	if state == "healthy" {
+		return []FailingCheck{}
+	}
+	checks, err := a.store.ListChecksByTarget(targetID)
+	if err != nil {
+		slog.Error("Alerter: failed to list checks for webhook", "target_id", targetID, "error", err)
+		return []FailingCheck{}
+	}
+	var failing []FailingCheck
+	for _, c := range checks {
+		result, err := a.store.GetLastResult(c.ID)
+		if err != nil || result == nil {
+			continue
+		}
+		if result.Status != "up" {
+			failing = append(failing, FailingCheck{
+				Type:   c.Type,
+				Detail: result.Message,
+			})
+		}
+	}
+	return failing
 }
 
 // SendTestEmail sends a test email to verify the configuration.

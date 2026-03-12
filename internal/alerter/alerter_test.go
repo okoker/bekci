@@ -911,3 +911,173 @@ func TestSendWebhookConnectionRefused(t *testing.T) {
 		t.Fatal("expected error for connection refused")
 	}
 }
+
+func configureWebhookAlerting(t *testing.T, s *store.Store, webhookURL string) {
+	t.Helper()
+	if err := s.SetSettings(map[string]string{
+		"webhook_enabled": "true",
+		"webhook_url":     webhookURL,
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func configureWebhookAlertingWithToken(t *testing.T, s *store.Store, webhookURL, token string) {
+	t.Helper()
+	if err := s.SetSettings(map[string]string{
+		"webhook_enabled":      "true",
+		"webhook_url":          webhookURL,
+		"webhook_bearer_token": token,
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDispatchWebhookFiring(t *testing.T) {
+	s := newTestStore(t)
+	target := createAlertTarget(t, s, "webhook-fire")
+	recipient := createAlertUser(t, s, "wh-user", "wh@example.com", "")
+	svc := New(s)
+
+	var gotBody []byte
+	var gotReq *http.Request
+	var hitCount int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hitCount++
+		gotReq = r
+		gotBody, _ = io.ReadAll(r.Body)
+		w.WriteHeader(200)
+	}))
+	defer srv.Close()
+
+	configureWebhookAlertingWithToken(t, s, srv.URL, "secret-token")
+	if err := s.SetTargetRecipients(target.ID, []string{recipient.ID}); err != nil {
+		t.Fatal(err)
+	}
+
+	svc.Dispatch(*target.RuleID, "healthy", "unhealthy")
+
+	if hitCount != 1 {
+		t.Fatalf("expected 1 webhook request, got %d", hitCount)
+	}
+
+	if gotReq.Header.Get("Authorization") != "Bearer secret-token" {
+		t.Fatalf("expected Bearer auth, got: %s", gotReq.Header.Get("Authorization"))
+	}
+
+	var payload WebhookPayload
+	if err := json.Unmarshal(gotBody, &payload); err != nil {
+		t.Fatalf("unmarshal webhook payload: %v", err)
+	}
+	if payload.Event != "firing" {
+		t.Fatalf("expected event=firing, got %q", payload.Event)
+	}
+	if payload.Target != "webhook-fire" {
+		t.Fatalf("expected target=webhook-fire, got %q", payload.Target)
+	}
+	if payload.Category != "Network" {
+		t.Fatalf("expected category=Network, got %q", payload.Category)
+	}
+
+	entries, total := listAlertHistory(t, s)
+	if total < 1 {
+		t.Fatalf("expected at least 1 alert history entry, got %d", total)
+	}
+	var foundWebhook bool
+	for _, e := range entries {
+		if strings.HasPrefix(e.Message, "[Webhook] ") {
+			foundWebhook = true
+		}
+	}
+	if !foundWebhook {
+		t.Fatal("expected webhook alert history entry")
+	}
+}
+
+func TestDispatchWebhookRecovery(t *testing.T) {
+	s := newTestStore(t)
+	target := createAlertTarget(t, s, "webhook-recovery")
+	recipient := createAlertUser(t, s, "wh-rec-user", "wh-rec@example.com", "")
+	svc := New(s)
+
+	var gotBody []byte
+	var hitCount int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hitCount++
+		gotBody, _ = io.ReadAll(r.Body)
+		w.WriteHeader(200)
+	}))
+	defer srv.Close()
+
+	configureWebhookAlerting(t, s, srv.URL)
+	if err := s.SetTargetRecipients(target.ID, []string{recipient.ID}); err != nil {
+		t.Fatal(err)
+	}
+
+	svc.Dispatch(*target.RuleID, "unhealthy", "healthy")
+
+	if hitCount != 1 {
+		t.Fatalf("expected 1 webhook request, got %d", hitCount)
+	}
+
+	var payload WebhookPayload
+	if err := json.Unmarshal(gotBody, &payload); err != nil {
+		t.Fatalf("unmarshal webhook payload: %v", err)
+	}
+	if payload.Event != "recovery" {
+		t.Fatalf("expected event=recovery, got %q", payload.Event)
+	}
+}
+
+func TestDispatchWebhookDisabled(t *testing.T) {
+	s := newTestStore(t)
+	target := createAlertTarget(t, s, "webhook-disabled")
+	recipient := createAlertUser(t, s, "wh-disabled-user", "wh-dis@example.com", "")
+	svc := New(s)
+
+	var hitCount int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hitCount++
+		w.WriteHeader(200)
+	}))
+	defer srv.Close()
+
+	// webhook_enabled defaults to empty/false
+	if err := s.SetSettings(map[string]string{"webhook_url": srv.URL}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetTargetRecipients(target.ID, []string{recipient.ID}); err != nil {
+		t.Fatal(err)
+	}
+
+	svc.Dispatch(*target.RuleID, "healthy", "unhealthy")
+
+	if hitCount != 0 {
+		t.Fatalf("expected 0 webhook requests when disabled, got %d", hitCount)
+	}
+}
+
+func TestDispatchWebhookFailureSetsLastError(t *testing.T) {
+	s := newTestStore(t)
+	target := createAlertTarget(t, s, "webhook-fail")
+	recipient := createAlertUser(t, s, "wh-fail-user", "wh-fail@example.com", "")
+	svc := New(s)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(500)
+		w.Write([]byte("server error"))
+	}))
+	defer srv.Close()
+
+	configureWebhookAlerting(t, s, srv.URL)
+	if err := s.SetTargetRecipients(target.ID, []string{recipient.ID}); err != nil {
+		t.Fatal(err)
+	}
+
+	svc.Dispatch(*target.RuleID, "healthy", "unhealthy")
+
+	lastErr, _ := s.GetSetting("webhook_last_error")
+	if lastErr == "" {
+		t.Fatal("expected webhook_last_error to be set after failure")
+	}
+}
