@@ -36,6 +36,10 @@ func Run(checkType, host string, configJSON string) *Result {
 		r = runPageHash(host, config)
 	case "tls_cert":
 		r = runTLSCert(host, config)
+	case "snmp_v2c":
+		r = runSNMPv2c(host, config)
+	case "snmp_v3":
+		r = runSNMPv3(host, config)
 	default:
 		r = &Result{
 			Status:  "down",
