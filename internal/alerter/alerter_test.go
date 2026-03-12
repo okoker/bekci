@@ -817,3 +817,97 @@ func TestSendTestSignalSuccess(t *testing.T) {
 		t.Fatalf("expected test signal message, got %v", payload["message"])
 	}
 }
+
+func TestSendWebhookSuccess(t *testing.T) {
+	var gotReq *http.Request
+	var gotBody []byte
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotReq = r
+		gotBody, _ = io.ReadAll(r.Body)
+		w.WriteHeader(200)
+	}))
+	defer srv.Close()
+
+	payload := WebhookPayload{
+		Event:         "firing",
+		Target:        "test-server",
+		TargetAddress: "10.0.0.1",
+		Category:      "Network",
+		Message:       "Test alert",
+		FailingChecks: []FailingCheck{
+			{Type: "ping", Detail: "100% packet loss"},
+		},
+		Timestamp: "2026-03-12T14:30:00Z",
+	}
+
+	err := SendWebhook(srv.URL, "my-token", false, payload)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	if gotReq.Header.Get("Content-Type") != "application/json" {
+		t.Fatalf("expected Content-Type application/json, got: %s", gotReq.Header.Get("Content-Type"))
+	}
+	if gotReq.Header.Get("Authorization") != "Bearer my-token" {
+		t.Fatalf("expected Bearer auth header, got: %s", gotReq.Header.Get("Authorization"))
+	}
+
+	var got WebhookPayload
+	if err := json.Unmarshal(gotBody, &got); err != nil {
+		t.Fatalf("unmarshal webhook body: %v", err)
+	}
+	if got.Event != "firing" {
+		t.Fatalf("expected event=firing, got %q", got.Event)
+	}
+	if got.Target != "test-server" {
+		t.Fatalf("expected target=test-server, got %q", got.Target)
+	}
+	if len(got.FailingChecks) != 1 || got.FailingChecks[0].Type != "ping" {
+		t.Fatalf("unexpected failing_checks: %+v", got.FailingChecks)
+	}
+}
+
+func TestSendWebhookNoToken(t *testing.T) {
+	var gotReq *http.Request
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotReq = r
+		w.WriteHeader(200)
+	}))
+	defer srv.Close()
+
+	payload := WebhookPayload{Event: "firing", Target: "t", Timestamp: "now"}
+	err := SendWebhook(srv.URL, "", false, payload)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if gotReq.Header.Get("Authorization") != "" {
+		t.Fatalf("expected no Authorization header when token is empty, got: %s", gotReq.Header.Get("Authorization"))
+	}
+}
+
+func TestSendWebhookFailure(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(500)
+		w.Write([]byte("internal error"))
+	}))
+	defer srv.Close()
+
+	payload := WebhookPayload{Event: "firing", Target: "t", Timestamp: "now"}
+	err := SendWebhook(srv.URL, "token", false, payload)
+	if err == nil {
+		t.Fatal("expected error for 500 response")
+	}
+	if !strings.Contains(err.Error(), "500") {
+		t.Fatalf("expected error to contain '500', got: %v", err)
+	}
+}
+
+func TestSendWebhookConnectionRefused(t *testing.T) {
+	payload := WebhookPayload{Event: "firing", Target: "t", Timestamp: "now"}
+	err := SendWebhook("http://127.0.0.1:1", "token", false, payload)
+	if err == nil {
+		t.Fatal("expected error for connection refused")
+	}
+}
