@@ -376,6 +376,8 @@ const signalTesting = ref(false)
 const signalTestPhone = ref('')
 
 const webhookTesting = ref(false)
+const webhookTestResult = ref('')
+const webhookTestError = ref(false)
 const webhookLastError = ref('')
 const webhookLastSuccess = ref('')
 
@@ -498,16 +500,18 @@ async function sendTestSignal() {
 
 async function sendTestWebhook() {
   webhookTesting.value = true
-  alertError.value = ''
-  alertSuccess.value = ''
+  webhookTestResult.value = ''
+  webhookTestError.value = false
   try {
     const res = await api.post('/settings/test-webhook')
-    alertSuccess.value = res.data.message
+    webhookTestResult.value = res.data.message || 'Test webhook sent successfully'
+    webhookTestError.value = false
     const statusRes = await api.get('/settings/webhook-status')
     webhookLastError.value = statusRes.data.last_error || ''
     webhookLastSuccess.value = statusRes.data.last_success || ''
   } catch (err) {
-    alertError.value = err.response?.data?.error || 'Failed to send test webhook'
+    webhookTestResult.value = err.response?.data?.error || 'Failed to send test webhook'
+    webhookTestError.value = true
   } finally {
     webhookTesting.value = false
   }
@@ -1203,18 +1207,18 @@ onUnmounted(() => {
           </div>
 
           <div class="form-group">
-            <label>Webhook URL</label>
-            <input type="text" v-model="alertForm.webhook_url"
-              placeholder="https://soar.example.com/webhook" />
+            <label>Type</label>
+            <select v-model="alertForm.webhook_auth_type">
+              <option value="">No Auth</option>
+              <option value="bearer">Bearer Token</option>
+              <option value="basic">Basic Auth</option>
+            </select>
           </div>
 
           <div class="form-group">
-            <label>Authentication</label>
-            <select v-model="alertForm.webhook_auth_type">
-              <option value="">None</option>
-              <option value="bearer">Bearer Token</option>
-              <option value="basic">Basic Auth (username/password)</option>
-            </select>
+            <label>Webhook URL</label>
+            <input type="text" v-model="alertForm.webhook_url"
+              placeholder="https://soar.example.com/webhook" />
           </div>
 
           <template v-if="alertForm.webhook_auth_type === 'bearer'">
@@ -1254,6 +1258,9 @@ onUnmounted(() => {
               :disabled="webhookTesting || alertForm.webhook_enabled !== 'true' || !alertForm.webhook_url">
               {{ webhookTesting ? 'Sending...' : 'Send Test Webhook' }}
             </button>
+          </div>
+          <div v-if="webhookTestResult" :class="webhookTestError ? 'error-msg' : 'success-msg'" style="margin-top: 8px;">
+            {{ webhookTestResult }}
           </div>
         </div>
 
