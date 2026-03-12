@@ -434,5 +434,10 @@ func (a *AlertService) SendTestWebhook() error {
 		Timestamp:     time.Now().UTC().Format(time.RFC3339),
 	}
 
-	return SendWebhook(url, auth, skipTLS, payload)
+	if err := SendWebhook(url, auth, skipTLS, payload); err != nil {
+		a.auditWebhook("webhook_dispatch", "Bekci Test", "test — error: "+err.Error(), "failure")
+		return err
+	}
+	a.auditWebhook("webhook_dispatch", "Bekci Test", "test", "success")
+	return nil
 }
