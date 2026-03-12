@@ -1247,6 +1247,7 @@ Generates a random 4-word passphrase from a curated word list (~960 words, ~10 b
 | GET | `/api/health` | public | Basic health check |
 | GET | `/api/system/health` | any | Detailed system health |
 | GET | `/api/fail2ban/status` | admin | Fail2Ban jail status |
+| GET | `/api/fail2ban/bans` | admin | Historical ban records from fail2ban DB |
 
 ### GET /api/health
 
@@ -1310,6 +1311,36 @@ Requires `fail2ban-client` available via `sudo` on the server. Returns status of
 |-------|------|
 | fail2ban not available | 503 |
 | Command timed out (5s) | 504 |
+
+### GET /api/fail2ban/bans
+
+Reads historical ban records from fail2ban's SQLite database (`/var/lib/fail2ban/fail2ban.sqlite3`).
+
+**Query params:**
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| jail | string | No | Filter by jail name |
+
+**Response (200):**
+```json
+{
+  "bans": [
+    {
+      "jail": "sshd",
+      "ip": "10.0.7.31",
+      "banned_at": "2026-03-10T10:39:36Z",
+      "expires_at": "2026-03-10T11:39:36Z",
+      "ban_count": 1
+    }
+  ]
+}
+```
+
+| Error | Code |
+|-------|------|
+| Invalid jail name | 400 |
+| fail2ban DB not available | 503 |
 
 ---
 

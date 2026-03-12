@@ -163,6 +163,7 @@ Request
 |----------|--------|------|-------|----------|--------|-------|
 | `/api/system/health` | GET | anyAuth | Y | Y | Y | Detailed system health (authenticated) |
 | `/api/fail2ban/status` | GET | adminAuth | Y | N | N | Fail2Ban integration status |
+| `/api/fail2ban/bans` | GET | adminAuth | Y | N | N | Historical ban records from fail2ban DB |
 
 ### Backup
 
