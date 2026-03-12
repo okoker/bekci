@@ -3,7 +3,7 @@ services:
     build:
       context: .
       args:
-        VERSION: 3.1.0
+        VERSION: 3.1.1
     container_name: bekci
     ports:
       - "65000:65000"
