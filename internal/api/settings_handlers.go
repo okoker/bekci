@@ -115,7 +115,11 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	// Mask sensitive values — show "configured" or empty
 	if v, ok := settings["resend_api_key"]; ok && v != "" {
-		settings["resend_api_key"] = "••••••••"
+		if len(v) > 7 {
+			settings["resend_api_key"] = v[:7] + "****"
+		} else {
+			settings["resend_api_key"] = "****"
+		}
 	}
 	if v, ok := settings["signal_password"]; ok && v != "" {
 		settings["signal_password"] = "••••••••"
@@ -205,7 +209,7 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Don't overwrite masked values
-	if v, ok := req["resend_api_key"]; ok && v == "••••••••" {
+	if v, ok := req["resend_api_key"]; ok && (strings.Contains(v, "••••••••") || strings.Contains(v, "****")) {
 		delete(req, "resend_api_key")
 	}
 	if v, ok := req["signal_password"]; ok && v == "••••••••" {

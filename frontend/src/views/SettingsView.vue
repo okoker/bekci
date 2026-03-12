@@ -1184,7 +1184,7 @@ onUnmounted(() => {
             <p class="text-muted">Uses the Resend API. Requires a valid API key and sender address.</p>
             <div class="form-group">
               <label>Resend API Key</label>
-              <input v-model="alertForm.resend_api_key" type="password" placeholder="re_..." autocomplete="off" />
+              <input v-model="alertForm.resend_api_key" type="text" placeholder="re_..." autocomplete="off" />
             </div>
           </template>
 
