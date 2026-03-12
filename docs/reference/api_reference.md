@@ -320,7 +320,7 @@ Creates target, checks, rule, and rule conditions in one transaction. Creator is
   "preferred_check_type": "string (optional, must match a condition's check_type; defaults to first condition's type)",
   "conditions": [
     {
-      "check_type": "http | tcp | ping | dns | page_hash | tls_cert (required)",
+      "check_type": "http | tcp | ping | dns | page_hash | tls_cert | snmp_v2c | snmp_v3 (required)",
       "check_name": "string (required)",
       "config": "JSON string (default: {})",
       "interval_s": 300,
@@ -683,6 +683,36 @@ Metrics: `hash`, `baseline_hash`, `url`, `baseline_captured`. On first run (empt
 
 Metrics: `days_left`, `issuer`, `subject`, `not_after`, `not_before`. Uses SNI for hostname matching. Connects with `InsecureSkipVerify` to inspect even invalid certs. Status "down" if cert expires within `warn_days` or already expired.
 
+### snmp_v2c
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `port` | int | `161` | SNMP UDP port |
+| `timeout_s` | int | `5` | Request timeout (seconds) |
+
+```json
+{ "port": 161, "timeout_s": 5 }
+```
+
+Credentials: uses `snmp_v2c_community` from global settings (not per-check config).
+
+Metrics: `sys_descr`, `sys_uptime`, `sys_contact`, `sys_name`, `cpu_load` (best-effort), `memory_size` (best-effort). Status "up" if SNMP responds, "down" on timeout or auth failure.
+
+### snmp_v3
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `port` | int | `161` | SNMP UDP port |
+| `timeout_s` | int | `5` | Request timeout (seconds) |
+
+```json
+{ "port": 161, "timeout_s": 10 }
+```
+
+Credentials: uses `snmp_v3_*` keys from global settings (username, security_level, auth_protocol, auth_passphrase, privacy_protocol, privacy_passphrase). Not per-check config.
+
+Metrics: same as `snmp_v2c`. Status "up" if SNMP responds, "down" on timeout or auth failure.
+
 ---
 
 ## Dashboard
@@ -943,7 +973,7 @@ Both fields are empty strings when no webhook has been sent yet.
 
 ### GET /api/settings
 
-Returns all settings as key-value map. Sensitive values (e.g. `resend_api_key`) are masked.
+Returns all settings as key-value map. Sensitive values (e.g. `resend_api_key`, `snmp_v3_auth_passphrase`, `snmp_v3_privacy_passphrase`) are masked.
 
 **Response (200):**
 ```json
@@ -971,7 +1001,7 @@ Returns all settings as key-value map. Sensitive values (e.g. `resend_api_key`) 
 
 ### PUT /api/settings
 
-Update one or more settings. Only known keys are accepted. Sending masked values (`"••••••••"`) for `resend_api_key` or `signal_password` is silently ignored (preserves existing value).
+Update one or more settings. Only known keys are accepted. Sending masked values (`"••••••••"`) for `resend_api_key`, `signal_password`, `webhook_bearer_token`, `webhook_basic_password`, `snmp_v3_auth_passphrase`, or `snmp_v3_privacy_passphrase` is silently ignored (preserves existing value).
 
 **Request:**
 ```json
@@ -1007,6 +1037,13 @@ Update one or more settings. Only known keys are accepted. Sending masked values
 | `webhook_skip_tls` | boolean string | `"true"` or `"false"` |
 | `webhook_last_error` | string | auto-set by system (read-only in practice) |
 | `webhook_last_success` | string | auto-set by system (read-only in practice) |
+| `snmp_v2c_community` | string | SNMP v2c community string |
+| `snmp_v3_username` | string | SNMP v3 USM username |
+| `snmp_v3_security_level` | string | `"noAuthNoPriv"`, `"authNoPriv"`, or `"authPriv"` |
+| `snmp_v3_auth_protocol` | string | `"MD5"` or `"SHA"` |
+| `snmp_v3_auth_passphrase` | string | SNMP v3 auth passphrase (masked in GET as `"••••••••"`) |
+| `snmp_v3_privacy_protocol` | string | `"DES"` or `"AES"` |
+| `snmp_v3_privacy_passphrase` | string | SNMP v3 privacy passphrase (masked in GET as `"••••••••"`) |
 | `sla_network` | float string | 0–100 (0 = disabled) |
 | `sla_security` | float string | 0–100 (0 = disabled) |
 | `sla_physical_security` | float string | 0–100 (0 = disabled) |
