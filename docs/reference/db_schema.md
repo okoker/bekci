@@ -177,7 +177,9 @@ Current status cache — 1 row per check, upserted on every `SaveResult`. Replac
 
 **Write pattern:** UPSERT (INSERT ... ON CONFLICT DO UPDATE) on every `SaveResult` call, inside the same transaction as raw insert + rollup upsert.
 
-**Read consumers:** `GetLastResult`, `GetBatchLastResultAndUptime`, alerter webhook payload.
+**Read consumers:** `GetLastResult` (engine + alerter webhook payload), `GetBatchLastResultAndUptime` (dashboard + SOC status).
+
+**Retention:** Unbounded — always reflects current state. Rows only removed when parent check is deleted (CASCADE).
 
 ### check_daily_rollups
 
@@ -205,7 +207,7 @@ Pre-aggregated daily uptime — 1 row per check per day, upserted on every `Save
 
 ### check_results
 
-Tactical time-series window. Purged by `PurgeOldResults(days)` — default 3 days (reduced from 90 after A-011 data split). Used only for 4h bar chart (`GetRecentResults`) and `fail_window` condition evaluation.
+Tactical time-series window. Schema unchanged from pre-A-011, but retention reduced from 90 days to 3 days (default). No longer used for dashboard status, SLA calculations, or uptime percentages — those now read from `check_state` and `check_daily_rollups`.
 
 | Column      | Type     | Constraints                                   |
 |-------------|----------|-----------------------------------------------|
@@ -221,6 +223,10 @@ Tactical time-series window. Purged by `PurgeOldResults(days)` — default 3 day
 - `idx_check_results_check_id` ON check_results(check_id)
 - `idx_check_results_checked_at` ON check_results(checked_at)
 - `idx_check_results_check_id_checked_at` ON check_results(check_id, checked_at DESC) *(migration017)*
+
+**Read consumers:** `GetRecentResultsSlim` (4h bar chart on dashboard), `GetRecentResultsByWindow` (fail_window condition evaluation in engine), forensic debugging.
+
+**Retention:** Default 3 days (code default in `main.go`; `history_days` setting still respected if set higher). Purged hourly by `PurgeOldResults`. At 3-day steady state with 1,500 checks at 5-min intervals: ~1.3M rows.
 
 ### rules
 

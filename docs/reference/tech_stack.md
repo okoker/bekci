@@ -169,10 +169,37 @@ SearchView is lazy-loaded (code-split). All other routes in single bundle.
 - Safety-net poll: reloads all enabled checks from DB every 60s
 
 ### Data Architecture (A-011)
-- **3-table split**: `check_state` (1 row/check, current status), `check_daily_rollups` (1 row/check/day, pre-aggregated), `check_results` (3-day tactical window)
-- `SaveResult` writes all 3 tables in a single transaction (raw insert + state upsert + rollup upsert)
-- Raw retention: 3 days (default `history_days`). Rollup retention: 90 days (hardcoded in purge)
-- Dashboard/SLA reads hit `check_state` + `check_daily_rollups` — no more full-scan of `check_results`
+
+The single `check_results` table was split into a 3-table architecture to eliminate full-table scans on the dashboard poll. At 90-day steady state with 1,500 checks, `check_results` held ~194M rows (~30-45 GB). Now:
+
+| Table | Rows at scale | Purpose |
+|-------|--------------|---------|
+| `check_state` | ~1,500 | Current status per check (1:1). Replaces `MAX(checked_at)` subqueries. |
+| `check_daily_rollups` | ~135K (90d) | Pre-aggregated daily uptime. Replaces `GROUP BY date(checked_at)` scans. |
+| `check_results` | ~6.5M (3d) | Tactical window for 4h bar chart + fail_window evaluation. Was ~194M. |
+
+**Write path:** `SaveResult` writes all 3 tables in a single BEGIN/COMMIT transaction:
+1. INSERT into `check_results` (raw row)
+2. UPSERT into `check_state` (current status cache)
+3. UPSERT into `check_daily_rollups` (increment counts, running average)
+
+**Read path mapping:**
+
+| Method | Reads from | Used by |
+|--------|-----------|---------|
+| `GetLastResult` | `check_state` | Engine (rule eval), alerter (webhook payload) |
+| `GetBatchLastResultAndUptime` | `check_state` + `check_daily_rollups` | Dashboard status, SOC status |
+| `GetDailyUptime` | `check_daily_rollups` | SLA page (90d chart), dashboard (90d history) |
+| `GetUptimePercent` | `check_daily_rollups` | SLA badge (via batch query) |
+| `GetRecentResultsSlim` | `check_results` | Dashboard 4h bar chart |
+| `GetRecentResultsByWindow` | `check_results` | Engine fail_window condition evaluation |
+
+**Retention:**
+- Raw results (`check_results`): 3 days default (code default in `main.go`; `history_days` setting still respected if higher)
+- Daily rollups (`check_daily_rollups`): 90 days (hardcoded in `PurgeOldResults`)
+- Current state (`check_state`): unbounded (removed only on check delete via CASCADE)
+
+**Purge:** Hourly ticker in `main.go` runs `PurgeOldResults` — two DELETEs: raw results older than retention + rollups older than 90 days. At 3-day raw retention, purge is trivially fast (~150K rows max per cycle).
 
 ### Rule Engine
 - Triggered per check result (async goroutine after `SaveResult`)

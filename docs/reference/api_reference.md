@@ -802,7 +802,7 @@ Metrics: same as `snmp_v2c`. Status "up" if SNMP responds, "down" on timeout or 
 
 ### GET /api/dashboard/status
 
-Returns enabled targets with their checks, last status, response time, and 90-day uptime. Disabled targets (`enabled=false`) are filtered out. Paused targets are included with pause metadata.
+Returns enabled targets with their checks, last status, response time, and 90-day uptime. Disabled targets (`enabled=false`) are filtered out. Paused targets are included with pause metadata. Data sourced from `check_state` (current status) + `check_daily_rollups` (90d uptime) — does not query `check_results`.
 
 **Response (200):**
 ```json
@@ -846,8 +846,8 @@ Returns enabled targets with their checks, last status, response time, and 90-da
 
 | Param | Values | Description |
 |-------|--------|-------------|
-| `range` | `4h` | Raw results for last 4 hours |
-| `range` | `90d` (or empty) | Daily uptime percentages for last 90 days |
+| `range` | `4h` | Raw results for last 4 hours (from `check_results`) |
+| `range` | `90d` (or empty) | Daily uptime percentages for last 90 days (from `check_daily_rollups`) |
 
 **Response (200) -- range=4h:** Slim format (3 fields only, for bar rendering):
 ```json
@@ -909,8 +909,9 @@ Returns all categories with per-target daily uptime arrays for the preferred che
 **Notes:**
 - `sla_threshold` is `0` when the category has no SLA configured (disabled)
 - `targets` is `[]` (empty array) for categories with no targets
-- `daily_uptime` contains only days with check results (frontend pads to 90 days)
+- `daily_uptime` contains only days with data in `check_daily_rollups` (frontend pads to 90 days)
 - Uses the target's preferred check type; falls back to first check if no match
+- Data sourced from `check_daily_rollups` (pre-aggregated) — does not query `check_results`
 
 ---
 
@@ -1101,7 +1102,7 @@ Update one or more settings. Only known keys are accepted. Sending masked values
 | Key | Type | Validation |
 |-----|------|------------|
 | `session_timeout_hours` | positive integer | >= 1 |
-| `history_days` | positive integer | >= 1 |
+| `history_days` | positive integer | >= 1 (raw result retention; code defaults to 3 days, this setting overrides if higher) |
 | `audit_retention_days` | positive integer | >= 1 |
 | `soc_public` | boolean string | `"true"` or `"false"` |
 | `alert_method` | string | `""`, `"email"`, `"signal"`, or `"email+signal"` |
@@ -1210,7 +1211,7 @@ Update one or more settings. Only known keys are accepted. Sending masked values
 
 ### GET /api/backup
 
-Returns a JSON file download containing all config data (users with hashed passwords, targets, checks, rules, settings, recipients). Does NOT include historical data (check_results, audit_logs, alert_history).
+Returns a JSON file download containing all config data (users with hashed passwords, targets, checks, rules, settings, recipients). Does NOT include historical data (check_results, check_state, check_daily_rollups, audit_logs, alert_history).
 
 **Response headers:**
 ```
