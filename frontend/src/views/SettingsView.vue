@@ -664,6 +664,50 @@ async function sendTestWebhook() {
   }
 }
 
+// ── Tags tab state ──
+const projectTags = ref([])
+const locationTags = ref([])
+const newProjectTag = ref('')
+const newLocationTag = ref('')
+
+async function loadTags() {
+  try {
+    const [p, l] = await Promise.all([
+      api.get('/tags?group=project'),
+      api.get('/tags?group=location')
+    ])
+    projectTags.value = p.data
+    locationTags.value = l.data
+  } catch (e) {
+    error.value = 'Failed to load tags'
+  }
+}
+
+async function addTag(group) {
+  const value = group === 'project' ? newProjectTag.value.trim() : newLocationTag.value.trim()
+  if (!value) return
+  try {
+    await api.post('/tags', { group, value })
+    if (group === 'project') newProjectTag.value = ''
+    else newLocationTag.value = ''
+    await loadTags()
+    success.value = 'Tag added'
+  } catch (e) {
+    error.value = e.response?.data?.error || 'Failed to add tag'
+  }
+}
+
+async function deleteTag(id) {
+  if (!confirm('Delete this tag? It will be removed from all targets using it.')) return
+  try {
+    await api.delete(`/tags/${id}`)
+    await loadTags()
+    success.value = 'Tag deleted'
+  } catch (e) {
+    error.value = e.response?.data?.error || 'Failed to delete tag'
+  }
+}
+
 // ── Fail2Ban tab state ──
 const f2bJails = ref([])
 const f2bError = ref('')
@@ -800,6 +844,9 @@ watch(activeTab, (tab) => {
   if (tab === 'alerting') {
     loadAlertSettings()
   }
+  if (tab === 'tags') {
+    loadTags()
+  }
 })
 
 // Sync activeTab when route changes (e.g. /users, /audit-log, /settings)
@@ -855,6 +902,12 @@ onUnmounted(() => {
         :class="{ active: activeTab === 'fail2ban' }"
         @click="activeTab = 'fail2ban'"
       >Fail2Ban</button>
+      <button
+        v-if="auth.isAdmin"
+        class="tab-btn"
+        :class="{ active: activeTab === 'tags' }"
+        @click="activeTab = 'tags'"
+      >Tags</button>
     </div>
 
     <!-- ── General Tab ── -->
@@ -1770,6 +1823,44 @@ onUnmounted(() => {
         </p>
       </div>
     </div>
+
+    <!-- ── Tags Tab ── -->
+    <div v-if="activeTab === 'tags' && auth.isAdmin">
+      <div v-if="error" class="error-msg">{{ error }}</div>
+      <div v-if="success" class="success-msg" @click="success = ''">{{ success }}</div>
+
+      <div class="card" style="margin-bottom: 1.5rem;">
+        <h3>Project Tags</h3>
+        <p class="text-muted" style="margin-bottom: 0.75rem;">Assign project names to targets for grouping and filtering.</p>
+        <div class="tag-list">
+          <div v-for="t in projectTags" :key="t.id" class="tag-item">
+            <span>{{ t.value }}</span>
+            <button class="btn btn-sm btn-danger" @click="deleteTag(t.id)">Delete</button>
+          </div>
+          <div v-if="projectTags.length === 0" class="text-muted">No project tags defined yet.</div>
+        </div>
+        <div class="tag-add-row">
+          <input v-model="newProjectTag" placeholder="New project name" @keyup.enter="addTag('project')" />
+          <button class="btn btn-sm btn-primary" @click="addTag('project')">Add</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Location Tags</h3>
+        <p class="text-muted" style="margin-bottom: 0.75rem;">Assign locations (datacenter, room, etc.) to targets.</p>
+        <div class="tag-list">
+          <div v-for="t in locationTags" :key="t.id" class="tag-item">
+            <span>{{ t.value }}</span>
+            <button class="btn btn-sm btn-danger" @click="deleteTag(t.id)">Delete</button>
+          </div>
+          <div v-if="locationTags.length === 0" class="text-muted">No location tags defined yet.</div>
+        </div>
+        <div class="tag-add-row">
+          <input v-model="newLocationTag" placeholder="New location name" @keyup.enter="addTag('location')" />
+          <button class="btn btn-sm btn-primary" @click="addTag('location')">Add</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -2408,5 +2499,24 @@ onUnmounted(() => {
 .f2b-ip-cell {
   font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
   color: #c0392b !important;
+}
+.tag-list {
+  margin-bottom: 0.75rem;
+}
+.tag-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.tag-add-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.tag-add-row input {
+  flex: 1;
+  max-width: 300px;
 }
 </style>
