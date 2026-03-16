@@ -8,10 +8,18 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
 	probing "github.com/prometheus-community/pro-bing"
+)
+
+var (
+	healthCache     interface{}
+	healthCacheTime time.Time
+	healthCacheMu   sync.Mutex
+	healthCacheTTL  = 120 * time.Second
 )
 
 type netHealth struct {
@@ -30,12 +38,27 @@ type cpuHealth struct {
 }
 
 func (s *Server) handleSystemHealth(w http.ResponseWriter, r *http.Request) {
+	healthCacheMu.Lock()
+	if time.Since(healthCacheTime) < healthCacheTTL && healthCache != nil {
+		cached := healthCache
+		healthCacheMu.Unlock()
+		writeJSON(w, http.StatusOK, cached)
+		return
+	}
+	healthCacheMu.Unlock()
+
 	result := map[string]any{
 		"version": s.version,
 		"net":     checkNet(),
 		"disk":    checkDisk(s.dbPath),
 		"cpu":     checkCPU(),
 	}
+
+	healthCacheMu.Lock()
+	healthCache = result
+	healthCacheTime = time.Now()
+	healthCacheMu.Unlock()
+
 	writeJSON(w, http.StatusOK, result)
 }
 
