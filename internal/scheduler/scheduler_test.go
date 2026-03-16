@@ -37,6 +37,12 @@ func TestNewScheduler(t *testing.T) {
 	if s.eventCh == nil {
 		t.Fatal("expected non-nil eventCh")
 	}
+	if s.sem == nil {
+		t.Fatal("expected non-nil semaphore channel")
+	}
+	if cap(s.sem) != 200 {
+		t.Fatalf("expected semaphore cap 200, got %d", cap(s.sem))
+	}
 }
 
 func TestRunNowChannel(t *testing.T) {

@@ -549,3 +549,106 @@ func TestRecoveryTransition(t *testing.T) {
 		t.Fatalf("expected unhealthy→healthy, got %s→%s", md.calls[1].oldState, md.calls[1].newState)
 	}
 }
+
+// T-E22: Concurrent evaluation of the same rule produces exactly 1 dispatch
+func TestConcurrentRuleEvaluation(t *testing.T) {
+	st := newTestStore(t)
+	eng := New(st)
+	md := &mockDispatcher{}
+	eng.SetDispatcher(md)
+
+	// Create target with 2 checks in same rule (AND group)
+	tgt := &store.Target{
+		ID: uuid.New().String(), Name: "concurrent-test", Host: "example.com",
+		Enabled: true, Operator: "AND", Category: "Network",
+	}
+	conds := []store.TargetCondition{
+		{CheckType: "http", CheckName: "HTTP1", Config: "{}", IntervalS: 300, Field: "status", Comparator: "eq", Value: "down", FailCount: 1, FailWindow: 0, ConditionGroup: 0, GroupOperator: "OR"},
+		{CheckType: "tcp", CheckName: "TCP1", Config: `{"port":80}`, IntervalS: 300, Field: "status", Comparator: "eq", Value: "down", FailCount: 1, FailWindow: 0, ConditionGroup: 1, GroupOperator: "OR"},
+	}
+	if err := st.CreateTargetWithConditions(tgt, conds, ""); err != nil {
+		t.Fatal(err)
+	}
+	checks, err := st.ListChecksByTarget(tgt.ID)
+	if err != nil || len(checks) < 2 {
+		t.Fatal("expected 2 checks")
+	}
+
+	// Save "down" results for both checks — both will trigger the rule
+	for _, c := range checks {
+		saveResult(t, st, c.ID, "down")
+	}
+
+	// Evaluate both checks concurrently — both reference the same rule
+	var wg sync.WaitGroup
+	for _, c := range checks {
+		wg.Add(1)
+		go func(checkID string) {
+			defer wg.Done()
+			eng.Evaluate(checkID)
+		}(c.ID)
+	}
+	wg.Wait()
+	time.Sleep(200 * time.Millisecond) // wait for async dispatch goroutines
+
+	// Per-rule mutex + CAS should ensure exactly 1 dispatch
+	md.mu.Lock()
+	defer md.mu.Unlock()
+	if len(md.calls) != 1 {
+		t.Fatalf("expected exactly 1 dispatch call from concurrent evaluation, got %d", len(md.calls))
+	}
+	if md.calls[0].newState != "unhealthy" {
+		t.Fatalf("expected transition to unhealthy, got %s", md.calls[0].newState)
+	}
+}
+
+// T-E23: UpdateRuleStateCAS returns false when state already transitioned
+func TestUpdateRuleStateCAS(t *testing.T) {
+	st := newTestStore(t)
+
+	// Create a target to get a rule
+	tgt := &store.Target{
+		ID: uuid.New().String(), Name: "cas-test", Host: "example.com",
+		Enabled: true, Operator: "AND", Category: "Network",
+	}
+	conds := []store.TargetCondition{{
+		CheckType: "http", CheckName: "HTTP", Config: "{}",
+		IntervalS: 300, Field: "status", Comparator: "eq", Value: "down",
+		FailCount: 1, FailWindow: 0, ConditionGroup: 0, GroupOperator: "AND",
+	}}
+	if err := st.CreateTargetWithConditions(tgt, conds, ""); err != nil {
+		t.Fatal(err)
+	}
+	target, err := st.GetTarget(tgt.ID)
+	if err != nil || target == nil || target.RuleID == nil {
+		t.Fatal("no rule created")
+	}
+	ruleID := *target.RuleID
+
+	// First CAS: healthy → unhealthy should succeed
+	changed, err := st.UpdateRuleStateCAS(ruleID, "healthy", "unhealthy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !changed {
+		t.Fatal("expected first CAS to succeed")
+	}
+
+	// Second CAS with stale oldState: healthy → unhealthy should fail (state is already unhealthy)
+	changed, err = st.UpdateRuleStateCAS(ruleID, "healthy", "unhealthy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed {
+		t.Fatal("expected second CAS to return false (state already transitioned)")
+	}
+
+	// Verify actual state
+	state, err := st.GetRuleState(ruleID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.CurrentState != "unhealthy" {
+		t.Fatalf("expected unhealthy, got %s", state.CurrentState)
+	}
+}
