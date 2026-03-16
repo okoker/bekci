@@ -29,6 +29,46 @@ const expandLoading = ref(false)
 const showEditModal = ref(false)
 const editTargetId = ref(null)
 
+// Saved searches (localStorage)
+const STORAGE_KEY = 'bekci_saved_searches'
+const savedSearches = ref([])
+const showSaveName = ref(false)
+const saveName = ref('')
+
+function loadSavedSearches() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    savedSearches.value = raw ? JSON.parse(raw) : []
+  } catch { savedSearches.value = [] }
+}
+
+function saveCurrentSearch() {
+  const name = saveName.value.trim()
+  if (!name) return
+  const entry = {
+    id: Date.now().toString(),
+    name,
+    text: searchText.value.trim(),
+    project: filterProject.value,
+    location: filterLocation.value
+  }
+  savedSearches.value.push(entry)
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(savedSearches.value))
+  saveName.value = ''
+  showSaveName.value = false
+}
+
+function applySavedSearch(s) {
+  searchText.value = s.text || ''
+  filterProject.value = s.project || ''
+  filterLocation.value = s.location || ''
+}
+
+function deleteSavedSearch(id) {
+  savedSearches.value = savedSearches.value.filter(s => s.id !== id)
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(savedSearches.value))
+}
+
 // Confirmation modals
 const showDeleteConfirm = ref(false)
 const pendingDeleteId = ref(null)
@@ -213,7 +253,10 @@ async function onTargetSaved() {
   success.value = 'Target updated'
 }
 
-onMounted(() => loadData())
+onMounted(() => {
+  loadData()
+  loadSavedSearches()
+})
 </script>
 
 <template>
@@ -245,6 +288,21 @@ onMounted(() => loadData())
           <option value="">All Locations</option>
           <option v-for="l in locationOptions" :key="l.id" :value="l.value">{{ l.value }}</option>
         </select>
+      </div>
+      <button v-if="hasActiveFilter && !showSaveName" class="btn btn-sm btn-save-search" @click="showSaveName = true" title="Save this search">Save</button>
+      <div v-if="showSaveName" class="save-search-inline">
+        <input v-model="saveName" type="text" class="save-search-input" placeholder="Search name..." @keyup.enter="saveCurrentSearch" @keyup.escape="showSaveName = false" autofocus />
+        <button class="btn btn-sm btn-primary" @click="saveCurrentSearch" :disabled="!saveName.trim()">Save</button>
+        <button class="btn btn-sm" @click="showSaveName = false">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Saved searches chip bar -->
+    <div v-if="savedSearches.length > 0" class="saved-searches-bar">
+      <span class="saved-label">Saved:</span>
+      <div v-for="s in savedSearches" :key="s.id" class="saved-chip" @click="applySavedSearch(s)">
+        <span class="saved-chip-name">{{ s.name }}</span>
+        <span class="saved-chip-x" @click.stop="deleteSavedSearch(s.id)" title="Remove">&times;</span>
       </div>
     </div>
 
@@ -468,6 +526,85 @@ onMounted(() => loadData())
 .filter-select:focus {
   outline: none;
   border-color: #ea580c;
+}
+
+/* Save search */
+.btn-save-search {
+  color: #4338ca;
+  border-color: #c7d2fe;
+  white-space: nowrap;
+}
+.btn-save-search:hover { background: #e0e7ff; }
+.save-search-inline {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+.save-search-input {
+  padding: 0.4rem 0.6rem;
+  border: 2px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  width: 140px;
+  background: #f8fafc;
+  color: var(--text);
+}
+.save-search-input:focus {
+  outline: none;
+  border-color: #6366f1;
+}
+
+/* Saved searches chip bar */
+.saved-searches-bar {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+  padding: 0.5rem 0;
+}
+.saved-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.saved-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.6rem;
+  background: #e0e7ff;
+  color: #3730a3;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s;
+  user-select: none;
+}
+.saved-chip:hover {
+  background: #c7d2fe;
+  box-shadow: 0 1px 3px rgba(99, 102, 241, 0.2);
+}
+.saved-chip-name {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.saved-chip-x {
+  font-size: 1rem;
+  line-height: 1;
+  color: #6366f1;
+  opacity: 0.5;
+  cursor: pointer;
+  padding: 0 0.1rem;
+}
+.saved-chip-x:hover {
+  opacity: 1;
+  color: #dc2626;
 }
 
 /* Results count */
