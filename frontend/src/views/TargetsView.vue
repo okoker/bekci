@@ -7,6 +7,8 @@ const auth = useAuthStore()
 
 // State
 const targets = ref([])
+const projectOptions = ref([])
+const locationOptions = ref([])
 const expandedTargetId = ref(null)
 const loading = ref(false)
 const error = ref('')
@@ -45,8 +47,20 @@ function getEmptyForm() {
   return {
     name: '', host: '', description: '', enabled: true,
     category: '', preferred_check_type: '',
+    notes: '', contacts: '', project: '', location: '',
     conditions: []
   }
+}
+
+async function loadTagOptions() {
+  try {
+    const [p, l] = await Promise.all([
+      api.get('/tags?group=project'),
+      api.get('/tags?group=location')
+    ])
+    projectOptions.value = p.data
+    locationOptions.value = l.data
+  } catch { /* ignore — dropdowns will just be empty */ }
 }
 
 function getDefaultConfig(type_) {
@@ -141,6 +155,7 @@ async function loadTargets() {
 function openForm(target = null) {
   editingTarget.value = target
   loadAllUsers()
+  loadTagOptions()
   if (target) {
     // Load full detail for editing
     loadTargetDetail(target.id)
@@ -162,6 +177,10 @@ async function loadTargetDetail(id) {
       enabled: data.enabled,
       category: data.category || 'Other',
       preferred_check_type: data.preferred_check_type || '',
+      notes: data.notes || '',
+      contacts: data.contacts || '',
+      project: data.project || '',
+      location: data.location || '',
       conditions: (data.conditions || []).map(c => {
         let cfg = {}
         try { cfg = JSON.parse(c.config) } catch { cfg = {} }
@@ -201,6 +220,10 @@ async function saveTarget() {
       operator: 'AND', // kept for backward compat
       category: form.value.category,
       preferred_check_type: form.value.preferred_check_type,
+      notes: form.value.notes || null,
+      contacts: form.value.contacts || null,
+      project: form.value.project || null,
+      location: form.value.location || null,
       conditions: form.value.conditions.map(c => ({
         check_id: c.check_id || undefined,
         check_type: c.check_type,
@@ -753,6 +776,38 @@ onMounted(() => loadTargets())
             <span class="text-muted input-hint">Which check type drives the SLA badge and dashboard uptime display</span>
           </div>
 
+          <!-- Notes & Contacts -->
+          <div class="form-row">
+            <div class="form-group form-group-wide">
+              <label>Notes</label>
+              <textarea v-model="form.notes" rows="4" placeholder="Optional notes about this target"></textarea>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group form-group-wide">
+              <label>Contacts</label>
+              <textarea v-model="form.contacts" rows="4" placeholder="Optional contact information"></textarea>
+            </div>
+          </div>
+
+          <!-- Project & Location tags -->
+          <div class="form-row">
+            <div class="form-group">
+              <label>Project</label>
+              <select v-model="form.project">
+                <option value="">— none —</option>
+                <option v-for="t in projectOptions" :key="t.id" :value="t.value">{{ t.value }}</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Location</label>
+              <select v-model="form.location">
+                <option value="">— none —</option>
+                <option v-for="t in locationOptions" :key="t.id" :value="t.value">{{ t.value }}</option>
+              </select>
+            </div>
+          </div>
+
           <div class="form-group checkbox-group">
             <label class="checkbox-label"><input type="checkbox" v-model="form.enabled" /> Enabled</label>
           </div>
@@ -1197,6 +1252,14 @@ onMounted(() => loadTargets())
 }
 .modal-card h3 { margin-bottom: 1rem; }
 .modal-wide { max-width: 640px; }
+
+.form-group-wide {
+  width: 75%;
+}
+.form-group-wide textarea {
+  width: 100%;
+  resize: vertical;
+}
 
 .form-actions {
   display: flex;
