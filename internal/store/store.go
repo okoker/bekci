@@ -79,6 +79,7 @@ func (s *Store) migrate() error {
 		s.migration017,
 		s.migration018,
 		s.migration019,
+		s.migration020,
 	}
 
 	for i := current; i < len(migrations); i++ {
@@ -632,6 +633,57 @@ func (s *Store) migration019() error {
 			value TEXT NOT NULL,
 			UNIQUE(grp, value)
 		);
+	`)
+	return err
+}
+
+// migration020 creates check_state and check_daily_rollups tables,
+// backfills from existing check_results, then purges raw results older than 3 days.
+func (s *Store) migration020() error {
+	_, err := s.db.Exec(`
+		CREATE TABLE IF NOT EXISTS check_state (
+			check_id    TEXT PRIMARY KEY REFERENCES checks(id) ON DELETE CASCADE,
+			status      TEXT NOT NULL CHECK(status IN ('up','down')),
+			response_ms INTEGER NOT NULL DEFAULT 0,
+			message     TEXT NOT NULL DEFAULT '',
+			metrics     TEXT NOT NULL DEFAULT '{}',
+			checked_at  DATETIME NOT NULL
+		);
+
+		CREATE TABLE IF NOT EXISTS check_daily_rollups (
+			check_id        TEXT NOT NULL REFERENCES checks(id) ON DELETE CASCADE,
+			day             TEXT NOT NULL,
+			total_count     INTEGER NOT NULL DEFAULT 0,
+			up_count        INTEGER NOT NULL DEFAULT 0,
+			down_count      INTEGER NOT NULL DEFAULT 0,
+			avg_response_ms INTEGER NOT NULL DEFAULT 0,
+			max_response_ms INTEGER NOT NULL DEFAULT 0,
+			PRIMARY KEY (check_id, day)
+		);
+
+		-- Backfill check_state: latest result per check
+		INSERT OR IGNORE INTO check_state (check_id, status, response_ms, message, metrics, checked_at)
+		SELECT cr.check_id, cr.status, cr.response_ms, cr.message, cr.metrics, cr.checked_at
+		FROM check_results cr
+		INNER JOIN (
+			SELECT check_id, MAX(checked_at) as max_at
+			FROM check_results
+			GROUP BY check_id
+		) latest ON cr.check_id = latest.check_id AND cr.checked_at = latest.max_at;
+
+		-- Backfill check_daily_rollups: aggregate per check per day
+		INSERT OR IGNORE INTO check_daily_rollups (check_id, day, total_count, up_count, down_count, avg_response_ms, max_response_ms)
+		SELECT check_id, date(checked_at),
+			COUNT(*),
+			SUM(CASE WHEN status = 'up' THEN 1 ELSE 0 END),
+			SUM(CASE WHEN status = 'down' THEN 1 ELSE 0 END),
+			CAST(AVG(response_ms) AS INTEGER),
+			MAX(response_ms)
+		FROM check_results
+		GROUP BY check_id, date(checked_at);
+
+		-- Purge raw results older than 3 days
+		DELETE FROM check_results WHERE checked_at < datetime('now', '-3 days');
 	`)
 	return err
 }
