@@ -14,12 +14,26 @@ const loading = ref(false)
 const error = ref('')
 const success = ref('')
 const activeCategory = ref('All')
+const activeProject = ref('All')
+const activeLocation = ref('All')
 const showGuide = ref(false)
 const categories = ['All', 'Network', 'Security', 'Physical Security', 'Key Services', 'Other']
 
+const projectValues = computed(() => {
+  const vals = new Set(targets.value.map(t => t.project).filter(Boolean))
+  return ['All', ...Array.from(vals).sort()]
+})
+const locationValues = computed(() => {
+  const vals = new Set(targets.value.map(t => t.location).filter(Boolean))
+  return ['All', ...Array.from(vals).sort()]
+})
+
 const filteredTargets = computed(() => {
-  if (activeCategory.value === 'All') return targets.value
-  return targets.value.filter(t => t.category === activeCategory.value)
+  let list = targets.value
+  if (activeCategory.value !== 'All') list = list.filter(t => t.category === activeCategory.value)
+  if (activeProject.value !== 'All') list = list.filter(t => t.project === activeProject.value)
+  if (activeLocation.value !== 'All') list = list.filter(t => t.location === activeLocation.value)
+  return list
 })
 
 function categoryCount(cat) {
@@ -503,6 +517,17 @@ onMounted(() => loadTargets())
       </button>
     </div>
 
+    <div v-if="!loading && targets.length > 0" class="filter-bar-secondary">
+      <label class="filter-label">Project:</label>
+      <select v-model="activeProject" class="filter-select">
+        <option v-for="p in projectValues" :key="p" :value="p">{{ p }}</option>
+      </select>
+      <label class="filter-label">Location:</label>
+      <select v-model="activeLocation" class="filter-select">
+        <option v-for="l in locationValues" :key="l" :value="l">{{ l }}</option>
+      </select>
+    </div>
+
     <!-- Targets table -->
     <div class="card">
       <div v-if="loading" class="text-muted" style="padding: 1rem;">Loading...</div>
@@ -515,6 +540,7 @@ onMounted(() => loadTargets())
             <th>Host</th>
             <th>State</th>
             <th>Category</th>
+            <th>Tags</th>
             <th>Conditions</th>
             <th>Enabled</th>
             <th>Actions</th>
@@ -536,6 +562,11 @@ onMounted(() => loadTargets())
                 <span v-else class="text-muted">—</span>
               </td>
               <td><span :class="['badge', categoryClass(t.category)]">{{ t.category }}</span></td>
+              <td>
+                <span v-if="t.project" class="badge badge-tag-project">{{ t.project }}</span>
+                <span v-if="t.location" class="badge badge-tag-location">{{ t.location }}</span>
+                <span v-if="!t.project && !t.location" class="text-muted">&mdash;</span>
+              </td>
               <td>{{ t.condition_count || 0 }}</td>
               <td>
                 <span :class="['badge', t.enabled ? 'badge-active' : 'badge-suspended']">{{ t.enabled ? 'yes' : 'no' }}</span>
@@ -553,7 +584,7 @@ onMounted(() => loadTargets())
             </tr>
             <!-- Expanded: checks list -->
             <tr v-if="expandedTargetId === t.id">
-              <td colspan="7" class="checks-panel">
+              <td colspan="8" class="checks-panel">
                 <div class="checks-header">
                   <strong>Checks</strong>
                 </div>
@@ -1140,6 +1171,32 @@ onMounted(() => loadTargets())
 .filter-count {
   font-weight: 400;
   opacity: 0.7;
+}
+
+.badge-tag-project {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+.badge-tag-location {
+  background: #fef3c7;
+  color: #92400e;
+}
+.filter-bar-secondary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+.filter-label {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+.filter-select {
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  font-size: 0.85rem;
 }
 
 .row-expanded > td { background: #e8ecf1; }
