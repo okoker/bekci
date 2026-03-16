@@ -10,6 +10,8 @@ const lastUpdated = ref(null)
 const activeCategory = ref('All')
 const categories = ['All', 'Network', 'Security', 'Physical Security', 'Key Services', 'Other']
 const show90d = ref(false)
+const currentPage = ref(1)
+const pageSize = 50
 let refreshTimer = null
 let healthTimer = null
 
@@ -78,11 +80,12 @@ async function loadDashboard() {
     lastUpdated.value = new Date()
     error.value = ''
 
-    // Collect preferred check IDs
+    // Only load history for targets visible on current page
+    const visibleIds = new Set(paginatedTargets.value.map(t => t.id))
     const checkIds = []
     for (const t of data) {
       const pref = t._preferredCheck
-      if (pref) checkIds.push(pref.id)
+      if (pref && visibleIds.has(t.id)) checkIds.push(pref.id)
     }
 
     // Always load 4h for checks that don't have it yet
@@ -257,6 +260,13 @@ const filteredAndSortedTargets = computed(() => {
   })
 })
 
+const totalPages = computed(() => Math.ceil(filteredAndSortedTargets.value.length / pageSize))
+
+const paginatedTargets = computed(() => {
+  const start = (currentPage.value - 1) * pageSize
+  return filteredAndSortedTargets.value.slice(start, start + pageSize)
+})
+
 function uptimeColor(pct) {
   if (pct < 0) return '#374151'
   if (pct >= 99.9) return '#48bb78'
@@ -304,7 +314,7 @@ onUnmounted(() => {
       <div v-if="!loading && dashboardData.length > 0" class="soc-filter-bar">
         <button v-for="cat in categories" :key="cat"
           :class="['soc-filter-btn', { active: activeCategory === cat, 'has-problems': categoryStats[cat].hasProblems }]"
-          @click="activeCategory = cat">
+          @click="activeCategory = cat; currentPage = 1">
           {{ cat }} <span class="soc-filter-count">({{ categoryStats[cat].count }})</span>
         </button>
       </div>
@@ -334,7 +344,7 @@ onUnmounted(() => {
     <div v-if="loading" class="soc-loading">Loading...</div>
 
     <div v-else class="soc-grid">
-      <div v-for="target in filteredAndSortedTargets" :key="target.id" class="soc-card" :class="{ 'soc-card-down': hasDownCheckTarget(target), 'soc-card-paused': isTargetPaused(target) }">
+      <div v-for="target in paginatedTargets" :key="target.id" class="soc-card" :class="{ 'soc-card-down': hasDownCheckTarget(target), 'soc-card-paused': isTargetPaused(target) }">
         <div class="soc-hover-label">
           <span class="soc-hover-name">{{ target.name }}</span>
           <span class="soc-hover-host">{{ target.host }}</span>
@@ -382,6 +392,15 @@ onUnmounted(() => {
           </template>
         </div>
       </div>
+    </div>
+
+    <div v-if="totalPages > 1" class="soc-pagination">
+      <button class="soc-page-btn" :disabled="currentPage <= 1" @click="currentPage--">&laquo; Prev</button>
+      <span class="soc-page-info">
+        {{ (currentPage - 1) * pageSize + 1 }}–{{ Math.min(currentPage * pageSize, filteredAndSortedTargets.length) }}
+        of {{ filteredAndSortedTargets.length }}
+      </span>
+      <button class="soc-page-btn" :disabled="currentPage >= totalPages" @click="currentPage++">&raquo; Next</button>
     </div>
   </div>
 </template>
@@ -696,6 +715,36 @@ onUnmounted(() => {
   color: #f59e0b;
   background: rgba(245, 158, 11, 0.15);
   border-radius: 50%;
+}
+
+.soc-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #1e293b;
+}
+.soc-page-btn {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.8rem;
+  color: #e2e8f0;
+  cursor: pointer;
+}
+.soc-page-btn:hover:not(:disabled) {
+  background: #334155;
+}
+.soc-page-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.soc-page-info {
+  font-size: 0.8rem;
+  color: #94a3b8;
 }
 
 .soc-toggle {
