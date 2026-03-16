@@ -808,17 +808,13 @@ onMounted(() => loadTargets())
           </div>
 
           <!-- Notes & Contacts -->
-          <div class="form-row">
-            <div class="form-group form-group-wide">
-              <label>Notes</label>
-              <textarea v-model="form.notes" rows="4" placeholder="Optional notes about this target"></textarea>
-            </div>
+          <div class="form-group form-group-wide">
+            <label>Notes</label>
+            <textarea v-model="form.notes" rows="4" placeholder="Optional notes about this target"></textarea>
           </div>
-          <div class="form-row">
-            <div class="form-group form-group-wide">
-              <label>Contacts</label>
-              <textarea v-model="form.contacts" rows="4" placeholder="Optional contact information"></textarea>
-            </div>
+          <div class="form-group form-group-wide">
+            <label>Contacts</label>
+            <textarea v-model="form.contacts" rows="4" placeholder="Optional contact information"></textarea>
           </div>
 
           <!-- Project & Location tags -->
