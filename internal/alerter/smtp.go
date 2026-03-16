@@ -12,6 +12,29 @@ import (
 
 const smtpTimeout = 10 * time.Second
 
+// loginAuth implements smtp.Auth using the LOGIN mechanism.
+// Required for Office 365 and other providers that don't support PLAIN auth.
+type loginAuth struct {
+	username, password string
+}
+
+func (a *loginAuth) Start(server *smtp.ServerInfo) (string, []byte, error) {
+	return "LOGIN", nil, nil
+}
+
+func (a *loginAuth) Next(fromServer []byte, more bool) ([]byte, error) {
+	if !more {
+		return nil, nil
+	}
+	switch string(fromServer) {
+	case "Username:":
+		return []byte(a.username), nil
+	case "Password:":
+		return []byte(a.password), nil
+	}
+	return nil, fmt.Errorf("unexpected server challenge: %s", fromServer)
+}
+
 // SendEmailSMTP sends an email via SMTP with explicit STARTTLS, timeouts, and phase logging.
 func SendEmailSMTP(host, port, username, password, from string, to []string, subject, htmlBody string) error {
 	addr := host + ":" + port
@@ -48,9 +71,9 @@ func SendEmailSMTP(host, port, username, password, from string, to []string, sub
 		return fmt.Errorf("smtp: server %s does not support STARTTLS", host)
 	}
 
-	// Phase 5: Authenticate
+	// Phase 5: Authenticate (LOGIN method — required by O365 and many providers)
 	slog.Debug("SMTP: authenticating", "user", username)
-	auth := smtp.PlainAuth("", username, password, host)
+	auth := &loginAuth{username: username, password: password}
 	if err := client.Auth(auth); err != nil {
 		return fmt.Errorf("smtp auth: %w", err)
 	}
