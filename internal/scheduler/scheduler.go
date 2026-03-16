@@ -194,13 +194,11 @@ func (s *Scheduler) runCheck(checkID string) {
 	// Per-check mutex prevents concurrent runs
 	s.mu.Lock()
 	mu, ok := s.checkMu[checkID]
-	s.mu.Unlock()
 	if !ok {
 		mu = &sync.Mutex{}
-		s.mu.Lock()
 		s.checkMu[checkID] = mu
-		s.mu.Unlock()
 	}
+	s.mu.Unlock()
 	if !mu.TryLock() {
 		return // already running
 	}
