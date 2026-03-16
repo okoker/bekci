@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/bekci/internal/crypto"
@@ -210,6 +211,59 @@ func (s *Server) handleFullBackup(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(archiveData)))
 	w.Write(archiveData)
+
+	// Auto-save a local copy (non-blocking)
+	go s.autoSaveBackupCopy(archiveData, filename, encrypt)
+}
+
+// autoSaveBackupCopy saves a copy of a backup archive to s.backupDir,
+// enforcing the backup_max_copies setting. Designed to run in a goroutine.
+func (s *Server) autoSaveBackupCopy(data []byte, filename string, encrypted bool) {
+	// Read max copies setting
+	maxStr, _ := s.store.GetSetting("backup_max_copies")
+	maxCopies, _ := strconv.Atoi(maxStr)
+	if maxCopies <= 0 {
+		maxCopies = 5
+	}
+
+	// Ensure backup directory exists
+	if err := os.MkdirAll(s.backupDir, 0755); err != nil {
+		slog.Warn("Auto-save backup: failed to create directory", "error", err)
+		return
+	}
+
+	// Enforce max copies — delete oldest if at limit
+	entries := loadBackupIndex(s.backupDir)
+	for len(entries) >= maxCopies {
+		oldest := entries[0]
+		os.Remove(filepath.Join(s.backupDir, oldest.Filename))
+		entries = entries[1:]
+	}
+
+	// Write file
+	destPath := filepath.Join(s.backupDir, filename)
+	if err := os.WriteFile(destPath, data, 0600); err != nil {
+		slog.Warn("Auto-save backup: failed to write file", "error", err)
+		return
+	}
+
+	// Compute SHA256
+	hash := sha256.Sum256(data)
+	hashStr := hex.EncodeToString(hash[:])[:16]
+
+	// Update index
+	entries = append(entries, backupMeta{
+		Filename:  filename,
+		SHA256:    hashStr,
+		Size:      int64(len(data)),
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+		Encrypted: encrypted,
+	})
+	if err := saveBackupIndex(s.backupDir, entries); err != nil {
+		slog.Warn("Auto-save backup: failed to update index", "error", err)
+	}
+
+	slog.Info("Auto-saved backup copy", "filename", filename, "size", len(data))
 }
 
 // addFileToTar adds a file from disk into a tar archive with the given name.
@@ -320,6 +374,19 @@ func (s *Server) handleSaveFullBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Enforce max copies — delete oldest if at limit
+	entries := loadBackupIndex(s.backupDir)
+	maxStr, _ := s.store.GetSetting("backup_max_copies")
+	maxCopies, _ := strconv.Atoi(maxStr)
+	if maxCopies <= 0 {
+		maxCopies = 5
+	}
+	for len(entries) >= maxCopies {
+		oldest := entries[0]
+		os.Remove(filepath.Join(s.backupDir, oldest.Filename))
+		entries = entries[1:]
+	}
+
 	// Write file
 	destPath := filepath.Join(s.backupDir, filename)
 	if err := os.WriteFile(destPath, archiveData, 0600); err != nil {
@@ -333,7 +400,6 @@ func (s *Server) handleSaveFullBackup(w http.ResponseWriter, r *http.Request) {
 	hashStr := hex.EncodeToString(hash[:])[:16]
 
 	// Update index
-	entries := loadBackupIndex(s.backupDir)
 	entries = append(entries, backupMeta{
 		Filename:  filename,
 		SHA256:    hashStr,

@@ -23,6 +23,7 @@ const labels = {
   session_timeout_hours: 'Session Timeout (hours)',
   history_days: 'History Retention (days)',
   audit_retention_days: 'Audit Log Retention (days)',
+  backup_max_copies: 'Backup Copies to Keep',
   soc_public: 'SOC View Public Access',
 }
 
@@ -47,6 +48,8 @@ async function loadSettings() {
     for (const s of slaKeys) {
       if (!(s.key in data)) data[s.key] = '99.5'
     }
+    // Default backup_max_copies if not yet saved
+    if (!('backup_max_copies' in data)) data['backup_max_copies'] = '5'
     settings.value = data
   } catch (e) {
     error.value = 'Failed to load settings'
@@ -933,6 +936,7 @@ onUnmounted(() => {
                 v-model="settings[key]"
                 type="number"
                 min="1"
+                :max="key === 'backup_max_copies' ? 50 : undefined"
                 :disabled="!auth.isAdmin"
               />
             </div>
