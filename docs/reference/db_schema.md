@@ -1,6 +1,6 @@
 # Database Schema Reference
 
-**Current schema version:** 19
+**Current schema version:** 20
 **Engine:** SQLite 3 with WAL journal mode
 **Driver:** `github.com/mattn/go-sqlite3` (CGO required)
 
@@ -160,9 +160,52 @@ Admin-managed list of allowed tag values for project and location fields on targ
 **Indexes:**
 - `idx_checks_target_id` ON checks(target_id)
 
+### check_state
+
+*(migration020)*
+
+Current status cache — 1 row per check, upserted on every `SaveResult`. Replaces expensive `MAX(checked_at)` subqueries.
+
+| Column      | Type     | Constraints                                  |
+|-------------|----------|----------------------------------------------|
+| check_id    | TEXT     | **PK**, FK -> checks(id) ON DELETE CASCADE   |
+| status      | TEXT     | NOT NULL, CHECK(status IN ('up','down'))      |
+| response_ms | INTEGER  | NOT NULL DEFAULT 0                           |
+| message     | TEXT     | NOT NULL DEFAULT ''                          |
+| metrics     | TEXT     | NOT NULL DEFAULT '{}' *(JSON)*               |
+| checked_at  | DATETIME | NOT NULL                                     |
+
+**Write pattern:** UPSERT (INSERT ... ON CONFLICT DO UPDATE) on every `SaveResult` call, inside the same transaction as raw insert + rollup upsert.
+
+**Read consumers:** `GetLastResult`, `GetBatchLastResultAndUptime`, alerter webhook payload.
+
+### check_daily_rollups
+
+*(migration020)*
+
+Pre-aggregated daily uptime — 1 row per check per day, upserted on every `SaveResult`. Eliminates expensive `GROUP BY date(checked_at)` aggregation queries.
+
+| Column          | Type    | Constraints                                   |
+|-----------------|---------|-----------------------------------------------|
+| check_id        | TEXT    | NOT NULL, FK -> checks(id) ON DELETE CASCADE  |
+| day             | TEXT    | NOT NULL                                      |
+| total_count     | INTEGER | NOT NULL DEFAULT 0                            |
+| up_count        | INTEGER | NOT NULL DEFAULT 0                            |
+| down_count      | INTEGER | NOT NULL DEFAULT 0                            |
+| avg_response_ms | INTEGER | NOT NULL DEFAULT 0                            |
+| max_response_ms | INTEGER | NOT NULL DEFAULT 0                            |
+
+**PK:** (check_id, day) composite
+
+**Write pattern:** UPSERT on every `SaveResult` call. Increments counts and recalculates running average inside the same transaction.
+
+**Read consumers:** `GetDailyUptime` (90-day daily chart), `GetUptimePercent` (SLA percentage), `GetBatchLastResultAndUptime` (dashboard 90d uptime), SLA page.
+
+**Retention:** Purged at 90 days by `PurgeOldResults`.
+
 ### check_results
 
-High-volume time-series data. Purged by `PurgeOldResults(days)`.
+Tactical time-series window. Purged by `PurgeOldResults(days)` — default 3 days (reduced from 90 after A-011 data split). Used only for 4h bar chart (`GetRecentResults`) and `fail_window` condition evaluation.
 
 | Column      | Type     | Constraints                                   |
 |-------------|----------|-----------------------------------------------|
@@ -330,8 +373,9 @@ Append-only audit trail. Purged by `PurgeOldAuditEntries(days)` (runs at startup
 | 017 | migration017   | Create composite index `idx_check_results_check_id_checked_at` on check_results(check_id, checked_at DESC) for dashboard/history performance. |
 | 018 | migration018   | Rebuild `checks` table to add `snmp_v2c` and `snmp_v3` to type CHECK constraint. Seed 7 SNMP settings (`snmp_v2c_community`, `snmp_v3_username`, `snmp_v3_security_level`, `snmp_v3_auth_protocol`, `snmp_v3_auth_passphrase`, `snmp_v3_privacy_protocol`, `snmp_v3_privacy_passphrase`). |
 | 019 | migration019   | Add `notes`, `contacts`, `project`, `location` columns (TEXT DEFAULT NULL) to `targets`. Create `tag_options` table for admin-managed project/location tag values. |
+| 020 | migration020   | Create `check_state` table (1 row/check, current status cache). Create `check_daily_rollups` table (1 row/check/day, pre-aggregated uptime). Backfill both from existing `check_results`. Purge raw results older than 3 days. |
 
-**Note:** Function declarations appear out of order in the source file (e.g. migration005 before migration004, migration008 before migration007), but the `migrations` slice defines the correct sequential execution order: 001 through 019, strictly in order.
+**Note:** Function declarations appear out of order in the source file (e.g. migration005 before migration004, migration008 before migration007), but the `migrations` slice defines the correct sequential execution order: 001 through 020, strictly in order.
 
 ---
 
@@ -355,6 +399,8 @@ targets
 checks
   |
   |--< check_results     (check_id FK, CASCADE)
+  |--- check_state        (check_id PK/FK, CASCADE, 1:1)
+  |--< check_daily_rollups (check_id FK, CASCADE)
   |--< rule_conditions   (check_id FK, CASCADE)
 
 rules
@@ -385,7 +431,9 @@ Target (rule_id) ----1:1----> Rule (id)
    |                            |
    |--< Check (target_id)      |--< RuleCondition (rule_id, check_id)
          |                                |
-         |--< CheckResult                 +--- references Check
+         |--- CheckState (1:1)            +--- references Check
+         |--< CheckDailyRollups
+         |--< CheckResult (3-day window)
 ```
 
 Target CRUD (`CreateTargetWithConditions`, `UpdateTargetWithConditions`) manages rules, checks, and conditions as a single transaction. Rules are "hidden" from the user -- they only interact with targets and conditions.
@@ -415,6 +463,8 @@ When a rule transitions to `unhealthy`, the system looks up `target_alert_recipi
 | targets    | target_alert_recipients  | CASCADE   |
 | targets    | target_pause_history     | CASCADE   |
 | checks     | check_results            | CASCADE   |
+| checks     | check_state              | CASCADE   |
+| checks     | check_daily_rollups      | CASCADE   |
 | checks     | rule_conditions          | CASCADE   |
 | rules      | rule_conditions          | CASCADE   |
 | rules      | rule_states              | CASCADE   |

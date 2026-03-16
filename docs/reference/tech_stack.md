@@ -5,7 +5,7 @@
 | Layer | Technology |
 |-------|-----------|
 | Backend | Go 1.25 (go.mod min 1.24), net/http stdlib router (Go 1.22+ method routing), SQLite WAL |
-| Database | SQLite 3 via go-sqlite3 (CGO required), WAL mode, `SetMaxOpenConns(1)`, auto-migrate (19 migrations) |
+| Database | SQLite 3 via go-sqlite3 (CGO required), WAL mode, `SetMaxOpenConns(1)`, auto-migrate (20 migrations) |
 | Frontend | Vue 3, Vite 7, Vue Router 4, Pinia 3, Axios, Chart.js + vue-chartjs |
 | Auth | JWT HS256 (golang-jwt/v5) in HttpOnly cookie (`token`), bcrypt cost 12 |
 | Reverse Proxy | Nginx 1.18 (prod only) — SSL termination, security headers, gzip |
@@ -167,6 +167,12 @@ SearchView is lazy-loaded (code-split). All other routes in single bundle.
 - Concurrency semaphore: buffered channel caps in-flight checks at 200
 - Per-check mutex (`TryLock`) prevents overlapping runs of the same check
 - Safety-net poll: reloads all enabled checks from DB every 60s
+
+### Data Architecture (A-011)
+- **3-table split**: `check_state` (1 row/check, current status), `check_daily_rollups` (1 row/check/day, pre-aggregated), `check_results` (3-day tactical window)
+- `SaveResult` writes all 3 tables in a single transaction (raw insert + state upsert + rollup upsert)
+- Raw retention: 3 days (default `history_days`). Rollup retention: 90 days (hardcoded in purge)
+- Dashboard/SLA reads hit `check_state` + `check_daily_rollups` — no more full-scan of `check_results`
 
 ### Rule Engine
 - Triggered per check result (async goroutine after `SaveResult`)
