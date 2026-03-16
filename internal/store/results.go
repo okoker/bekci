@@ -30,11 +30,59 @@ type DailyUptime struct {
 }
 
 func (s *Store) SaveResult(r *CheckResult) error {
-	_, err := s.db.Exec(`
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	// 1. Raw result
+	if _, err := tx.Exec(`
 		INSERT INTO check_results (check_id, status, response_ms, message, metrics, checked_at)
 		VALUES (?, ?, ?, ?, ?, ?)
-	`, r.CheckID, r.Status, r.ResponseMs, r.Message, r.Metrics, r.CheckedAt)
-	return err
+	`, r.CheckID, r.Status, r.ResponseMs, r.Message, r.Metrics, r.CheckedAt); err != nil {
+		return fmt.Errorf("insert check_results: %w", err)
+	}
+
+	// 2. Upsert current state
+	if _, err := tx.Exec(`
+		INSERT INTO check_state (check_id, status, response_ms, message, metrics, checked_at)
+		VALUES (?, ?, ?, ?, ?, ?)
+		ON CONFLICT(check_id) DO UPDATE SET
+			status      = excluded.status,
+			response_ms = excluded.response_ms,
+			message     = excluded.message,
+			metrics     = excluded.metrics,
+			checked_at  = excluded.checked_at
+	`, r.CheckID, r.Status, r.ResponseMs, r.Message, r.Metrics, r.CheckedAt); err != nil {
+		return fmt.Errorf("upsert check_state: %w", err)
+	}
+
+	// 3. Upsert daily rollup
+	upVal := 0
+	downVal := 0
+	if r.Status == "up" {
+		upVal = 1
+	} else {
+		downVal = 1
+	}
+	day := r.CheckedAt.Format("2006-01-02")
+
+	if _, err := tx.Exec(`
+		INSERT INTO check_daily_rollups (check_id, day, total_count, up_count, down_count, avg_response_ms, max_response_ms)
+		VALUES (?, ?, 1, ?, ?, ?, ?)
+		ON CONFLICT(check_id, day) DO UPDATE SET
+			total_count     = total_count + 1,
+			up_count        = up_count + ?,
+			down_count      = down_count + ?,
+			avg_response_ms = (avg_response_ms * (total_count - 1) + ?) / total_count,
+			max_response_ms = MAX(max_response_ms, ?)
+	`, r.CheckID, day, upVal, downVal, r.ResponseMs, r.ResponseMs,
+		upVal, downVal, r.ResponseMs, r.ResponseMs); err != nil {
+		return fmt.Errorf("upsert check_daily_rollups: %w", err)
+	}
+
+	return tx.Commit()
 }
 
 // GetRecentResults returns raw results for a check within the last N hours.

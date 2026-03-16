@@ -1022,6 +1022,79 @@ func TestListAllChecks(t *testing.T) {
 	}
 }
 
+func TestSaveResultWritesAllThreeTables(t *testing.T) {
+	s := newTestStore(t)
+	tgt, conds := makeTarget("3table-tgt")
+	if err := s.CreateTargetWithConditions(tgt, conds[:1], ""); err != nil {
+		t.Fatal(err)
+	}
+	checks, _ := s.ListChecksByTarget(tgt.ID)
+	checkID := checks[0].ID
+
+	now := time.Now()
+	r := &CheckResult{
+		CheckID:    checkID,
+		Status:     "up",
+		ResponseMs: 42,
+		Message:    "ok",
+		Metrics:    `{"rtt":42}`,
+		CheckedAt:  now,
+	}
+	if err := s.SaveResult(r); err != nil {
+		t.Fatalf("SaveResult: %v", err)
+	}
+
+	// 1. check_results: raw row exists
+	var rawCount int
+	s.db.QueryRow(`SELECT COUNT(*) FROM check_results WHERE check_id = ?`, checkID).Scan(&rawCount)
+	if rawCount != 1 {
+		t.Fatalf("check_results count = %d, want 1", rawCount)
+	}
+
+	// 2. check_state: latest state matches
+	var stStatus string
+	var stMs int64
+	s.db.QueryRow(`SELECT status, response_ms FROM check_state WHERE check_id = ?`, checkID).Scan(&stStatus, &stMs)
+	if stStatus != "up" || stMs != 42 {
+		t.Fatalf("check_state = (%s, %d), want (up, 42)", stStatus, stMs)
+	}
+
+	// 3. check_daily_rollups: day entry exists with correct counts
+	day := now.Format("2006-01-02")
+	var total, upCount, downCount int
+	s.db.QueryRow(`SELECT total_count, up_count, down_count FROM check_daily_rollups WHERE check_id = ? AND day = ?`,
+		checkID, day).Scan(&total, &upCount, &downCount)
+	if total != 1 || upCount != 1 || downCount != 0 {
+		t.Fatalf("rollup = (%d, %d, %d), want (1, 1, 0)", total, upCount, downCount)
+	}
+
+	// Save a second result (down) — rollup should accumulate
+	r2 := &CheckResult{
+		CheckID:    checkID,
+		Status:     "down",
+		ResponseMs: 200,
+		Message:    "timeout",
+		Metrics:    "{}",
+		CheckedAt:  now.Add(time.Minute),
+	}
+	if err := s.SaveResult(r2); err != nil {
+		t.Fatal(err)
+	}
+
+	// check_state should now be "down" (latest)
+	s.db.QueryRow(`SELECT status FROM check_state WHERE check_id = ?`, checkID).Scan(&stStatus)
+	if stStatus != "down" {
+		t.Fatalf("check_state status = %s after second save, want down", stStatus)
+	}
+
+	// rollup should have total=2, up=1, down=1
+	s.db.QueryRow(`SELECT total_count, up_count, down_count FROM check_daily_rollups WHERE check_id = ? AND day = ?`,
+		checkID, day).Scan(&total, &upCount, &downCount)
+	if total != 2 || upCount != 1 || downCount != 1 {
+		t.Fatalf("rollup after 2 saves = (%d, %d, %d), want (2, 1, 1)", total, upCount, downCount)
+	}
+}
+
 func TestGetBatchLastResultAndUptime(t *testing.T) {
 	s := newTestStore(t)
 
