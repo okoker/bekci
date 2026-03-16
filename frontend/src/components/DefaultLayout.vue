@@ -118,6 +118,7 @@ onUnmounted(() => {
       <div class="navbar-left">
         <router-link to="/" class="navbar-brand"><img src="/bekci-icon.png" alt="Bekci" class="navbar-icon" />Bekci</router-link>
         <router-link to="/" class="nav-link">Dashboard</router-link>
+        <router-link v-if="auth.isOperator" to="/search" class="nav-link">Search</router-link>
         <router-link to="/sla" class="nav-link">SLA</router-link>
         <router-link to="/targets" class="nav-link">Targets</router-link>
         <router-link to="/soc" class="nav-link">SOC</router-link>
