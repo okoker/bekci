@@ -139,6 +139,29 @@ func (s *Store) UpdateRuleState(ruleID, newState string) error {
 	return err
 }
 
+// UpdateRuleStateCAS atomically transitions rule state only if current state matches oldState.
+// Returns true if the transition happened, false if another goroutine already changed it.
+func (s *Store) UpdateRuleStateCAS(ruleID, oldState, newState string) (bool, error) {
+	_, err := s.db.Exec(`
+		INSERT OR IGNORE INTO rule_states (rule_id, current_state, last_change, last_evaluated)
+		VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+	`, ruleID, oldState)
+	if err != nil {
+		return false, err
+	}
+
+	res, err := s.db.Exec(`
+		UPDATE rule_states
+		SET current_state = ?, last_change = CURRENT_TIMESTAMP, last_evaluated = CURRENT_TIMESTAMP
+		WHERE rule_id = ? AND current_state = ?
+	`, newState, ruleID, oldState)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
+}
+
 func (s *Store) TouchRuleEvaluated(ruleID string) error {
 	_, err := s.db.Exec(`
 		INSERT INTO rule_states (rule_id, current_state, last_change, last_evaluated)

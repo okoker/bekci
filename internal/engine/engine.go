@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/bekci/internal/store"
 )
@@ -18,10 +19,12 @@ type AlertDispatcher interface {
 type Engine struct {
 	store      *store.Store
 	dispatcher AlertDispatcher
+	ruleMu     map[string]*sync.Mutex
+	mu         sync.Mutex
 }
 
 func New(st *store.Store) *Engine {
-	return &Engine{store: st}
+	return &Engine{store: st, ruleMu: make(map[string]*sync.Mutex)}
 }
 
 // SetDispatcher sets the alert dispatcher for state change notifications.
@@ -46,6 +49,17 @@ func (e *Engine) Evaluate(checkID string) {
 }
 
 func (e *Engine) evaluateRule(rule store.Rule) {
+	// Serialize evaluation per rule to prevent duplicate alerts
+	e.mu.Lock()
+	rmu, ok := e.ruleMu[rule.ID]
+	if !ok {
+		rmu = &sync.Mutex{}
+		e.ruleMu[rule.ID] = rmu
+	}
+	e.mu.Unlock()
+	rmu.Lock()
+	defer rmu.Unlock()
+
 	conds, err := e.store.ListRuleConditions(rule.ID)
 	if err != nil {
 		slog.Error("Engine: failed to list conditions", "rule_id", rule.ID, "error", err)
@@ -114,8 +128,13 @@ func (e *Engine) evaluateRule(rule store.Rule) {
 	}
 
 	if newState != oldState {
-		if err := e.store.UpdateRuleState(rule.ID, newState); err != nil {
+		changed, err := e.store.UpdateRuleStateCAS(rule.ID, oldState, newState)
+		if err != nil {
 			slog.Error("Engine: failed to update rule state", "rule_id", rule.ID, "error", err)
+			return
+		}
+		if !changed {
+			slog.Debug("Engine: state already transitioned by another evaluator", "rule_id", rule.ID)
 			return
 		}
 		slog.Warn("Rule state changed", "rule_id", rule.ID, "rule_name", rule.Name,
