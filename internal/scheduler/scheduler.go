@@ -28,6 +28,10 @@ type Scheduler struct {
 	eventCh   chan string             // check_id for immediate run
 	ctx       context.Context
 	cancel    context.CancelFunc
+
+	settingsCache   map[string]string
+	settingsCacheAt time.Time
+	settingsCacheMu sync.Mutex
 }
 
 // SetEngine sets the rule evaluator called after each check result.
@@ -35,14 +39,38 @@ func (s *Scheduler) SetEngine(e RuleEvaluator) {
 	s.engine = e
 }
 
+// getCachedSetting returns an SNMP setting from a 30s cache, refreshing all
+// SNMP settings together on expiry.
+func (s *Scheduler) getCachedSetting(key string) string {
+	s.settingsCacheMu.Lock()
+	defer s.settingsCacheMu.Unlock()
+	if time.Since(s.settingsCacheAt) > 30*time.Second || s.settingsCache == nil {
+		settings := make(map[string]string)
+		for _, k := range []string{
+			"snmp_v2c_community",
+			"snmp_v3_username", "snmp_v3_security_level",
+			"snmp_v3_auth_protocol", "snmp_v3_auth_passphrase",
+			"snmp_v3_privacy_protocol", "snmp_v3_privacy_passphrase",
+		} {
+			if v, err := s.store.GetSetting(k); err == nil {
+				settings[k] = v
+			}
+		}
+		s.settingsCache = settings
+		s.settingsCacheAt = time.Now()
+	}
+	return s.settingsCache[key]
+}
+
 func New(st *store.Store) *Scheduler {
 	return &Scheduler{
-		store:     st,
-		timers:    make(map[string]*time.Timer),
-		intervals: make(map[string]time.Duration),
-		checkMu:   make(map[string]*sync.Mutex),
-		sem:       make(chan struct{}, 200),
-		eventCh:   make(chan string, 100),
+		store:         st,
+		timers:        make(map[string]*time.Timer),
+		intervals:     make(map[string]time.Duration),
+		checkMu:       make(map[string]*sync.Mutex),
+		sem:           make(chan struct{}, 200),
+		eventCh:       make(chan string, 100),
+		settingsCache: make(map[string]string),
 	}
 }
 
@@ -225,13 +253,13 @@ func (s *Scheduler) runCheck(checkID string) {
 		return
 	}
 
-	// Inject SNMP credentials from settings into config
+	// Inject SNMP credentials from cached settings into config
 	configJSON := check.Config
 	if check.Type == "snmp_v2c" || check.Type == "snmp_v3" {
 		var cfg map[string]any
 		if err := json.Unmarshal([]byte(check.Config), &cfg); err == nil {
 			if check.Type == "snmp_v2c" {
-				if community, err := s.store.GetSetting("snmp_v2c_community"); err == nil && community != "" {
+				if community := s.getCachedSetting("snmp_v2c_community"); community != "" {
 					cfg["community"] = community
 				}
 			} else {
@@ -240,7 +268,7 @@ func (s *Scheduler) runCheck(checkID string) {
 				fieldNames := []string{"username", "security_level", "auth_protocol",
 					"auth_passphrase", "privacy_protocol", "privacy_passphrase"}
 				for i, key := range keys {
-					if val, err := s.store.GetSetting(key); err == nil && val != "" {
+					if val := s.getCachedSetting(key); val != "" {
 						cfg[fieldNames[i]] = val
 					}
 				}
