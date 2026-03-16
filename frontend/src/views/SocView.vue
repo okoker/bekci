@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import api from '../api'
 
 const dashboardData = ref([])
@@ -9,6 +9,7 @@ const error = ref('')
 const lastUpdated = ref(null)
 const activeCategory = ref('All')
 const categories = ['All', 'Network', 'Security', 'Physical Security', 'Key Services', 'Other']
+const show90d = ref(false)
 let refreshTimer = null
 let healthTimer = null
 
@@ -77,29 +78,43 @@ async function loadDashboard() {
     lastUpdated.value = new Date()
     error.value = ''
 
-    // Batch-load history for all preferred checks
+    // Collect preferred check IDs
     const checkIds = []
     for (const t of data) {
       const pref = t._preferredCheck
-      if (pref && !historyData.value[pref.id]) {
-        checkIds.push(pref.id)
-      }
+      if (pref) checkIds.push(pref.id)
     }
-    if (checkIds.length > 0) {
-      const results = await Promise.allSettled(
-        checkIds.map(id => loadHistorySingle(id))
-      )
+
+    // Always load 4h for checks that don't have it yet
+    const need4h = checkIds.filter(id => !historyData.value[id]?.bar4h)
+    if (need4h.length > 0) {
+      const results = await Promise.allSettled(need4h.map(id => loadHistory4h(id)))
       const updated = { ...historyData.value }
       const errors = { ...historyError.value }
-      for (let i = 0; i < checkIds.length; i++) {
+      for (let i = 0; i < need4h.length; i++) {
         if (results[i].status === 'fulfilled') {
-          updated[checkIds[i]] = results[i].value
+          updated[need4h[i]] = { ...updated[need4h[i]], ...results[i].value }
         } else {
-          errors[checkIds[i]] = true
+          errors[need4h[i]] = true
         }
       }
       historyData.value = updated
       historyError.value = errors
+    }
+
+    // Load 90d only if toggle is on, for checks that don't have it yet
+    if (show90d.value) {
+      const need90d = checkIds.filter(id => !historyData.value[id]?.bar90d)
+      if (need90d.length > 0) {
+        const results = await Promise.allSettled(need90d.map(id => loadHistory90d(id)))
+        const updated = { ...historyData.value }
+        for (let i = 0; i < need90d.length; i++) {
+          if (results[i].status === 'fulfilled') {
+            updated[need90d[i]] = { ...updated[need90d[i]], ...results[i].value }
+          }
+        }
+        historyData.value = updated
+      }
     }
   } catch (e) {
     if (e.response?.status === 401) {
@@ -112,16 +127,19 @@ async function loadDashboard() {
   }
 }
 
-async function loadHistorySingle(checkId) {
-  const [res90d, res4h] = await Promise.all([
-    api.get(`/soc/history/${checkId}?range=90d`),
-    api.get(`/soc/history/${checkId}?range=4h`),
-  ])
-  return {
-    bar90d: pad90dBars(res90d.data),
-    bar4h: pad4hBars(res4h.data),
-  }
+async function loadHistory4h(checkId) {
+  const res = await api.get(`/soc/history/${checkId}?range=4h`)
+  return { bar4h: pad4hBars(res.data) }
 }
+
+async function loadHistory90d(checkId) {
+  const res = await api.get(`/soc/history/${checkId}?range=90d`)
+  return { bar90d: pad90dBars(res.data) }
+}
+
+watch(show90d, (val) => {
+  if (val) loadDashboard()
+})
 
 function getPreferredCheck(target) {
   return target.checks?.find(c => c.type === target.preferred_check_type) || target.checks?.[0]
@@ -290,6 +308,10 @@ onUnmounted(() => {
           {{ cat }} <span class="soc-filter-count">({{ categoryStats[cat].count }})</span>
         </button>
       </div>
+      <label class="soc-toggle" title="Show 90-day uptime history">
+        <input type="checkbox" v-model="show90d" />
+        <span class="soc-toggle-label">90d</span>
+      </label>
       <div v-if="health" class="health-indicator" @click.stop="togglePopover">
         <div class="health-dots">
           <span class="health-dot" :class="dotColor('net')" title="Network"></span>
@@ -343,7 +365,7 @@ onUnmounted(() => {
             </div>
           </template>
           <template v-else>
-            <div class="soc-bar-track">
+            <div v-if="show90d" class="soc-bar-track">
               <div v-for="(day, i) in (historyData[target._preferredCheck?.id]?.bar90d || empty90d)" :key="'90d-' + i"
                 class="soc-bar-tick"
                 :style="{ background: uptimeColor(day.uptime_pct) }"
@@ -674,5 +696,22 @@ onUnmounted(() => {
   color: #f59e0b;
   background: rgba(245, 158, 11, 0.15);
   border-radius: 50%;
+}
+
+.soc-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.soc-toggle input {
+  accent-color: #3b82f6;
+  cursor: pointer;
+}
+.soc-toggle-label {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  font-weight: 500;
 }
 </style>
