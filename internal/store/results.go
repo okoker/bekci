@@ -75,7 +75,7 @@ func (s *Store) SaveResult(r *CheckResult) error {
 			total_count     = total_count + 1,
 			up_count        = up_count + ?,
 			down_count      = down_count + ?,
-			avg_response_ms = (avg_response_ms * (total_count - 1) + ?) / total_count,
+			avg_response_ms = (avg_response_ms * total_count + ?) / (total_count + 1),
 			max_response_ms = MAX(max_response_ms, ?)
 	`, r.CheckID, day, upVal, downVal, r.ResponseMs, r.ResponseMs,
 		upVal, downVal, r.ResponseMs, r.ResponseMs); err != nil {

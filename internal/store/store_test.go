@@ -1093,6 +1093,18 @@ func TestSaveResultWritesAllThreeTables(t *testing.T) {
 	if total != 2 || upCount != 1 || downCount != 1 {
 		t.Fatalf("rollup after 2 saves = (%d, %d, %d), want (2, 1, 1)", total, upCount, downCount)
 	}
+
+	// Verify avg and max response_ms
+	var avgMs, maxMs int
+	s.db.QueryRow(`SELECT avg_response_ms, max_response_ms FROM check_daily_rollups WHERE check_id = ? AND day = ?`,
+		checkID, day).Scan(&avgMs, &maxMs)
+	expectedAvg := (42 + 200) / 2 // = 121
+	if avgMs != expectedAvg {
+		t.Fatalf("avg_response_ms = %d, want %d", avgMs, expectedAvg)
+	}
+	if maxMs != 200 {
+		t.Fatalf("max_response_ms = %d, want 200", maxMs)
+	}
 }
 
 func TestGetBatchLastResultAndUptime(t *testing.T) {
