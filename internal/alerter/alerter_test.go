@@ -481,10 +481,47 @@ func TestDispatchSignalFailureStillLogsAlert(t *testing.T) {
 	}
 }
 
-func TestDispatchRecoveryBypassesCooldown(t *testing.T) {
+func TestDispatchRecoveryRespectsCooldown(t *testing.T) {
 	s := newTestStore(t)
 	target := createAlertTarget(t, s, "dispatch-recovery")
 	recipient := createAlertUser(t, s, "recovery-user", "", "+444444")
+	svc := New(s)
+
+	var hitCount int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hitCount++
+		w.WriteHeader(200)
+		w.Write([]byte(`{"ok":true}`))
+	}))
+	defer srv.Close()
+
+	configureSignalAlerting(t, s, srv.URL)
+	if err := s.SetSettings(map[string]string{"alert_cooldown_s": "3600"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetTargetRecipients(target.ID, []string{recipient.ID}); err != nil {
+		t.Fatal(err)
+	}
+	// Log a recent firing alert — recovery should be suppressed by cooldown
+	if err := s.LogAlert(target.ID, *target.RuleID, recipient.ID, "firing", "prior alert"); err != nil {
+		t.Fatal(err)
+	}
+
+	svc.Dispatch(*target.RuleID, "unhealthy", "healthy")
+
+	if hitCount != 0 {
+		t.Fatalf("expected cooldown to suppress recovery alert, got %d requests", hitCount)
+	}
+	_, total := listAlertHistory(t, s)
+	if total != 1 {
+		t.Fatalf("expected existing alert history only (recovery suppressed), got %d", total)
+	}
+}
+
+func TestDispatchRecoverySendsAfterCooldown(t *testing.T) {
+	s := newTestStore(t)
+	target := createAlertTarget(t, s, "dispatch-recovery-ok")
+	recipient := createAlertUser(t, s, "recovery-ok-user", "", "+444445")
 	svc := New(s)
 
 	var gotBody []byte
@@ -498,7 +535,8 @@ func TestDispatchRecoveryBypassesCooldown(t *testing.T) {
 	defer srv.Close()
 
 	configureSignalAlerting(t, s, srv.URL)
-	if err := s.SetSettings(map[string]string{"alert_cooldown_s": "3600"}); err != nil {
+	// Use a 1-second cooldown so we can exceed it in the test
+	if err := s.SetSettings(map[string]string{"alert_cooldown_s": "1"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.SetTargetRecipients(target.ID, []string{recipient.ID}); err != nil {
@@ -508,10 +546,11 @@ func TestDispatchRecoveryBypassesCooldown(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	time.Sleep(1100 * time.Millisecond)
 	svc.Dispatch(*target.RuleID, "unhealthy", "healthy")
 
 	if hitCount != 1 {
-		t.Fatalf("expected recovery to bypass cooldown and send, got %d requests", hitCount)
+		t.Fatalf("expected recovery to send after cooldown expired, got %d requests", hitCount)
 	}
 
 	var payload map[string]any
@@ -1317,6 +1356,10 @@ func TestDispatchWebhookRecoveryIncludesDowntime(t *testing.T) {
 	defer srv.Close()
 
 	configureWebhookAlerting(t, s, srv.URL)
+	// Use 1s cooldown so recovery isn't suppressed
+	if err := s.SetSettings(map[string]string{"alert_cooldown_s": "1"}); err != nil {
+		t.Fatal(err)
+	}
 	if err := s.SetTargetRecipients(target.ID, []string{recipient.ID}); err != nil {
 		t.Fatal(err)
 	}
@@ -1325,6 +1368,7 @@ func TestDispatchWebhookRecoveryIncludesDowntime(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	time.Sleep(1100 * time.Millisecond)
 	svc.Dispatch(*target.RuleID, "unhealthy", "healthy")
 
 	if hitCount != 1 {

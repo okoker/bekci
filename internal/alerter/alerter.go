@@ -40,19 +40,17 @@ func (a *AlertService) Dispatch(ruleID, oldState, newState string) {
 		return // no alerting configured
 	}
 
-	// Check cooldown (skip for recovery alerts)
-	if newState == "unhealthy" {
-		cooldownStr, _ := a.store.GetSetting("alert_cooldown_s")
-		cooldown, _ := strconv.Atoi(cooldownStr)
-		if cooldown <= 0 {
-			cooldown = 1800
-		}
+	// Check cooldown for all alerts (firing + recovery)
+	cooldownStr, _ := a.store.GetSetting("alert_cooldown_s")
+	cooldown, _ := strconv.Atoi(cooldownStr)
+	if cooldown <= 0 {
+		cooldown = 1800
+	}
 
-		lastAlert, _ := a.store.GetLastAlertTime(ruleID)
-		if !lastAlert.IsZero() && time.Since(lastAlert) < time.Duration(cooldown)*time.Second {
-			slog.Debug("Alerter: skipping alert, within cooldown", "rule_id", ruleID)
-			return
-		}
+	lastAlert, _ := a.store.GetLastAlertTimeAny(ruleID)
+	if !lastAlert.IsZero() && time.Since(lastAlert) < time.Duration(cooldown)*time.Second {
+		slog.Debug("Alerter: skipping alert, within cooldown", "rule_id", ruleID, "type", newState)
+		return
 	}
 
 	// Get target details
