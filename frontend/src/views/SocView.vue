@@ -266,7 +266,7 @@ function formatTooltip4h(r) {
 
 onMounted(() => {
   loadDashboard()
-  refreshTimer = setInterval(loadDashboard, 15000)
+  refreshTimer = setInterval(loadDashboard, 30000)
   fetchHealth()
   healthTimer = setInterval(fetchHealth, 30000)
   document.addEventListener('click', closePopover)
