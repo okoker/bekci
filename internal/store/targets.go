@@ -19,6 +19,10 @@ type Target struct {
 	Category           string     `json:"category"`
 	RuleID             *string    `json:"rule_id"`
 	PausedAt           *time.Time `json:"paused_at"`
+	Notes              *string    `json:"notes"`
+	Contacts           *string    `json:"contacts"`
+	Project            *string    `json:"project"`
+	Location           *string    `json:"location"`
 	CreatedAt          time.Time  `json:"created_at"`
 	UpdatedAt          time.Time  `json:"updated_at"`
 }
@@ -50,10 +54,11 @@ type TargetDetail struct {
 func scanTarget(row interface{ Scan(...any) error }) (*Target, error) {
 	t := &Target{}
 	var enabled int
-	var ruleID sql.NullString
+	var ruleID, notes, contacts, project, location sql.NullString
 	var pausedAt sql.NullTime
 	err := row.Scan(&t.ID, &t.Name, &t.Host, &t.Description, &enabled,
 		&t.PreferredCheckType, &t.Operator, &t.Category, &ruleID, &pausedAt,
+		&notes, &contacts, &project, &location,
 		&t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
 		return nil, err
@@ -65,10 +70,22 @@ func scanTarget(row interface{ Scan(...any) error }) (*Target, error) {
 	if pausedAt.Valid {
 		t.PausedAt = &pausedAt.Time
 	}
+	if notes.Valid {
+		t.Notes = &notes.String
+	}
+	if contacts.Valid {
+		t.Contacts = &contacts.String
+	}
+	if project.Valid {
+		t.Project = &project.String
+	}
+	if location.Valid {
+		t.Location = &location.String
+	}
 	return t, nil
 }
 
-const targetCols = `id, name, host, description, enabled, preferred_check_type, operator, category, rule_id, paused_at, created_at, updated_at`
+const targetCols = `id, name, host, description, enabled, preferred_check_type, operator, category, rule_id, paused_at, notes, contacts, project, location, created_at, updated_at`
 
 func (s *Store) GetTarget(id string) (*Target, error) {
 	row := s.db.QueryRow(`SELECT `+targetCols+` FROM targets WHERE id = ?`, id)
@@ -154,9 +171,9 @@ func (s *Store) CreateTargetWithConditions(t *Target, conds []TargetCondition, c
 	}
 
 	_, err = tx.Exec(`
-		INSERT INTO targets (id, name, host, description, enabled, preferred_check_type, operator, category, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, t.ID, t.Name, t.Host, t.Description, enabled, t.PreferredCheckType, t.Operator, t.Category, t.CreatedAt, t.UpdatedAt)
+		INSERT INTO targets (id, name, host, description, enabled, preferred_check_type, operator, category, notes, contacts, project, location, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, t.ID, t.Name, t.Host, t.Description, enabled, t.PreferredCheckType, t.Operator, t.Category, t.Notes, t.Contacts, t.Project, t.Location, t.CreatedAt, t.UpdatedAt)
 	if err != nil {
 		return err
 	}
@@ -248,7 +265,7 @@ func (s *Store) CreateTargetWithConditions(t *Target, conds []TargetCondition, c
 }
 
 // UpdateTargetWithConditions updates a target and smart-diffs its checks/conditions.
-func (s *Store) UpdateTargetWithConditions(id, name, host, description string, enabled bool, operator, category, preferredCheck string, conds []TargetCondition) error {
+func (s *Store) UpdateTargetWithConditions(id, name, host, description string, enabled bool, operator, category, preferredCheck string, notes, contacts, project, location *string, conds []TargetCondition) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -291,9 +308,11 @@ func (s *Store) UpdateTargetWithConditions(id, name, host, description string, e
 	// Update target fields
 	_, err = tx.Exec(`
 		UPDATE targets SET name = ?, host = ?, description = ?, enabled = ?,
-			preferred_check_type = ?, operator = ?, category = ?, updated_at = ?
+			preferred_check_type = ?, operator = ?, category = ?,
+			notes = ?, contacts = ?, project = ?, location = ?,
+			updated_at = ?
 		WHERE id = ?
-	`, name, host, description, en, preferredType, operator, category, now, id)
+	`, name, host, description, en, preferredType, operator, category, notes, contacts, project, location, now, id)
 	if err != nil {
 		return err
 	}

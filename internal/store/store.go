@@ -76,6 +76,7 @@ func (s *Store) migrate() error {
 		s.migration016,
 		s.migration017,
 		s.migration018,
+		s.migration019,
 	}
 
 	for i := current; i < len(migrations); i++ {
@@ -613,4 +614,22 @@ func (s *Store) migration018() error {
 		return fmt.Errorf("foreign key check failed after checks table rebuild")
 	}
 	return rows.Err()
+}
+
+// migration019 adds notes, contacts, project, location to targets and creates tag_options table.
+func (s *Store) migration019() error {
+	_, err := s.db.Exec(`
+		ALTER TABLE targets ADD COLUMN notes TEXT DEFAULT NULL;
+		ALTER TABLE targets ADD COLUMN contacts TEXT DEFAULT NULL;
+		ALTER TABLE targets ADD COLUMN project TEXT DEFAULT NULL;
+		ALTER TABLE targets ADD COLUMN location TEXT DEFAULT NULL;
+
+		CREATE TABLE IF NOT EXISTS tag_options (
+			id    INTEGER PRIMARY KEY AUTOINCREMENT,
+			grp   TEXT NOT NULL CHECK(grp IN ('project', 'location')),
+			value TEXT NOT NULL,
+			UNIQUE(grp, value)
+		);
+	`)
+	return err
 }
