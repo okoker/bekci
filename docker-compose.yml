@@ -13,6 +13,10 @@ services:
       - BEKCI_DB_PATH=/data/bekci.db
     cap_add:
       - NET_RAW
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
     restart: unless-stopped
 
 volumes:
