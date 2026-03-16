@@ -289,6 +289,10 @@ Returns summary list (no full conditions, includes condition count and state).
     "operator": "AND",
     "category": "Network",
     "rule_id": "uuid",
+    "notes": "Main web server notes",
+    "contacts": "ops@example.com",
+    "project": "DIAS",
+    "location": "DC-1",
     "created_at": "2026-01-15T10:00:00Z",
     "updated_at": "2026-01-15T10:00:00Z",
     "condition_count": 2,  // number of checks for this target
@@ -302,7 +306,7 @@ Returns summary list (no full conditions, includes condition count and state).
 ]
 ```
 
-**Notes:** `state` is `null` for targets with no rule (no conditions). `state.last_change` and `state.last_evaluated` are `null` until the first evaluation.
+**Notes:** `state` is `null` for targets with no rule (no conditions). `state.last_change` and `state.last_evaluated` are `null` until the first evaluation. `notes`, `contacts`, `project`, `location` are `null` when not set.
 
 ### POST /api/targets
 
@@ -318,6 +322,10 @@ Creates target, checks, rule, and rule conditions in one transaction. Creator is
   "operator": "AND (kept for backward compat, ignored by engine)",
   "category": "Network | Security | Physical Security | Key Services | Other (default: Other)",
   "preferred_check_type": "string (optional, must match a condition's check_type; defaults to first condition's type)",
+  "notes": "string (optional)",
+  "contacts": "string (optional)",
+  "project": "string (optional, must exist in tag_options)",
+  "location": "string (optional, must exist in tag_options)",
   "conditions": [
     {
       "check_type": "http | tcp | ping | dns | page_hash | tls_cert | snmp_v2c | snmp_v3 (required)",
@@ -355,6 +363,8 @@ If `group_operator` is omitted, it defaults to the top-level `operator` value fo
 | Invalid check_type | 400 |
 | Missing check_name | 400 |
 | Invalid group_operator | 400 |
+| Invalid project tag | 400 |
+| Invalid location tag | 400 |
 | Duplicate target name | 409 |
 
 ### GET /api/targets/{id}
@@ -373,6 +383,10 @@ Returns full target detail with conditions, state, and recipient IDs.
   "operator": "AND",
   "category": "Network",
   "rule_id": "uuid",
+  "notes": "Main web server",
+  "contacts": "ops@example.com",
+  "project": "DIAS",
+  "location": "DC-1",
   "created_at": "2026-01-15T10:00:00Z",
   "updated_at": "2026-01-15T10:00:00Z",
   "conditions": [
@@ -478,6 +492,70 @@ Unpauses the target and immediately triggers RunNow on all its checks.
 |-------|------|
 | Target not found | 404 |
 | Not paused | 400 |
+
+---
+
+## Tags
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/api/tags?group=project\|location` | any | List tag values for a group |
+| POST | `/api/tags` | admin | Create a tag value |
+| DELETE | `/api/tags/{id}` | admin | Delete a tag value (cascade-clears from targets) |
+
+### GET /api/tags
+
+**Query params:**
+
+| Param | Required | Values |
+|-------|----------|--------|
+| `group` | Yes | `project` or `location` |
+
+**Response (200):**
+```json
+[
+  { "id": 1, "group": "project", "value": "DIAS" },
+  { "id": 2, "group": "project", "value": "SCADA" }
+]
+```
+
+| Error | Code |
+|-------|------|
+| Missing/invalid group | 400 |
+
+### POST /api/tags
+
+**Request:**
+```json
+{
+  "group": "project | location",
+  "value": "string (required)"
+}
+```
+
+**Response (201):**
+```json
+{ "id": 3, "group": "location", "value": "DC-1" }
+```
+
+| Error | Code |
+|-------|------|
+| Missing/invalid group | 400 |
+| Empty value | 400 |
+| Duplicate value in group | 409 |
+
+### DELETE /api/tags/{id}
+
+Deletes the tag option and sets the corresponding field to NULL on all targets using it.
+
+**Response (200):**
+```json
+{ "status": "ok" }
+```
+
+| Error | Code |
+|-------|------|
+| Tag not found | 404 |
 
 ---
 
@@ -1107,7 +1185,7 @@ Update one or more settings. Only known keys are accepted. Sending masked values
 }
 ```
 
-**Audit actions:** `login`, `login_failed`, `logout`, `create_user`, `update_user`, `suspend_user`, `activate_user`, `reset_password`, `change_password`, `change_password_failed`, `update_profile`, `create_target`, `update_target`, `delete_target`, `pause_target`, `unpause_target`, `set_alert_recipients`, `update_settings`, `restore_backup`, `export_backup`, `export_full_backup`, `save_full_backup`, `download_saved_backup`, `delete_saved_backup`, `run_check`, `test_email`, `test_signal`, `test_webhook`, `webhook_dispatch`.
+**Audit actions:** `login`, `login_failed`, `logout`, `create_user`, `update_user`, `suspend_user`, `activate_user`, `reset_password`, `change_password`, `change_password_failed`, `update_profile`, `create_target`, `update_target`, `delete_target`, `pause_target`, `unpause_target`, `set_alert_recipients`, `create_tag`, `delete_tag`, `update_settings`, `restore_backup`, `export_backup`, `export_full_backup`, `save_full_backup`, `download_saved_backup`, `delete_saved_backup`, `run_check`, `test_email`, `test_signal`, `test_webhook`, `webhook_dispatch`.
 
 **`webhook_dispatch`** is logged by the system (user=system) for all webhook events. Detail contains the event type: `test`, `firing`, `recovery`, `re-alert`, or `{type} — error: {message}` on failure.
 

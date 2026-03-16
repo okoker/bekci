@@ -1,6 +1,6 @@
 # Database Schema Reference
 
-**Current schema version:** 18
+**Current schema version:** 19
 **Engine:** SQLite 3 with WAL journal mode
 **Driver:** `github.com/mattn/go-sqlite3` (CGO required)
 
@@ -108,6 +108,10 @@ Key-value config store.
 | category             | TEXT     | NOT NULL DEFAULT 'critical' *(migration006, renamed from severity in migration007)* |
 | rule_id              | TEXT     | DEFAULT NULL *(migration006)*       |
 | paused_at            | DATETIME | DEFAULT NULL *(migration015)*       |
+| notes                | TEXT     | DEFAULT NULL *(migration019)*       |
+| contacts             | TEXT     | DEFAULT NULL *(migration019)*       |
+| project              | TEXT     | DEFAULT NULL *(migration019)*       |
+| location             | TEXT     | DEFAULT NULL *(migration019)*       |
 | created_at           | DATETIME | DEFAULT CURRENT_TIMESTAMP           |
 | updated_at           | DATETIME | DEFAULT CURRENT_TIMESTAMP           |
 
@@ -118,6 +122,26 @@ Key-value config store.
 - `category` was originally `severity` (renamed in migration007). Values remapped in migration010. DDL default is `'critical'` but app code defaults to `'Other'` when empty.
 - `idx_targets_project_id` index from migration002 is orphaned after migration004 dropped the projects table (harmless but unclean).
 - `paused_at` — when NOT NULL, target is paused: scheduler skips checks, dashboard shows "PAUSED" badge.
+- `notes`, `contacts` — free-text optional fields.
+- `project`, `location` — optional tag values from `tag_options` table. Validated on create/update. Cascade-cleared when tag option is deleted.
+
+### tag_options
+
+*(migration019)*
+
+Admin-managed list of allowed tag values for project and location fields on targets.
+
+| Column | Type    | Constraints                                      |
+|--------|---------|--------------------------------------------------|
+| id     | INTEGER | **PK** AUTOINCREMENT                             |
+| grp    | TEXT    | NOT NULL, CHECK(grp IN ('project', 'location'))  |
+| value  | TEXT    | NOT NULL                                         |
+
+**Unique:** (grp, value) composite
+
+**Notes:**
+- Column named `grp` (not `group`) to avoid SQL reserved word.
+- Deleting a tag option cascade-clears the corresponding field on all targets referencing that value (app-level, not DDL cascade).
 
 ### checks
 
@@ -305,8 +329,9 @@ Append-only audit trail. Purged by `PurgeOldAuditEntries(days)` (runs at startup
 | 016 | migration016   | Seed Signal alerting settings: `signal_api_url`, `signal_number`, `signal_username`, `signal_password`. |
 | 017 | migration017   | Create composite index `idx_check_results_check_id_checked_at` on check_results(check_id, checked_at DESC) for dashboard/history performance. |
 | 018 | migration018   | Rebuild `checks` table to add `snmp_v2c` and `snmp_v3` to type CHECK constraint. Seed 7 SNMP settings (`snmp_v2c_community`, `snmp_v3_username`, `snmp_v3_security_level`, `snmp_v3_auth_protocol`, `snmp_v3_auth_passphrase`, `snmp_v3_privacy_protocol`, `snmp_v3_privacy_passphrase`). |
+| 019 | migration019   | Add `notes`, `contacts`, `project`, `location` columns (TEXT DEFAULT NULL) to `targets`. Create `tag_options` table for admin-managed project/location tag values. |
 
-**Note:** Function declarations appear out of order in the source file (e.g. migration005 before migration004, migration008 before migration007), but the `migrations` slice defines the correct sequential execution order: 001 through 018, strictly in order.
+**Note:** Function declarations appear out of order in the source file (e.g. migration005 before migration004, migration008 before migration007), but the `migrations` slice defines the correct sequential execution order: 001 through 019, strictly in order.
 
 ---
 
@@ -338,6 +363,7 @@ rules
   |--< rule_states        (rule_id FK, CASCADE, 1:1)
   |--< alert_history     (rule_id, logical ref, no FK)
 
+tag_options                (standalone, app-level ref from targets.project/location)
 settings                  (standalone key-value)
 schema_version            (standalone, single row)
 audit_logs                (standalone, no FKs)
