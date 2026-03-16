@@ -4,6 +4,8 @@ Base URL: `http://<host>:65000/api`
 
 All request/response bodies are JSON (`Content-Type: application/json`) unless noted otherwise.
 
+**Compression:** All API responses are gzip-compressed when the client sends `Accept-Encoding: gzip`. Handled by `gzipMiddleware` (stdlib `compress/gzip`), wrapping the outermost layer of the router chain.
+
 ## Authentication
 
 Auth uses HttpOnly cookies. On successful login, the server sets a `token` cookie (HttpOnly, Secure, SameSite=Strict). All authenticated endpoints read the JWT from this cookie automatically — no `Authorization` header needed.
@@ -967,7 +969,7 @@ Response formats are identical to their Dashboard counterparts.
 }
 ```
 
-`alert_type` values: `"firing"`, `"recovery"`, `"re-alert"`.
+`alert_type` values: `"firing"`, `"recovery"`, `"re-alert"`. Cooldown (`alert_cooldown_s`) applies to all alert types including recovery — prevents unlimited recovery alerts from flapping targets. Recovery alerts include downtime duration (down since, recovered at, total duration).
 
 ### POST /api/settings/test-email
 
@@ -1386,7 +1388,7 @@ Public liveness check.
 
 ### GET /api/system/health
 
-Returns network connectivity (ICMP ping to 1.1.1.1), disk usage, and CPU load.
+Returns network connectivity (ICMP ping to 1.1.1.1), disk usage, and CPU load. **Cached with 120s TTL** — repeated requests within the window return the cached response without performing an ICMP ping.
 
 **Response (200):**
 ```json

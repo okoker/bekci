@@ -5,7 +5,7 @@
 | Layer | Technology |
 |-------|-----------|
 | Backend | Go 1.25 (go.mod min 1.24), net/http stdlib router (Go 1.22+ method routing), SQLite WAL |
-| Database | SQLite 3 via go-sqlite3 (CGO required), WAL mode, `SetMaxOpenConns(1)`, auto-migrate (20 migrations) |
+| Database | SQLite 3 via go-sqlite3 (CGO required), WAL mode, `SetMaxOpenConns(1)`, auto-migrate (21 migrations) |
 | Frontend | Vue 3, Vite 7, Vue Router 4, Pinia 3, Axios, Chart.js + vue-chartjs |
 | Auth | JWT HS256 (golang-jwt/v5) in HttpOnly cookie (`token`), bcrypt cost 12 |
 | Reverse Proxy | Nginx 1.18 (prod only) — SSL termination, security headers, gzip |
@@ -118,6 +118,8 @@ No npm on server — `cmd/bekci/frontend_dist/` is committed to git. Go binary e
 | WriteTimeout | 30s |
 | IdleTimeout | 60s |
 | Default port | 65000 |
+| Gzip | stdlib `compress/gzip` middleware, wraps outermost in router chain. All responses compressed. |
+| Health cache | `/system/health` cached 120s TTL (`sync.Mutex`). No ICMP ping per request. |
 
 ---
 
@@ -140,7 +142,7 @@ No npm on server — `cmd/bekci/frontend_dist/` is committed to git. Go binary e
 | vue | ^3.5.25 | UI framework (Composition API, `<script setup>`) |
 | vite | ^7.3.1 | Build tool + dev server |
 | @vitejs/plugin-vue | ^6.0.2 | Vue 3 SFC support for Vite |
-| vue-router | ^4.6.4 | Client-side routing (11 routes, SearchView lazy-loaded) |
+| vue-router | ^4.6.4 | Client-side routing (11 routes, SearchView + SlaView lazy-loaded) |
 | pinia | ^3.0.4 | State management |
 | axios | ^1.13.5 | HTTP client (withCredentials for cookie auth) |
 | chart.js | ^4.5.1 | Charts (SLA page) |
@@ -155,7 +157,7 @@ No npm on server — `cmd/bekci/frontend_dist/` is committed to git. Go binary e
 | SearchView-*.js | 10 KB | ~3.5 KB |
 | SearchView-*.css | 3.7 KB | ~1.1 KB |
 
-SearchView is lazy-loaded (code-split). All other routes in single bundle.
+SearchView and SlaView are lazy-loaded (code-split). SlaView lazy-load saves ~250KB from main bundle (Chart.js loaded on demand).
 
 ---
 
@@ -167,6 +169,7 @@ SearchView is lazy-loaded (code-split). All other routes in single bundle.
 - Concurrency semaphore: buffered channel caps in-flight checks at 200
 - Per-check mutex (`TryLock`) prevents overlapping runs of the same check
 - Safety-net poll: reloads all enabled checks from DB every 60s
+- SNMP settings cache: `getCachedSetting()` method with 30s TTL. All 7 SNMP keys cached together — avoids 7 DB reads per SNMP check execution.
 
 ### Data Architecture (A-011)
 
