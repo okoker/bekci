@@ -39,12 +39,12 @@ func (s *Scheduler) SetEngine(e RuleEvaluator) {
 	s.engine = e
 }
 
-// getCachedSetting returns an SNMP setting from a 30s cache, refreshing all
+// getCachedSetting returns an SNMP setting from a 15m cache, refreshing all
 // SNMP settings together on expiry.
 func (s *Scheduler) getCachedSetting(key string) string {
 	s.settingsCacheMu.Lock()
 	defer s.settingsCacheMu.Unlock()
-	if time.Since(s.settingsCacheAt) > 30*time.Second || s.settingsCache == nil {
+	if time.Since(s.settingsCacheAt) > 15*time.Minute || s.settingsCache == nil {
 		settings := make(map[string]string)
 		for _, k := range []string{
 			"snmp_v2c_community",
