@@ -47,6 +47,10 @@ type targetRequest struct {
 	Operator           string                   `json:"operator"`
 	Category           string                   `json:"category"`
 	PreferredCheckType string                   `json:"preferred_check_type"`
+	Notes              *string                  `json:"notes"`
+	Contacts           *string                  `json:"contacts"`
+	Project            *string                  `json:"project"`
+	Location           *string                  `json:"location"`
 	Conditions         []targetConditionRequest `json:"conditions"`
 }
 
@@ -165,6 +169,36 @@ func (s *Server) handleCreateTarget(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	// Validate project/location tags if provided
+	if req.Project != nil && *req.Project != "" {
+		tags, _ := s.store.ListTagOptions("project")
+		found := false
+		for _, tag := range tags {
+			if tag.Value == *req.Project {
+				found = true
+				break
+			}
+		}
+		if !found {
+			writeError(w, http.StatusBadRequest, "invalid project tag")
+			return
+		}
+	}
+	if req.Location != nil && *req.Location != "" {
+		tags, _ := s.store.ListTagOptions("location")
+		found := false
+		for _, tag := range tags {
+			if tag.Value == *req.Location {
+				found = true
+				break
+			}
+		}
+		if !found {
+			writeError(w, http.StatusBadRequest, "invalid location tag")
+			return
+		}
+	}
+
 	t := &store.Target{
 		Name:               req.Name,
 		Host:               req.Host,
@@ -173,6 +207,10 @@ func (s *Server) handleCreateTarget(w http.ResponseWriter, r *http.Request) {
 		Operator:           req.Operator,
 		Category:           req.Category,
 		PreferredCheckType: req.PreferredCheckType,
+		Notes:              req.Notes,
+		Contacts:           req.Contacts,
+		Project:            req.Project,
+		Location:           req.Location,
 	}
 
 	creatorID := ""
@@ -312,7 +350,37 @@ func (s *Server) handleUpdateTarget(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	if err := s.store.UpdateTargetWithConditions(id, req.Name, req.Host, req.Description, enabled, req.Operator, req.Category, req.PreferredCheckType, conds); err != nil {
+	// Validate project/location tags if provided
+	if req.Project != nil && *req.Project != "" {
+		tags, _ := s.store.ListTagOptions("project")
+		found := false
+		for _, tag := range tags {
+			if tag.Value == *req.Project {
+				found = true
+				break
+			}
+		}
+		if !found {
+			writeError(w, http.StatusBadRequest, "invalid project tag")
+			return
+		}
+	}
+	if req.Location != nil && *req.Location != "" {
+		tags, _ := s.store.ListTagOptions("location")
+		found := false
+		for _, tag := range tags {
+			if tag.Value == *req.Location {
+				found = true
+				break
+			}
+		}
+		if !found {
+			writeError(w, http.StatusBadRequest, "invalid location tag")
+			return
+		}
+	}
+
+	if err := s.store.UpdateTargetWithConditions(id, req.Name, req.Host, req.Description, enabled, req.Operator, req.Category, req.PreferredCheckType, req.Notes, req.Contacts, req.Project, req.Location, conds); err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			s.audit(r, "update_target", "target", id, "not found", "failure")
 			writeError(w, http.StatusNotFound, "target not found")
