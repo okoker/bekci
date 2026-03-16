@@ -169,7 +169,7 @@ SearchView and SlaView are lazy-loaded (code-split). SlaView lazy-load saves ~25
 - Concurrency semaphore: buffered channel caps in-flight checks at 200
 - Per-check mutex (`TryLock`) prevents overlapping runs of the same check
 - Safety-net poll: reloads all enabled checks from DB every 60s
-- SNMP settings cache: `getCachedSetting()` method with 30s TTL. All 7 SNMP keys cached together — avoids 7 DB reads per SNMP check execution.
+- SNMP settings cache: `getCachedSetting()` method with 15m TTL. All 7 SNMP keys cached together — avoids 7 DB reads per SNMP check execution. Long TTL justified because SNMP credentials change rarely (admin action only).
 
 ### Data Architecture (A-011)
 
