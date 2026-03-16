@@ -21,6 +21,8 @@ func New(dbPath string) (*Store, error) {
 		return nil, fmt.Errorf("opening database: %w", err)
 	}
 
+	db.SetMaxOpenConns(1)
+
 	s := &Store{db: db}
 	if err := s.migrate(); err != nil {
 		db.Close()
