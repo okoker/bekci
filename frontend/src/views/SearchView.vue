@@ -298,7 +298,7 @@ onMounted(() => {
         </select>
       </div>
       <div v-if="hasActiveFilter" class="save-btn-wrap">
-        <button class="btn btn-sm btn-save-search" @click="showSaveName = !showSaveName" title="Save this search">
+        <button class="btn btn-sm btn-save-search" @click="showSaveName = !showSaveName" title="Save your searches for future reuse.">
           {{ showSaveName ? 'Cancel' : '+ Save' }}
         </button>
         <div v-if="showSaveName" class="save-popover">
