@@ -79,7 +79,7 @@ func RenderSignalAlert(targetName, targetHost, state string, checks []string, ts
 
 	if state == "healthy" && downSince != nil {
 		dur := ts.Sub(*downSince)
-		msg += fmt.Sprintf("\n\u23F1 Down: %s\n\u23F1 Up: %s\n\u23F1 Duration: %s",
+		msg += fmt.Sprintf("\n\U0001F53B Down: %s\n\U0001F53A Up: %s\n\u23F1 Duration: %s",
 			downSince.UTC().Format("02/01/2006 15:04 UTC"), timestamp, formatDuration(dur))
 	}
 
