@@ -80,6 +80,7 @@ func (s *Store) migrate() error {
 		s.migration018,
 		s.migration019,
 		s.migration020,
+		s.migration021,
 	}
 
 	for i := current; i < len(migrations); i++ {
@@ -684,6 +685,16 @@ func (s *Store) migration020() error {
 
 		-- Purge raw results older than 3 days
 		DELETE FROM check_results WHERE checked_at < datetime('now', '-3 days');
+	`)
+	return err
+}
+
+// migration021 adds missing indexes on rule_conditions and targets for rule evaluation queries.
+func (s *Store) migration021() error {
+	_, err := s.db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_rule_conditions_check_id ON rule_conditions(check_id);
+		CREATE INDEX IF NOT EXISTS idx_rule_conditions_rule_id ON rule_conditions(rule_id, condition_group, sort_order);
+		CREATE INDEX IF NOT EXISTS idx_targets_rule_id ON targets(rule_id);
 	`)
 	return err
 }
