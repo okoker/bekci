@@ -81,9 +81,17 @@ func (a *AlertService) Dispatch(ruleID, oldState, newState string) {
 
 	now := time.Now()
 
+	// For recovery alerts, look up when the target went down
+	var downSince *time.Time
+	if newState == "healthy" {
+		if t, err := a.store.GetLastAlertTime(ruleID); err == nil && !t.IsZero() {
+			downSince = &t
+		}
+	}
+
 	// Send emails
 	if (method == "email" || method == "email+signal") && fromEmail != "" {
-		subject, htmlBody := RenderEmailAlert(target.Name, target.Host, newState, nil, now)
+		subject, htmlBody := RenderEmailAlert(target.Name, target.Host, newState, nil, now, downSince)
 		provider, _ := a.store.GetSetting("email_provider")
 
 		// Read SMTP settings once (outside the loop)
@@ -134,7 +142,7 @@ func (a *AlertService) Dispatch(ruleID, oldState, newState string) {
 		if sigURL == "" || sigNumber == "" || sigUser == "" || sigPass == "" {
 			slog.Warn("Alerter: signal alerting configured but signal settings incomplete")
 		} else {
-			msg := RenderSignalAlert(target.Name, target.Host, newState, nil, now)
+			msg := RenderSignalAlert(target.Name, target.Host, newState, nil, now, downSince)
 
 			for _, user := range recipients {
 				if user.Phone == "" {
@@ -173,6 +181,14 @@ func (a *AlertService) Dispatch(ruleID, oldState, newState string) {
 				Message:       fmt.Sprintf("Target %s is %s", target.Name, newState),
 				FailingChecks: failingChecks,
 				Timestamp:     now.UTC().Format(time.RFC3339),
+			}
+
+			// Add downtime info for recovery webhooks
+			if newState == "healthy" && downSince != nil {
+				ds := downSince.UTC().Format(time.RFC3339)
+				dur := formatDuration(now.Sub(*downSince))
+				payload.DownSince = &ds
+				payload.Duration = &dur
 			}
 
 			if err := SendWebhook(webhookURL, auth, skipTLS, payload); err != nil {
@@ -239,7 +255,7 @@ func (a *AlertService) CheckRealerts() {
 		now := time.Now()
 
 		if (method == "email" || method == "email+signal") && fromEmail != "" {
-			subject, htmlBody := RenderEmailAlert(target.Name, target.Host, "unhealthy", nil, now)
+			subject, htmlBody := RenderEmailAlert(target.Name, target.Host, "unhealthy", nil, now, nil)
 			subject = "[RE-ALERT] " + subject[8:] // replace [ALERT] with [RE-ALERT]
 			provider, _ := a.store.GetSetting("email_provider")
 
@@ -288,7 +304,7 @@ func (a *AlertService) CheckRealerts() {
 			sigPass, _ := a.store.GetSetting("signal_password")
 
 			if sigURL != "" && sigNumber != "" && sigUser != "" && sigPass != "" {
-				msg := RenderSignalAlert(target.Name, target.Host, "unhealthy", nil, now)
+				msg := RenderSignalAlert(target.Name, target.Host, "unhealthy", nil, now, nil)
 				msg = strings.Replace(msg, "[ALERT]", "[RE-ALERT]", 1)
 				msg = strings.Replace(msg, "\U0001F534", "\U0001F7E0", 1) // red -> orange circle
 

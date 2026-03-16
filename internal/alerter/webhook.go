@@ -19,6 +19,8 @@ type WebhookPayload struct {
 	Message       string         `json:"message"`
 	FailingChecks []FailingCheck `json:"failing_checks"`
 	Timestamp     string         `json:"timestamp"`
+	DownSince     *string        `json:"down_since,omitempty"`
+	Duration      *string        `json:"duration,omitempty"`
 }
 
 // FailingCheck describes a single failing check within a webhook payload.

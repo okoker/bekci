@@ -121,7 +121,7 @@ func listAlertHistory(t *testing.T, s *store.Store) ([]store.AlertHistoryItem, i
 }
 
 func TestRenderEmailAlert(t *testing.T) {
-	subj, body := RenderEmailAlert("MyServer", "10.0.0.1", "unhealthy", nil, time.Now())
+	subj, body := RenderEmailAlert("MyServer", "10.0.0.1", "unhealthy", nil, time.Now(), nil)
 	if !strings.Contains(subj, "[ALERT]") {
 		t.Fatalf("unhealthy subject missing [ALERT]: %s", subj)
 	}
@@ -132,7 +132,7 @@ func TestRenderEmailAlert(t *testing.T) {
 		t.Fatalf("unhealthy body missing red color #dc2626")
 	}
 
-	subj, body = RenderEmailAlert("MyServer", "10.0.0.1", "healthy", nil, time.Now())
+	subj, body = RenderEmailAlert("MyServer", "10.0.0.1", "healthy", nil, time.Now(), nil)
 	if !strings.Contains(subj, "[RECOVERED]") {
 		t.Fatalf("healthy subject missing [RECOVERED]: %s", subj)
 	}
@@ -145,7 +145,7 @@ func TestRenderEmailAlert(t *testing.T) {
 }
 
 func TestRenderSignalAlert(t *testing.T) {
-	msg := RenderSignalAlert("MyServer", "10.0.0.1", "unhealthy", nil, time.Now())
+	msg := RenderSignalAlert("MyServer", "10.0.0.1", "unhealthy", nil, time.Now(), nil)
 	if !strings.Contains(msg, "ALERT") {
 		t.Fatalf("unhealthy message missing ALERT: %s", msg)
 	}
@@ -153,7 +153,7 @@ func TestRenderSignalAlert(t *testing.T) {
 		t.Fatalf("unhealthy message missing DOWN: %s", msg)
 	}
 
-	msg = RenderSignalAlert("MyServer", "10.0.0.1", "healthy", nil, time.Now())
+	msg = RenderSignalAlert("MyServer", "10.0.0.1", "healthy", nil, time.Now(), nil)
 	if !strings.Contains(msg, "RECOVERED") {
 		t.Fatalf("healthy message missing RECOVERED: %s", msg)
 	}
@@ -1224,5 +1224,124 @@ func TestSendTestWebhookBasicAuth(t *testing.T) {
 	}
 	if user != "test-user" || pass != "test-pass" {
 		t.Fatalf("expected test-user:test-pass, got %s:%s", user, pass)
+	}
+}
+
+func TestRecoveryAlertIncludesDowntime(t *testing.T) {
+	downTime := time.Now().Add(-2 * time.Hour)
+	_, body := RenderEmailAlert("TestTarget", "1.2.3.4", "healthy", nil, time.Now(), &downTime)
+	if !strings.Contains(body, "Duration") {
+		t.Fatal("recovery email should contain Duration")
+	}
+	if !strings.Contains(body, "Down since") {
+		t.Fatal("recovery email should contain Down since")
+	}
+	if !strings.Contains(body, "Recovered at") {
+		t.Fatal("recovery email should contain Recovered at")
+	}
+
+	msg := RenderSignalAlert("TestTarget", "1.2.3.4", "healthy", nil, time.Now(), &downTime)
+	if !strings.Contains(msg, "Duration") {
+		t.Fatal("recovery signal should contain Duration")
+	}
+	if !strings.Contains(msg, "Down:") {
+		t.Fatal("recovery signal should contain Down timestamp")
+	}
+	if !strings.Contains(msg, "Up:") {
+		t.Fatal("recovery signal should contain Up timestamp")
+	}
+}
+
+func TestFiringAlertNoDowntime(t *testing.T) {
+	_, body := RenderEmailAlert("TestTarget", "1.2.3.4", "unhealthy", nil, time.Now(), nil)
+	if strings.Contains(body, "Duration") {
+		t.Fatal("firing email should NOT contain Duration")
+	}
+
+	msg := RenderSignalAlert("TestTarget", "1.2.3.4", "unhealthy", nil, time.Now(), nil)
+	if strings.Contains(msg, "Duration") {
+		t.Fatal("firing signal should NOT contain Duration")
+	}
+}
+
+func TestRecoveryAlertNoDownSinceSkipsDowntime(t *testing.T) {
+	// Recovery alert without downSince should not contain downtime info
+	_, body := RenderEmailAlert("TestTarget", "1.2.3.4", "healthy", nil, time.Now(), nil)
+	if strings.Contains(body, "Duration") {
+		t.Fatal("recovery email without downSince should NOT contain Duration")
+	}
+	if strings.Contains(body, "Down since") {
+		t.Fatal("recovery email without downSince should NOT contain Down since")
+	}
+
+	msg := RenderSignalAlert("TestTarget", "1.2.3.4", "healthy", nil, time.Now(), nil)
+	if strings.Contains(msg, "Duration") {
+		t.Fatal("recovery signal without downSince should NOT contain Duration")
+	}
+}
+
+func TestFormatDuration(t *testing.T) {
+	tests := []struct {
+		d    time.Duration
+		want string
+	}{
+		{30 * time.Second, "30s"},
+		{5 * time.Minute, "5m"},
+		{45 * time.Minute, "45m"},
+		{2*time.Hour + 15*time.Minute, "2h 15m"},
+		{1*time.Hour + 0*time.Minute, "1h 0m"},
+		{25 * time.Hour, "1d 1h"},
+		{72*time.Hour + 30*time.Minute, "3d 0h"},
+	}
+	for _, tt := range tests {
+		got := formatDuration(tt.d)
+		if got != tt.want {
+			t.Errorf("formatDuration(%v) = %q, want %q", tt.d, got, tt.want)
+		}
+	}
+}
+
+func TestDispatchWebhookRecoveryIncludesDowntime(t *testing.T) {
+	s := newTestStore(t)
+	target := createAlertTarget(t, s, "webhook-recovery-dt")
+	recipient := createAlertUser(t, s, "wh-rec-dt-user", "wh-rec-dt@example.com", "")
+	svc := New(s)
+
+	var gotBody []byte
+	var hitCount int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hitCount++
+		gotBody, _ = io.ReadAll(r.Body)
+		w.WriteHeader(200)
+	}))
+	defer srv.Close()
+
+	configureWebhookAlerting(t, s, srv.URL)
+	if err := s.SetTargetRecipients(target.ID, []string{recipient.ID}); err != nil {
+		t.Fatal(err)
+	}
+	// Log a prior firing alert so GetLastAlertTime returns a value
+	if err := s.LogAlert(target.ID, *target.RuleID, recipient.ID, "firing", "prior alert"); err != nil {
+		t.Fatal(err)
+	}
+
+	svc.Dispatch(*target.RuleID, "unhealthy", "healthy")
+
+	if hitCount != 1 {
+		t.Fatalf("expected 1 webhook request, got %d", hitCount)
+	}
+
+	var payload WebhookPayload
+	if err := json.Unmarshal(gotBody, &payload); err != nil {
+		t.Fatalf("unmarshal webhook payload: %v", err)
+	}
+	if payload.Event != "recovery" {
+		t.Fatalf("expected event=recovery, got %q", payload.Event)
+	}
+	if payload.DownSince == nil {
+		t.Fatal("expected down_since to be set for recovery webhook")
+	}
+	if payload.Duration == nil {
+		t.Fatal("expected duration to be set for recovery webhook")
 	}
 }
