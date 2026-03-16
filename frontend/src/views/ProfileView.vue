@@ -82,15 +82,15 @@ async function changePassword() {
       <h3>Change Password</h3>
       <form @submit.prevent="changePassword">
         <div class="form-group">
-          <label>Current Password</label>
+          <label class="required">Current Password</label>
           <input v-model="pwForm.current_password" type="password" required />
         </div>
         <div class="form-group">
-          <label>New Password (min 15 chars)</label>
+          <label class="required">New Password (min 15 chars)</label>
           <input v-model="pwForm.new_password" type="password" required minlength="15" />
         </div>
         <div class="form-group">
-          <label>Confirm New Password</label>
+          <label class="required">Confirm New Password</label>
           <input v-model="confirmPassword" type="password" required minlength="15" />
         </div>
         <div v-if="pwErr" class="error-msg">{{ pwErr }}</div>

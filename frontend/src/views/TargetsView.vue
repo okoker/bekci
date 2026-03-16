@@ -776,11 +776,11 @@ onMounted(() => loadTargets())
           <!-- Target fields -->
           <div class="form-row">
             <div class="form-group">
-              <label>Name</label>
+              <label class="required">Name</label>
               <input v-model="form.name" required placeholder="e.g. Web Server" />
             </div>
             <div class="form-group">
-              <label>Host</label>
+              <label class="required">Host</label>
               <input v-model="form.host" required placeholder="e.g. google.com" />
             </div>
           </div>
@@ -789,7 +789,7 @@ onMounted(() => loadTargets())
             <input v-model="form.description" placeholder="Optional description" />
           </div>
           <div class="form-group">
-            <label>Category</label>
+            <label class="required">Category</label>
             <select v-model="form.category" required>
               <option value="" disabled>Select category</option>
               <option value="Network">Network</option>

@@ -880,6 +880,12 @@ onUnmounted(() => {
         @click="activeTab = 'general'"
       >General</button>
       <button
+        v-if="auth.isAdmin"
+        class="tab-btn"
+        :class="{ active: activeTab === 'tags' }"
+        @click="activeTab = 'tags'"
+      >Tags</button>
+      <button
         class="tab-btn"
         :class="{ active: activeTab === 'sla' }"
         @click="activeTab = 'sla'"
@@ -902,12 +908,6 @@ onUnmounted(() => {
         :class="{ active: activeTab === 'fail2ban' }"
         @click="activeTab = 'fail2ban'"
       >Fail2Ban</button>
-      <button
-        v-if="auth.isAdmin"
-        class="tab-btn"
-        :class="{ active: activeTab === 'tags' }"
-        @click="activeTab = 'tags'"
-      >Tags</button>
     </div>
 
     <!-- ── General Tab ── -->
@@ -1163,7 +1163,7 @@ onUnmounted(() => {
         <form @submit.prevent="createUser">
           <div class="form-row">
             <div class="form-group">
-              <label>Username</label>
+              <label class="required">Username</label>
               <input v-model="userForm.username" required />
             </div>
             <div class="form-group">
@@ -1173,7 +1173,7 @@ onUnmounted(() => {
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label>Password (min 15 chars)</label>
+              <label class="required">Password (min 15 chars)</label>
               <input v-model="userForm.password" type="password" required minlength="15" />
             </div>
             <div class="form-group">
@@ -2518,5 +2518,11 @@ onUnmounted(() => {
 .tag-add-row input {
   flex: 1;
   max-width: 300px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  background: #fff;
+  color: #1e293b;
 }
 </style>

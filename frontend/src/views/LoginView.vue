@@ -39,11 +39,11 @@ onMounted(() => {
       </div>
       <form @submit.prevent="handleLogin">
         <div class="form-group">
-          <label for="username">Username</label>
+          <label for="username" class="required">Username</label>
           <input id="username" ref="usernameInput" v-model="username" type="text" autocomplete="username" required />
         </div>
         <div class="form-group">
-          <label for="password">Password</label>
+          <label for="password" class="required">Password</label>
           <input id="password" v-model="password" type="password" autocomplete="current-password" required />
         </div>
         <div v-if="error" class="error-msg">{{ error }}</div>
