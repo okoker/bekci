@@ -196,16 +196,14 @@ func (s *Store) GetRecentResultsByWindow(checkID string, windowSeconds int) ([]C
 	return results, rows.Err()
 }
 
-// GetLastResult returns the most recent result for a check.
+// GetLastResult returns the most recent result for a check (from check_state table).
 func (s *Store) GetLastResult(checkID string) (*CheckResult, error) {
 	r := &CheckResult{}
 	err := s.db.QueryRow(`
-		SELECT id, check_id, status, response_ms, message, metrics, checked_at
-		FROM check_results
+		SELECT check_id, status, response_ms, message, metrics, checked_at
+		FROM check_state
 		WHERE check_id = ?
-		ORDER BY checked_at DESC
-		LIMIT 1
-	`, checkID).Scan(&r.ID, &r.CheckID, &r.Status, &r.ResponseMs, &r.Message, &r.Metrics, &r.CheckedAt)
+	`, checkID).Scan(&r.CheckID, &r.Status, &r.ResponseMs, &r.Message, &r.Metrics, &r.CheckedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
