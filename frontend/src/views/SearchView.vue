@@ -69,6 +69,14 @@ function deleteSavedSearch(id) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(savedSearches.value))
 }
 
+function buildChipTooltip(s) {
+  const parts = []
+  if (s.text) parts.push(`Text: "${s.text}"`)
+  if (s.project) parts.push(`Project: ${s.project}`)
+  if (s.location) parts.push(`Location: ${s.location}`)
+  return parts.join(', ')
+}
+
 // Confirmation modals
 const showDeleteConfirm = ref(false)
 const pendingDeleteId = ref(null)
@@ -289,18 +297,21 @@ onMounted(() => {
           <option v-for="l in locationOptions" :key="l.id" :value="l.value">{{ l.value }}</option>
         </select>
       </div>
-      <button v-if="hasActiveFilter && !showSaveName" class="btn btn-sm btn-save-search" @click="showSaveName = true" title="Save this search">Save</button>
-      <div v-if="showSaveName" class="save-search-inline">
-        <input v-model="saveName" type="text" class="save-search-input" placeholder="Search name..." @keyup.enter="saveCurrentSearch" @keyup.escape="showSaveName = false" autofocus />
-        <button class="btn btn-sm btn-primary" @click="saveCurrentSearch" :disabled="!saveName.trim()">Save</button>
-        <button class="btn btn-sm" @click="showSaveName = false">Cancel</button>
+      <div v-if="hasActiveFilter" class="save-btn-wrap">
+        <button class="btn btn-sm btn-save-search" @click="showSaveName = !showSaveName" title="Save this search">
+          {{ showSaveName ? 'Cancel' : '+ Save' }}
+        </button>
+        <div v-if="showSaveName" class="save-popover">
+          <input v-model="saveName" type="text" class="save-popover-input" placeholder="Name this search..." @keyup.enter="saveCurrentSearch" @keyup.escape="showSaveName = false" ref="saveNameInput" />
+          <button class="btn btn-sm btn-primary" @click="saveCurrentSearch" :disabled="!saveName.trim()">Save</button>
+        </div>
       </div>
     </div>
 
     <!-- Saved searches chip bar -->
     <div v-if="savedSearches.length > 0" class="saved-searches-bar">
-      <span class="saved-label">Saved:</span>
-      <div v-for="s in savedSearches" :key="s.id" class="saved-chip" @click="applySavedSearch(s)">
+      <span class="saved-label">Saved searches</span>
+      <div v-for="s in savedSearches" :key="s.id" class="saved-chip" @click="applySavedSearch(s)" :title="buildChipTooltip(s)">
         <span class="saved-chip-name">{{ s.name }}</span>
         <span class="saved-chip-x" @click.stop="deleteSavedSearch(s.id)" title="Remove">&times;</span>
       </div>
@@ -529,27 +540,41 @@ onMounted(() => {
 }
 
 /* Save search */
+.save-btn-wrap {
+  position: relative;
+}
 .btn-save-search {
   color: #4338ca;
   border-color: #c7d2fe;
   white-space: nowrap;
+  font-size: 0.8rem;
 }
 .btn-save-search:hover { background: #e0e7ff; }
-.save-search-inline {
+.save-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
   display: flex;
   gap: 0.4rem;
   align-items: center;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.5rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  z-index: 10;
+  min-width: 220px;
 }
-.save-search-input {
+.save-popover-input {
+  flex: 1;
   padding: 0.4rem 0.6rem;
-  border: 2px solid #cbd5e1;
+  border: 1.5px solid #cbd5e1;
   border-radius: 6px;
-  font-size: 0.85rem;
-  width: 140px;
+  font-size: 0.82rem;
   background: #f8fafc;
   color: var(--text);
 }
-.save-search-input:focus {
+.save-popover-input:focus {
   outline: none;
   border-color: #6366f1;
 }
@@ -561,14 +586,18 @@ onMounted(() => {
   align-items: center;
   flex-wrap: wrap;
   margin-bottom: 1rem;
-  padding: 0.5rem 0;
+  padding: 0.4rem 0.75rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
 }
 .saved-label {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 600;
   color: #94a3b8;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  margin-right: 0.25rem;
 }
 .saved-chip {
   display: inline-flex;
