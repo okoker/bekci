@@ -4,7 +4,7 @@
 
 | Layer | Technology |
 |-------|-----------|
-| Backend | Go 1.25 (go.mod min 1.24), net/http stdlib router (Go 1.22+ method routing), SQLite WAL |
+| Backend | Go 1.25 (go.mod 1.25.0), net/http stdlib router (Go 1.22+ method routing), SQLite WAL |
 | Database | SQLite 3 via go-sqlite3 (CGO required), WAL mode, `SetMaxOpenConns(1)`, auto-migrate (21 migrations) |
 | Frontend | Vue 3, Vite 7, Vue Router 4, Pinia 3, Axios, Chart.js + vue-chartjs |
 | Auth | JWT HS256 (golang-jwt/v5) in HttpOnly cookie (`token`), bcrypt cost 12 |
@@ -25,7 +25,7 @@
 | **Host** | Docker Desktop on macOS | `ssh cl@dias-bekci` (10.0.9.20) |
 | **URL** | `http://localhost:65000` | `https://dias-bekci` (nginx on 443) |
 | **OS** | Alpine 3.21 (container) | Ubuntu 22.04.5 LTS (kernel 5.15) |
-| **Go** | 1.25-alpine (build stage) | 1.24.0 (`/usr/local/go`) — should upgrade to 1.25 |
+| **Go** | 1.25-alpine (build stage) | 1.25.0 (`/usr/local/go`) |
 | **Node** | 22-alpine (build stage) | None (frontend pre-built in repo) |
 | **DB path** | `/data/bekci.db` (Docker volume `bekci-data`) | `/var/lib/bekci/bekci.db` |
 | **Binary** | `/usr/local/bin/bekci` (in container) | `/opt/bekci/bekci` |

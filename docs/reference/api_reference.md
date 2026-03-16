@@ -1272,6 +1272,8 @@ Field: file = <backup.json>
 
 Downloads a complete database backup as a tar.gz archive containing the SQLite database file and config.yaml. Optionally encrypts the archive with AES-256-GCM (Argon2id KDF).
 
+> **Note:** Downloads also trigger an automatic server-side backup save (subject to `backup_max_copies` limit).
+
 **Request:**
 ```json
 {
