@@ -2,7 +2,6 @@ package checker
 
 import (
 	"crypto/sha256"
-	"crypto/tls"
 	"fmt"
 	"io"
 	"net"
@@ -31,13 +30,13 @@ func runPageHash(host string, config map[string]any) *Result {
 	}
 	url += endpoint
 
-	client := &http.Client{
-		Timeout: time.Duration(timeoutS) * time.Second,
-	}
+	transport := sharedTransport
 	if skipTLS {
-		client.Transport = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
+		transport = skipTLSTransport
+	}
+	client := &http.Client{
+		Timeout:   time.Duration(timeoutS) * time.Second,
+		Transport: transport,
 	}
 
 	start := time.Now()
@@ -63,7 +62,7 @@ func runPageHash(host string, config map[string]any) *Result {
 		}
 	}
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 10*1024*1024)) // 10MB limit
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 2*1024*1024)) // 2MB limit
 	if err != nil {
 		return &Result{
 			Status:     "down",
