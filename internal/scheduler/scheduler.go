@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -23,7 +24,8 @@ type Scheduler struct {
 	intervals map[string]time.Duration // check_id → current interval
 	checkMu   map[string]*sync.Mutex   // per-check mutex to prevent concurrent runs
 	mu        sync.Mutex
-	eventCh   chan string // check_id for immediate run
+	sem       chan struct{}           // concurrency limiter for in-flight checks
+	eventCh   chan string             // check_id for immediate run
 	ctx       context.Context
 	cancel    context.CancelFunc
 }
@@ -39,6 +41,7 @@ func New(st *store.Store) *Scheduler {
 		timers:    make(map[string]*time.Timer),
 		intervals: make(map[string]time.Duration),
 		checkMu:   make(map[string]*sync.Mutex),
+		sem:       make(chan struct{}, 200),
 		eventCh:   make(chan string, 100),
 	}
 }
@@ -163,9 +166,10 @@ func (s *Scheduler) scheduleCheck(ec store.EnabledCheck) {
 		interval = 10 * time.Second
 	}
 
-	// Schedule first run after a short delay (stagger checks)
+	// Schedule first run with jitter spread across the interval to avoid thundering herd
 	checkID := ec.ID
-	timer := time.AfterFunc(5*time.Second, func() {
+	jitter := time.Duration(rand.Int63n(int64(interval)))
+	timer := time.AfterFunc(jitter, func() {
 		s.runAndReschedule(checkID, interval)
 	})
 	s.timers[checkID] = timer
@@ -191,6 +195,10 @@ func (s *Scheduler) runAndReschedule(checkID string, interval time.Duration) {
 }
 
 func (s *Scheduler) runCheck(checkID string) {
+	// Concurrency limiter — blocks if 200 checks already in flight
+	s.sem <- struct{}{}
+	defer func() { <-s.sem }()
+
 	// Per-check mutex prevents concurrent runs
 	s.mu.Lock()
 	mu, ok := s.checkMu[checkID]
