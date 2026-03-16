@@ -140,7 +140,7 @@ No npm on server — `cmd/bekci/frontend_dist/` is committed to git. Go binary e
 | vue | ^3.5.25 | UI framework (Composition API, `<script setup>`) |
 | vite | ^7.3.1 | Build tool + dev server |
 | @vitejs/plugin-vue | ^6.0.2 | Vue 3 SFC support for Vite |
-| vue-router | ^4.6.4 | Client-side routing (10 routes, no lazy loading) |
+| vue-router | ^4.6.4 | Client-side routing (11 routes, SearchView lazy-loaded) |
 | pinia | ^3.0.4 | State management |
 | axios | ^1.13.5 | HTTP client (withCredentials for cookie auth) |
 | chart.js | ^4.5.1 | Charts (SLA page) |
@@ -150,10 +150,12 @@ No npm on server — `cmd/bekci/frontend_dist/` is committed to git. Go binary e
 ### Frontend Build Output
 | Asset | Size (raw) | Size (gzipped) |
 |-------|-----------|----------------|
-| index-*.js | 430 KB | ~148 KB |
-| index-*.css | 41 KB | ~8 KB |
+| index-*.js | 471 KB | ~158 KB |
+| index-*.css | 45 KB | ~8 KB |
+| SearchView-*.js | 10 KB | ~3.5 KB |
+| SearchView-*.css | 3.7 KB | ~1.1 KB |
 
-Single bundle (no code splitting, no lazy-loaded routes). All routes and dependencies in one JS file.
+SearchView is lazy-loaded (code-split). All other routes in single bundle.
 
 ---
 
