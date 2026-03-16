@@ -139,15 +139,14 @@ func (s *Store) GetRecentResultsSlim(checkID string, hours int) ([]CheckResultSl
 	return results, rows.Err()
 }
 
-// GetDailyUptime returns per-day uptime percentages for the last N days.
+// GetDailyUptime returns per-day uptime percentages from check_daily_rollups.
 func (s *Store) GetDailyUptime(checkID string, days int) ([]DailyUptime, error) {
 	rows, err := s.db.Query(`
-		SELECT date(checked_at) as day,
-		       ROUND(100.0 * SUM(CASE WHEN status = 'up' THEN 1 ELSE 0 END) / COUNT(*), 2) as uptime_pct,
-		       COUNT(*) as total_checks
-		FROM check_results
-		WHERE check_id = ? AND checked_at >= datetime('now', ?)
-		GROUP BY day
+		SELECT day,
+			ROUND(100.0 * up_count / NULLIF(total_count, 0), 2) as uptime_pct,
+			total_count
+		FROM check_daily_rollups
+		WHERE check_id = ? AND day >= date('now', ?)
 		ORDER BY day ASC
 	`, checkID, formatDaysOffset(days))
 	if err != nil {
@@ -213,16 +212,16 @@ func (s *Store) GetLastResult(checkID string) (*CheckResult, error) {
 	return r, nil
 }
 
-// GetUptimePercent returns the uptime percentage for a check over the last N days.
+// GetUptimePercent returns the uptime percentage from check_daily_rollups.
 func (s *Store) GetUptimePercent(checkID string, days int) (float64, error) {
 	var pct float64
 	err := s.db.QueryRow(`
 		SELECT COALESCE(
-			ROUND(100.0 * SUM(CASE WHEN status = 'up' THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0), 2),
+			ROUND(100.0 * SUM(up_count) / NULLIF(SUM(total_count), 0), 2),
 			-1
 		)
-		FROM check_results
-		WHERE check_id = ? AND checked_at >= datetime('now', ?)
+		FROM check_daily_rollups
+		WHERE check_id = ? AND day >= date('now', ?)
 	`, checkID, formatDaysOffset(days)).Scan(&pct)
 	return pct, err
 }
