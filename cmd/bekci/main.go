@@ -161,7 +161,7 @@ func main() {
 				}
 
 				// Purge old check results based on history_days setting
-				historyDays := 90
+				historyDays := 3
 				if v, err := db.GetSetting("history_days"); err == nil && v != "" {
 					if d, err := strconv.Atoi(v); err == nil && d > 0 {
 						historyDays = d

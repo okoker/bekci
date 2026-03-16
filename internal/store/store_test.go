@@ -1157,3 +1157,54 @@ func TestGetBatchLastResultAndUptime(t *testing.T) {
 		t.Errorf("uptime: got %.1f, want 90.0 (9/10 up)", summary.Uptime90d)
 	}
 }
+
+func TestPurgeOldResultsAndRollups(t *testing.T) {
+	s := newTestStore(t)
+	tgt, conds := makeTarget("purge-split-tgt")
+	if err := s.CreateTargetWithConditions(tgt, conds[:1], ""); err != nil {
+		t.Fatal(err)
+	}
+	checks, _ := s.ListChecksByTarget(tgt.ID)
+	checkID := checks[0].ID
+
+	now := time.Now()
+
+	// Insert a recent result (today)
+	if err := s.SaveResult(&CheckResult{
+		CheckID: checkID, Status: "up", ResponseMs: 50,
+		Message: "", Metrics: "{}", CheckedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Insert an old result (10 days ago)
+	if err := s.SaveResult(&CheckResult{
+		CheckID: checkID, Status: "up", ResponseMs: 50,
+		Message: "", Metrics: "{}", CheckedAt: now.Add(-10 * 24 * time.Hour),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Purge with 3-day retention
+	purged, err := s.PurgeOldResults(3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if purged != 1 {
+		t.Fatalf("purged raw = %d, want 1", purged)
+	}
+
+	// Recent raw result should remain
+	var rawRemaining int
+	s.db.QueryRow(`SELECT COUNT(*) FROM check_results WHERE check_id = ?`, checkID).Scan(&rawRemaining)
+	if rawRemaining != 1 {
+		t.Fatalf("raw remaining = %d, want 1", rawRemaining)
+	}
+
+	// Both rollup days should still exist (rollups use 90-day retention, not 3-day)
+	var rollupCount int
+	s.db.QueryRow(`SELECT COUNT(*) FROM check_daily_rollups WHERE check_id = ?`, checkID).Scan(&rollupCount)
+	if rollupCount != 2 {
+		t.Fatalf("rollup count = %d, want 2 (both days kept)", rollupCount)
+	}
+}

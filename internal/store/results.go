@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"time"
 )
 
@@ -265,7 +266,8 @@ func (s *Store) GetBatchLastResultAndUptime() (map[string]*BatchCheckSummary, er
 	return result, rows.Err()
 }
 
-// PurgeOldResults deletes results older than the given number of days.
+// PurgeOldResults deletes raw results older than the given number of days
+// and rollups older than 90 days.
 func (s *Store) PurgeOldResults(days int) (int64, error) {
 	res, err := s.db.Exec(`
 		DELETE FROM check_results
@@ -274,7 +276,17 @@ func (s *Store) PurgeOldResults(days int) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return res.RowsAffected()
+	rawPurged, _ := res.RowsAffected()
+
+	// Purge rollups older than 90 days (independent of raw retention)
+	if _, err := s.db.Exec(`
+		DELETE FROM check_daily_rollups
+		WHERE day < date('now', '-90 days')
+	`); err != nil {
+		slog.Error("Failed to purge old rollups", "error", err)
+	}
+
+	return rawPurged, nil
 }
 
 func formatDaysOffset(days int) string {
