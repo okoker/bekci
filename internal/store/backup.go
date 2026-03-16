@@ -93,7 +93,14 @@ type BackupCheck struct {
 }
 
 // ExportBackup reads all config tables and assembles a BackupData.
+// All reads are wrapped in a single read transaction for point-in-time consistency.
 func (s *Store) ExportBackup(appVersion string) (*BackupData, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("begin read tx: %w", err)
+	}
+	defer tx.Rollback()
+
 	data := &BackupData{
 		Version:    1,
 		CreatedAt:  time.Now().UTC().Format(time.RFC3339),
@@ -102,12 +109,12 @@ func (s *Store) ExportBackup(appVersion string) (*BackupData, error) {
 	}
 
 	// Schema version
-	if err := s.db.QueryRow(`SELECT version FROM schema_version LIMIT 1`).Scan(&data.SchemaVersion); err != nil {
+	if err := tx.QueryRow(`SELECT version FROM schema_version LIMIT 1`).Scan(&data.SchemaVersion); err != nil {
 		return nil, fmt.Errorf("reading schema version: %w", err)
 	}
 
 	// Users (with password_hash)
-	rows, err := s.db.Query(`SELECT id, username, email, phone, password_hash, role, status, created_at, updated_at FROM users ORDER BY created_at ASC`)
+	rows, err := tx.Query(`SELECT id, username, email, phone, password_hash, role, status, created_at, updated_at FROM users ORDER BY created_at ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("exporting users: %w", err)
 	}
@@ -123,14 +130,27 @@ func (s *Store) ExportBackup(appVersion string) (*BackupData, error) {
 		return nil, err
 	}
 
-	// Settings
-	data.Settings, err = s.GetAllSettings()
-	if err != nil {
-		return nil, fmt.Errorf("exporting settings: %w", err)
+	// Settings (inline query via tx for consistency)
+	{
+		sRows, err := tx.Query(`SELECT key, value FROM settings`)
+		if err != nil {
+			return nil, fmt.Errorf("exporting settings: %w", err)
+		}
+		defer sRows.Close()
+		for sRows.Next() {
+			var k, v string
+			if err := sRows.Scan(&k, &v); err != nil {
+				return nil, err
+			}
+			data.Settings[k] = v
+		}
+		if err := sRows.Err(); err != nil {
+			return nil, err
+		}
 	}
 
 	// Rules
-	rRows, err := s.db.Query(`SELECT id, name, description, operator, severity, enabled, created_at, updated_at FROM rules ORDER BY created_at ASC`)
+	rRows, err := tx.Query(`SELECT id, name, description, operator, severity, enabled, created_at, updated_at FROM rules ORDER BY created_at ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("exporting rules: %w", err)
 	}
@@ -149,7 +169,7 @@ func (s *Store) ExportBackup(appVersion string) (*BackupData, error) {
 	}
 
 	// Targets
-	tRows, err := s.db.Query(`SELECT id, name, host, description, enabled, preferred_check_type, operator, category, rule_id, paused_at, created_at, updated_at FROM targets ORDER BY name ASC`)
+	tRows, err := tx.Query(`SELECT id, name, host, description, enabled, preferred_check_type, operator, category, rule_id, paused_at, created_at, updated_at FROM targets ORDER BY name ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("exporting targets: %w", err)
 	}
@@ -176,7 +196,7 @@ func (s *Store) ExportBackup(appVersion string) (*BackupData, error) {
 	}
 
 	// Checks
-	cRows, err := s.db.Query(`SELECT id, target_id, type, name, config, interval_s, enabled, created_at, updated_at FROM checks ORDER BY created_at ASC`)
+	cRows, err := tx.Query(`SELECT id, target_id, type, name, config, interval_s, enabled, created_at, updated_at FROM checks ORDER BY created_at ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("exporting checks: %w", err)
 	}
@@ -195,7 +215,7 @@ func (s *Store) ExportBackup(appVersion string) (*BackupData, error) {
 	}
 
 	// Rule conditions
-	rcRows, err := s.db.Query(`SELECT id, rule_id, check_id, field, comparator, value, fail_count, fail_window, sort_order, condition_group, group_operator FROM rule_conditions ORDER BY rule_id, condition_group, sort_order ASC`)
+	rcRows, err := tx.Query(`SELECT id, rule_id, check_id, field, comparator, value, fail_count, fail_window, sort_order, condition_group, group_operator FROM rule_conditions ORDER BY rule_id, condition_group, sort_order ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("exporting rule_conditions: %w", err)
 	}
@@ -212,7 +232,7 @@ func (s *Store) ExportBackup(appVersion string) (*BackupData, error) {
 	}
 
 	// Rule states
-	rsRows, err := s.db.Query(`SELECT rule_id, current_state, last_change, last_evaluated FROM rule_states ORDER BY rule_id ASC`)
+	rsRows, err := tx.Query(`SELECT rule_id, current_state, last_change, last_evaluated FROM rule_states ORDER BY rule_id ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("exporting rule_states: %w", err)
 	}
@@ -229,7 +249,7 @@ func (s *Store) ExportBackup(appVersion string) (*BackupData, error) {
 	}
 
 	// Recipients
-	recRows, err := s.db.Query(`SELECT target_id, user_id FROM target_alert_recipients ORDER BY target_id, user_id`)
+	recRows, err := tx.Query(`SELECT target_id, user_id FROM target_alert_recipients ORDER BY target_id, user_id`)
 	if err != nil {
 		return nil, fmt.Errorf("exporting recipients: %w", err)
 	}
@@ -246,7 +266,7 @@ func (s *Store) ExportBackup(appVersion string) (*BackupData, error) {
 	}
 
 	// Pause history
-	phRows, err := s.db.Query(`SELECT id, target_id, paused_at, resumed_at, reason FROM target_pause_history ORDER BY id ASC`)
+	phRows, err := tx.Query(`SELECT id, target_id, paused_at, resumed_at, reason FROM target_pause_history ORDER BY id ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("exporting target_pause_history: %w", err)
 	}
@@ -291,6 +311,9 @@ func (s *Store) ExportBackup(appVersion string) (*BackupData, error) {
 	if data.PauseHistory == nil {
 		data.PauseHistory = []BackupPauseHistory{}
 	}
+
+	// Read-only tx — rollback is fine (deferred above handles it too)
+	tx.Rollback()
 
 	return data, nil
 }
