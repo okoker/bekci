@@ -5,7 +5,7 @@
 | Layer | Technology |
 |-------|-----------|
 | Backend | Go 1.25 (go.mod min 1.24), net/http stdlib router (Go 1.22+ method routing), SQLite WAL |
-| Database | SQLite 3 via go-sqlite3 (CGO required), WAL mode, auto-migrate (18 migrations) |
+| Database | SQLite 3 via go-sqlite3 (CGO required), WAL mode, `SetMaxOpenConns(1)`, auto-migrate (19 migrations) |
 | Frontend | Vue 3, Vite 7, Vue Router 4, Pinia 3, Axios, Chart.js + vue-chartjs |
 | Auth | JWT HS256 (golang-jwt/v5) in HttpOnly cookie (`token`), bcrypt cost 12 |
 | Reverse Proxy | Nginx 1.18 (prod only) — SSL termination, security headers, gzip |
@@ -156,6 +156,31 @@ No npm on server — `cmd/bekci/frontend_dist/` is committed to git. Go binary e
 | SearchView-*.css | 3.7 KB | ~1.1 KB |
 
 SearchView is lazy-loaded (code-split). All other routes in single bundle.
+
+---
+
+## Runtime Architecture
+
+### Scheduler
+- Per-check `time.AfterFunc` timer — no worker pool, each check gets its own goroutine
+- Startup jitter: initial delay randomized across the check's interval to prevent thundering herd
+- Concurrency semaphore: buffered channel caps in-flight checks at 200
+- Per-check mutex (`TryLock`) prevents overlapping runs of the same check
+- Safety-net poll: reloads all enabled checks from DB every 60s
+
+### Rule Engine
+- Triggered per check result (async goroutine after `SaveResult`)
+- Per-rule mutex serializes evaluation — prevents duplicate alerts when multiple checks tied to same rule complete simultaneously
+- Atomic CAS state transition: `UPDATE ... WHERE current_state = ?` ensures only one evaluator dispatches alerts per transition
+
+### HTTP Checker
+- Shared `http.Transport` with connection pooling (100 max idle, 5 per host, 90s idle timeout)
+- TLS session cache (128-entry LRU) for session resumption
+- Separate transport for `InsecureSkipVerify` targets
+
+### Docker
+- `ulimits: nofile: 65535` — required for 1500+ concurrent check sockets
+- `cap_add: NET_RAW` — required for ICMP ping
 
 ---
 
