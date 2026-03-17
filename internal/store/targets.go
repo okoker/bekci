@@ -160,9 +160,6 @@ func (s *Store) CreateTargetWithConditions(t *Target, conds []TargetCondition, c
 	if t.Enabled {
 		enabled = 1
 	}
-	if t.PreferredCheckType == "" {
-		t.PreferredCheckType = "ping"
-	}
 	if t.Operator == "" {
 		t.Operator = "AND"
 	}

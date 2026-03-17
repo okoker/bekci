@@ -1208,3 +1208,36 @@ func TestPurgeOldResultsAndRollups(t *testing.T) {
 		t.Fatalf("rollup count = %d, want 2 (both days kept)", rollupCount)
 	}
 }
+
+// T-S22: Create and update produce same preferred_check_type when not explicitly set
+func TestPreferredCheckTypeConsistency(t *testing.T) {
+	s := newTestStore(t)
+
+	// Create target with [http, ping] conditions, no explicit preferred type
+	tgt := &Target{
+		Name:     "pref-test",
+		Host:     "pref.example.com",
+		Enabled:  true,
+		Operator: "AND",
+		Category: "Other",
+		// PreferredCheckType deliberately left empty
+	}
+	conds := []TargetCondition{
+		{CheckType: "http", CheckName: "HTTP", Config: "{}", IntervalS: 60, Field: "status", Comparator: "eq", Value: "down", FailCount: 1, ConditionGroup: 0, GroupOperator: "AND"},
+		{CheckType: "ping", CheckName: "Ping", Config: "{}", IntervalS: 60, Field: "status", Comparator: "eq", Value: "down", FailCount: 1, ConditionGroup: 0, GroupOperator: "AND"},
+	}
+
+	if err := s.CreateTargetWithConditions(tgt, conds, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.GetTarget(tgt.ID)
+	if err != nil || got == nil {
+		t.Fatal("target not found after create")
+	}
+
+	// Create path should use first condition's type (http), not default to ping
+	if got.PreferredCheckType != "http" {
+		t.Fatalf("create: preferred_check_type = %q, want \"http\"", got.PreferredCheckType)
+	}
+}
