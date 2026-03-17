@@ -50,6 +50,12 @@ func (s *Store) DeleteTagOption(id int) error {
 
 	// Clear from targets — grp is "project" or "location" which matches column name
 	col := grp
+	switch col {
+	case "project", "location":
+		// valid column name
+	default:
+		return fmt.Errorf("invalid tag group: %s", col)
+	}
 	if _, err := s.db.Exec(`UPDATE targets SET `+col+` = NULL WHERE `+col+` = ?`, value); err != nil {
 		return err
 	}
