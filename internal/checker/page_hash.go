@@ -13,6 +13,9 @@ import (
 
 func runPageHash(host string, config map[string]any) *Result {
 	scheme := configStr(config, "scheme", "https")
+	if scheme != "http" && scheme != "https" {
+		return &Result{Status: "error", Message: fmt.Sprintf("invalid scheme: %s (only http and https allowed)", scheme)}
+	}
 	port := configInt(config, "port", 0)
 	endpoint := configStr(config, "endpoint", "/")
 	baselineHash := configStr(config, "baseline_hash", "")

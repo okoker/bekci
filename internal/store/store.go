@@ -97,10 +97,12 @@ func (s *Store) migrate() error {
 }
 
 // SchemaVersion returns the current database schema version.
-func (s *Store) SchemaVersion() int {
+func (s *Store) SchemaVersion() (int, error) {
 	var v int
-	s.db.QueryRow(`SELECT version FROM schema_version LIMIT 1`).Scan(&v)
-	return v
+	if err := s.db.QueryRow(`SELECT version FROM schema_version LIMIT 1`).Scan(&v); err != nil {
+		return 0, fmt.Errorf("reading schema version: %w", err)
+	}
+	return v, nil
 }
 
 // migration001 creates the v2 auth tables.

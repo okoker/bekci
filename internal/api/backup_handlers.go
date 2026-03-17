@@ -82,7 +82,11 @@ func (s *Server) handleRestore(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, fmt.Sprintf("unsupported backup version: %d", data.Version))
 		return
 	}
-	currentSchema := s.store.SchemaVersion()
+	currentSchema, err := s.store.SchemaVersion()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to read current schema version")
+		return
+	}
 	if data.SchemaVersion > currentSchema {
 		writeError(w, http.StatusBadRequest, fmt.Sprintf("backup schema version %d is newer than this server supports (%d)", data.SchemaVersion, currentSchema))
 		return
