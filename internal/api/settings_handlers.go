@@ -13,6 +13,7 @@ var knownSettings = map[string]bool{
 	"history_days":           true,
 	"audit_retention_days":   true,
 	"soc_public":             true,
+	"backup_max_copies":      true,
 	// Alerting settings
 	"alert_method":     true,
 	"email_provider":   true,

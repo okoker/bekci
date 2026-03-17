@@ -29,8 +29,9 @@ type Server struct {
 	dbPath         string
 	configPath     string
 	backupDir      string
-	loginLimiter   *loginLimiter
-	socPublicCache cachedSetting
+	loginLimiter      *loginLimiter
+	usernameLimiter   *loginLimiter
+	socPublicCache    cachedSetting
 }
 
 // New creates a new API server.
@@ -46,13 +47,15 @@ func New(st *store.Store, authSvc *auth.Service, sched *scheduler.Scheduler, ale
 		dbPath:       dbPath,
 		configPath:   configPath,
 		backupDir:    backupDir,
-		loginLimiter: newLoginLimiter(),
+		loginLimiter:    newLoginLimiter(),
+		usernameLimiter: newLoginLimiter(),
 	}
 }
 
 // Close releases resources held by the server (e.g. background goroutines).
 func (s *Server) Close() {
 	s.loginLimiter.Stop()
+	s.usernameLimiter.Stop()
 }
 
 // cachedSocPublic returns the soc_public setting value, using a 30s cache.

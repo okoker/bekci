@@ -25,8 +25,8 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	ip := clientIP(r)
 
-	if !s.loginLimiter.allow(ip) {
-		slog.Warn("Login rate limited", "ip", ip)
+	if !s.loginLimiter.allow(ip) || !s.usernameLimiter.allow(req.Username) {
+		slog.Warn("Login rate limited", "ip", ip, "username", req.Username)
 		writeError(w, http.StatusTooManyRequests, "too many login attempts, try again later")
 		return
 	}
@@ -36,11 +36,13 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		slog.Warn("Login failed", "username", req.Username, "ip", ip)
 		s.auditLogin(r, "", req.Username, "login_failed", err.Error(), "failure")
 		s.loginLimiter.recordFailure(ip)
+		s.usernameLimiter.recordFailure(req.Username)
 		writeError(w, http.StatusUnauthorized, "invalid username or password")
 		return
 	}
 
 	s.loginLimiter.resetSuccess(ip)
+	s.usernameLimiter.resetSuccess(req.Username)
 	s.auditLogin(r, user.ID, user.Username, "login", "", "success")
 
 	http.SetCookie(w, &http.Cookie{

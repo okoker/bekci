@@ -254,7 +254,11 @@ func (a *AlertService) CheckRealerts() {
 
 		if (method == "email" || method == "email+signal") && fromEmail != "" {
 			subject, htmlBody := RenderEmailAlert(target.Name, target.Host, "unhealthy", nil, now, nil)
-			subject = "[RE-ALERT] " + subject[8:] // replace [ALERT] with [RE-ALERT]
+			if len(subject) > 8 {
+				subject = "[RE-ALERT] " + subject[8:] // replace [ALERT] with [RE-ALERT]
+			} else {
+				subject = "[RE-ALERT] " + subject
+			}
 			provider, _ := a.store.GetSetting("email_provider")
 
 			// Read SMTP settings once (outside the loop)
