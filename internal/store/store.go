@@ -81,6 +81,7 @@ func (s *Store) migrate() error {
 		s.migration019,
 		s.migration020,
 		s.migration021,
+		s.migration022,
 	}
 
 	for i := current; i < len(migrations); i++ {
@@ -698,5 +699,11 @@ func (s *Store) migration021() error {
 		CREATE INDEX IF NOT EXISTS idx_rule_conditions_rule_id ON rule_conditions(rule_id, condition_group, sort_order);
 		CREATE INDEX IF NOT EXISTS idx_targets_rule_id ON targets(rule_id);
 	`)
+	return err
+}
+
+// migration022 fixes A-011: update history_days default from 90 to 3 for raw result retention.
+func (s *Store) migration022() error {
+	_, err := s.db.Exec(`UPDATE settings SET value = '3' WHERE key = 'history_days' AND value = '90'`)
 	return err
 }
