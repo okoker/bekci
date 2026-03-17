@@ -86,12 +86,12 @@ Key-value config store.
 | signal_number          |         | migration016 |
 | signal_username        |         | migration016 |
 | signal_password        |         | migration016 |
-| snmp_v2c_community     |         | migration018 |
+| snmp_v2c_community     | public  | migration018 |
 | snmp_v3_username       |         | migration018 |
-| snmp_v3_security_level |         | migration018 |
-| snmp_v3_auth_protocol  |         | migration018 |
+| snmp_v3_security_level | authPriv | migration018 |
+| snmp_v3_auth_protocol  | SHA     | migration018 |
 | snmp_v3_auth_passphrase|         | migration018 |
-| snmp_v3_privacy_protocol|        | migration018 |
+| snmp_v3_privacy_protocol| AES    | migration018 |
 | snmp_v3_privacy_passphrase|      | migration018 |
 
 ### targets
@@ -120,7 +120,7 @@ Key-value config store.
 - `UNIQUE(project_id, name)` was replaced by `UNIQUE(name)` after migration004 table rebuild.
 - `rule_id` is a logical FK to `rules(id)` but not enforced at DDL level (nullable, set by app code).
 - `category` was originally `severity` (renamed in migration007). Values remapped in migration010. DDL default is `'critical'` but app code defaults to `'Other'` when empty.
-- `idx_targets_project_id` index from migration002 is orphaned after migration004 dropped the projects table (harmless but unclean).
+- `idx_targets_project_id` index from migration002 was dropped along with the old table during migration004's table rebuild (CREATE new → DROP old → RENAME).
 - `idx_targets_rule_id` ON targets(rule_id) *(migration021)* — accelerates rule-to-target lookups.
 - `paused_at` — when NOT NULL, target is paused: scheduler skips checks, dashboard shows "PAUSED" badge.
 - `notes`, `contacts` — free-text optional fields.
@@ -264,7 +264,7 @@ Each condition links a rule to a check with evaluation criteria. Conditions are 
 
 **Indexes:** *(migration021)*
 - `idx_rule_conditions_check_id` ON rule_conditions(check_id)
-- `idx_rule_conditions_rule_group_sort` ON rule_conditions(rule_id, condition_group, sort_order)
+- `idx_rule_conditions_rule_id` ON rule_conditions(rule_id, condition_group, sort_order)
 
 ### rule_states
 
@@ -385,7 +385,7 @@ Append-only audit trail. Purged by `PurgeOldAuditEntries(days)` (runs at startup
 | 018 | migration018   | Rebuild `checks` table to add `snmp_v2c` and `snmp_v3` to type CHECK constraint. Seed 7 SNMP settings (`snmp_v2c_community`, `snmp_v3_username`, `snmp_v3_security_level`, `snmp_v3_auth_protocol`, `snmp_v3_auth_passphrase`, `snmp_v3_privacy_protocol`, `snmp_v3_privacy_passphrase`). |
 | 019 | migration019   | Add `notes`, `contacts`, `project`, `location` columns (TEXT DEFAULT NULL) to `targets`. Create `tag_options` table for admin-managed project/location tag values. |
 | 020 | migration020   | Create `check_state` table (1 row/check, current status cache). Create `check_daily_rollups` table (1 row/check/day, pre-aggregated uptime). Backfill both from existing `check_results`. Purge raw results older than 3 days. |
-| 021 | migration021   | Add 3 performance indexes: `idx_rule_conditions_check_id` on `rule_conditions(check_id)`, `idx_rule_conditions_rule_group_sort` on `rule_conditions(rule_id, condition_group, sort_order)`, `idx_targets_rule_id` on `targets(rule_id)`. |
+| 021 | migration021   | Add 3 performance indexes: `idx_rule_conditions_check_id` on `rule_conditions(check_id)`, `idx_rule_conditions_rule_id` on `rule_conditions(rule_id, condition_group, sort_order)`, `idx_targets_rule_id` on `targets(rule_id)`. |
 
 **Note:** Function declarations appear out of order in the source file (e.g. migration005 before migration004, migration008 before migration007), but the `migrations` slice defines the correct sequential execution order: 001 through 021, strictly in order.
 

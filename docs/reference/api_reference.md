@@ -20,7 +20,7 @@ Auth uses HttpOnly cookies. On successful login, the server sets a `token` cooki
 { "error": "error message" }
 ```
 
-**Rate limiting**: Login endpoint is rate-limited per IP -- 5 attempts per 5-minute window, 15-minute lockout after threshold.
+**Rate limiting**: Login endpoint is rate-limited per IP **and** per username (two independent limiters) -- 5 attempts per 5-minute window, 15-minute lockout after threshold. Blocked if either limiter triggers.
 
 ---
 
@@ -36,7 +36,7 @@ Auth uses HttpOnly cookies. On successful login, the server sets a `token` cooki
 
 ### POST /api/login
 
-Rate limited: 5 attempts/5min per IP, 15min lockout.
+Rate limited: 5 attempts/5min per IP + per username (dual limiters), 15min lockout.
 
 **Request:**
 ```json
@@ -565,7 +565,7 @@ Deletes the tag option and sets the corresponding field to NULL on all targets u
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/api/targets/{id}/recipients` | any | List alert recipients for target |
+| GET | `/api/targets/{id}/recipients` | operator+ | List alert recipients for target |
 | PUT | `/api/targets/{id}/recipients` | operator+ | Set alert recipients for target |
 
 ### GET /api/targets/{id}/recipients
@@ -904,7 +904,11 @@ Returns all categories with per-target daily uptime arrays for the preferred che
         }
       ]
     }
-  ]
+  ],
+  "pause_stats": {
+    "count": 2,
+    "affected_hosts": 1
+  }
 }
 ```
 
@@ -973,9 +977,13 @@ Response formats are identical to their Dashboard counterparts.
 
 ### POST /api/settings/test-email
 
-Sends a test email to the authenticated user's email address. Requires the alerter service to be configured.
+Sends a test email. Requires the alerter service to be configured.
 
-**Request:** No body required.
+**Request:** Optional body to override recipient:
+```json
+{ "email": "override@example.com" }
+```
+If no body or empty email, sends to the authenticated user's email address.
 
 **Response (200):**
 ```json
@@ -1064,10 +1072,15 @@ Returns all settings as key-value map. Sensitive values (e.g. `resend_api_key`, 
   "audit_retention_days": "91",
   "soc_public": "false",
   "alert_method": "email",
-  "resend_api_key": "••••••••",
+  "email_provider": "resend",
+  "resend_api_key": "re_1234****",
   "alert_from_email": "alerts@example.com",
   "alert_cooldown_s": "300",
   "alert_realert_s": "3600",
+  "smtp_host": "smtp.example.com",
+  "smtp_port": "587",
+  "smtp_username": "user@example.com",
+  "smtp_password": "••••••••",
   "signal_api_url": "http://10.0.9.21:55555/v2/send",
   "signal_number": "+1234567890",
   "signal_username": "user",
@@ -1083,13 +1096,14 @@ Returns all settings as key-value map. Sensitive values (e.g. `resend_api_key`, 
   "snmp_v3_auth_protocol": "",
   "snmp_v3_auth_passphrase": "••••••••",
   "snmp_v3_privacy_protocol": "",
-  "snmp_v3_privacy_passphrase": "••••••••"
+  "snmp_v3_privacy_passphrase": "••••••••",
+  "backup_max_copies": "5"
 }
 ```
 
 ### PUT /api/settings
 
-Update one or more settings. Only known keys are accepted. Sending masked values (`"••••••••"`) for `resend_api_key`, `signal_password`, `webhook_bearer_token`, `webhook_basic_password`, `snmp_v3_auth_passphrase`, or `snmp_v3_privacy_passphrase` is silently ignored (preserves existing value).
+Update one or more settings. Only known keys are accepted. Sending masked values (`"••••••••"` or `"****"`) for `resend_api_key`, `signal_password`, `smtp_password`, `webhook_bearer_token`, `webhook_basic_password`, `snmp_v3_auth_passphrase`, or `snmp_v3_privacy_passphrase` is silently ignored (preserves existing value).
 
 **Request:**
 ```json
@@ -1108,8 +1122,13 @@ Update one or more settings. Only known keys are accepted. Sending masked values
 | `audit_retention_days` | positive integer | >= 1 |
 | `soc_public` | boolean string | `"true"` or `"false"` |
 | `alert_method` | string | `""`, `"email"`, `"signal"`, or `"email+signal"` |
-| `resend_api_key` | string | any string (empty to clear) |
+| `email_provider` | string | `""`, `"resend"`, or `"ms365"` |
+| `resend_api_key` | string | any string (empty to clear; masked in GET: first 7 chars + `****`) |
 | `alert_from_email` | string | any string |
+| `smtp_host` | string | SMTP server hostname |
+| `smtp_port` | string | SMTP server port (e.g. `"587"`) |
+| `smtp_username` | string | SMTP auth username |
+| `smtp_password` | string | SMTP auth password (masked in GET as `"••••••••"`) |
 | `alert_cooldown_s` | non-negative integer | >= 0 |
 | `alert_realert_s` | non-negative integer | >= 0 |
 | `signal_api_url` | string | any string (full gateway URL) |
@@ -1137,6 +1156,7 @@ Update one or more settings. Only known keys are accepted. Sending masked values
 | `sla_physical_security` | float string | 0–100 (0 = disabled) |
 | `sla_key_services` | float string | 0–100 (0 = disabled) |
 | `sla_other` | float string | 0–100 (0 = disabled) |
+| `backup_max_copies` | positive integer | >= 1 (max saved backups on server) |
 
 **Response (200):**
 ```json
@@ -1372,7 +1392,7 @@ Generates a random 4-word passphrase from a curated word list (~960 words, ~10 b
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | GET | `/api/health` | public | Basic health check |
-| GET | `/api/system/health` | any | Detailed system health |
+| GET | `/api/system/health` | socAuth | Detailed system health (public when soc_public=true) |
 | GET | `/api/fail2ban/status` | admin | Fail2Ban jail status |
 | GET | `/api/fail2ban/bans` | admin | Historical ban records from fail2ban DB |
 

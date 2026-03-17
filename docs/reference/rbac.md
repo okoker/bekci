@@ -58,13 +58,14 @@ Valid roles enforced at user creation and update: `admin`, `operator`, `viewer`.
 
 ```
 Request
-  -> recoveryMiddleware (panic recovery, returns 500)
-    -> loggingMiddleware (DEBUG: all requests; WARN: 5xx with IP + user_id)
-      -> corsMiddleware (CORS headers if origin configured)
-        -> route match
-          -> [requireAuth] (cookie JWT + session + active user check)
-            -> [requireRole("admin", ...)] (role whitelist check)
-              -> handler
+  -> gzipMiddleware (compress response if Accept-Encoding: gzip)
+    -> recoveryMiddleware (panic recovery, returns 500)
+      -> loggingMiddleware (DEBUG: all requests; WARN: 5xx with IP + user_id)
+        -> corsMiddleware (CORS headers if origin configured)
+          -> route match
+            -> [requireAuth] (cookie JWT + session + active user check)
+              -> [requireRole("admin", ...)] (role whitelist check)
+                -> handler
 ```
 
 ### Auth Wrappers (defined in router.go)
@@ -83,7 +84,7 @@ Request
 
 | Endpoint | Method | Auth | Admin | Operator | Viewer | Notes |
 |----------|--------|------|-------|----------|--------|-------|
-| `/api/login` | POST | public | -- | -- | -- | Rate limited by IP |
+| `/api/login` | POST | public | -- | -- | -- | Rate limited by IP + username |
 | `/api/health` | GET | public | -- | -- | -- | Unauthenticated health probe |
 | `/api/logout` | POST | anyAuth | Y | Y | Y | Deletes own session |
 | `/api/me` | GET | anyAuth | Y | Y | Y | Own profile info |
@@ -110,7 +111,9 @@ Request
 | `/api/targets/{id}` | GET | anyAuth | Y | Y | Y | Get target detail |
 | `/api/targets/{id}` | PUT | opAuth | Y | Y | N | Update target |
 | `/api/targets/{id}` | DELETE | opAuth | Y | Y | N | Delete target |
-| `/api/targets/{id}/recipients` | GET | anyAuth | Y | Y | Y | List alert recipients |
+| `/api/targets/{id}/pause` | POST | opAuth | Y | Y | N | Pause target (skip checks) |
+| `/api/targets/{id}/unpause` | POST | opAuth | Y | Y | N | Unpause target |
+| `/api/targets/{id}/recipients` | GET | opAuth | Y | Y | N | List alert recipients |
 | `/api/targets/{id}/recipients` | PUT | opAuth | Y | Y | N | Set alert recipients |
 
 ### Checks
@@ -149,6 +152,14 @@ Request
 
 **SOC conditional auth**: When `soc_public` setting is `"true"`, these endpoints are fully public (no cookie required). Otherwise, standard `requireAuth` applies (any authenticated role).
 
+### Tags
+
+| Endpoint | Method | Auth | Admin | Operator | Viewer | Notes |
+|----------|--------|------|-------|----------|--------|-------|
+| `/api/tags` | GET | anyAuth | Y | Y | Y | List all tag options |
+| `/api/tags` | POST | adminAuth | Y | N | N | Create tag option |
+| `/api/tags/{id}` | DELETE | adminAuth | Y | N | N | Delete tag option |
+
 ### Settings
 
 | Endpoint | Method | Auth | Admin | Operator | Viewer | Notes |
@@ -156,12 +167,15 @@ Request
 | `/api/settings` | GET | anyAuth | Y | Y | Y | View all settings |
 | `/api/settings` | PUT | adminAuth | Y | N | N | Update settings |
 | `/api/settings/test-email` | POST | adminAuth | Y | N | N | Send test email |
+| `/api/settings/test-signal` | POST | adminAuth | Y | N | N | Send test Signal message |
+| `/api/settings/test-webhook` | POST | adminAuth | Y | N | N | Send test webhook |
+| `/api/settings/webhook-status` | GET | adminAuth | Y | N | N | Get webhook delivery status |
 
 ### System
 
 | Endpoint | Method | Auth | Admin | Operator | Viewer | Notes |
 |----------|--------|------|-------|----------|--------|-------|
-| `/api/system/health` | GET | anyAuth | Y | Y | Y | Detailed system health (authenticated) |
+| `/api/system/health` | GET | socAuth | Y | Y | Y | Detailed system health (public when soc_public=true) |
 | `/api/fail2ban/status` | GET | adminAuth | Y | N | N | Fail2Ban integration status |
 | `/api/fail2ban/bans` | GET | adminAuth | Y | N | N | Historical ban records from fail2ban DB |
 
@@ -169,8 +183,14 @@ Request
 
 | Endpoint | Method | Auth | Admin | Operator | Viewer | Notes |
 |----------|--------|------|-------|----------|--------|-------|
-| `/api/backup` | GET | adminAuth | Y | N | N | Download DB backup |
+| `/api/backup` | GET | adminAuth | Y | N | N | Download DB backup (JSON) |
 | `/api/backup/restore` | POST | adminAuth | Y | N | N | Restore DB from backup |
+| `/api/backup/full` | POST | adminAuth | Y | N | N | Create encrypted full backup |
+| `/api/backup/full/save` | POST | adminAuth | Y | N | N | Create and save backup to server |
+| `/api/backup/full/list` | GET | adminAuth | Y | N | N | List saved backups |
+| `/api/backup/full/saved/{filename}` | GET | adminAuth | Y | N | N | Download saved backup |
+| `/api/backup/full/saved/{filename}` | DELETE | adminAuth | Y | N | N | Delete saved backup |
+| `/api/backup/generate-passphrase` | GET | adminAuth | Y | N | N | Generate random passphrase |
 
 ### Audit
 
@@ -180,7 +200,7 @@ Request
 
 ## Rate Limiting
 
-Login endpoint only. Per-IP tracking.
+Login endpoint only. Dual tracking: per-IP **and** per-username (two independent limiters with identical parameters). Request is blocked if **either** limiter triggers.
 
 | Parameter | Value |
 |-----------|-------|
@@ -190,9 +210,9 @@ Login endpoint only. Per-IP tracking.
 | Cleanup interval | 10 minutes |
 
 **Behavior**:
-- Failures within the window increment counter
-- At 5 failures: IP locked for 15 minutes (HTTP 429)
-- Successful login: counter reset immediately
+- Failures within the window increment counter for both IP and username
+- At 5 failures on either: locked for 15 minutes (HTTP 429)
+- Successful login: counters reset immediately for both IP and username
 - Window expiry: counter reset
 - Background goroutine prunes stale records every 10 minutes (entries where both window and lockout have expired)
 
