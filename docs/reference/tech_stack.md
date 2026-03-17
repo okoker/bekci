@@ -152,12 +152,19 @@ No npm on server — `cmd/bekci/frontend_dist/` is committed to git. Go binary e
 ### Frontend Build Output
 | Asset | Size (raw) | Size (gzipped) |
 |-------|-----------|----------------|
-| index-*.js | 471 KB | ~158 KB |
-| index-*.css | 45 KB | ~8 KB |
-| SearchView-*.js | 10 KB | ~3.5 KB |
-| SearchView-*.css | 3.7 KB | ~1.1 KB |
+| index-*.js | 269 KB | ~88 KB |
+| index-*.css | 42 KB | ~8 KB |
+| SearchView-*.js | 12 KB | ~4 KB |
+| SlaView-*.js | 204 KB | ~70 KB |
 
 SearchView and SlaView are lazy-loaded (code-split). SlaView lazy-load saves ~250KB from main bundle (Chart.js loaded on demand).
+
+### SOC Page Performance
+- **Poll interval:** 30 seconds (status + history refresh)
+- **90d history:** Off by default. User toggle loads on demand. Not re-fetched on polls — only loaded once when enabled.
+- **Pagination:** 48 hosts per page (12 rows × 4 columns). History fetched only for visible page.
+- **Page change:** `loadHistoryForVisiblePage()` fires immediately on page navigation — no waiting for next poll.
+- **Net effect:** ~970 requests/min → ~100 requests/min. Initial load 8s → 2s.
 
 ---
 
