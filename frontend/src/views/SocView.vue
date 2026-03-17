@@ -68,6 +68,52 @@ const historyError = ref({}) // checkId -> true if history load failed
 const empty90d = Array.from({ length: 90 }, () => ({ date: '', uptime_pct: -1, total_checks: 0 }))
 const empty4h = Array.from({ length: 48 }, () => ({ status: 'none', response_ms: 0, checked_at: '' }))
 
+async function loadHistoryForVisiblePage() {
+  if (dashboardData.value.length === 0) return
+  const visibleIds = new Set(paginatedTargets.value.map(t => t.id))
+  const checkIds = []
+  for (const t of dashboardData.value) {
+    const pref = t._preferredCheck
+    if (pref && visibleIds.has(t.id)) checkIds.push(pref.id)
+  }
+
+  // Always load 4h for checks that don't have it yet
+  const need4h = checkIds.filter(id => !historyData.value[id]?.bar4h)
+  if (need4h.length > 0) {
+    const results = await Promise.allSettled(need4h.map(id => loadHistory4h(id)))
+    const updated = { ...historyData.value }
+    const errors = { ...historyError.value }
+    for (let i = 0; i < need4h.length; i++) {
+      if (results[i].status === 'fulfilled') {
+        updated[need4h[i]] = { ...updated[need4h[i]], ...results[i].value }
+      } else {
+        errors[need4h[i]] = true
+      }
+    }
+    historyData.value = updated
+    historyError.value = errors
+  }
+
+  // Load 90d only if toggle is on, for checks that don't have it yet
+  if (show90d.value) {
+    const need90d = checkIds.filter(id => !historyData.value[id]?.bar90d)
+    if (need90d.length > 0) {
+      const results = await Promise.allSettled(need90d.map(id => loadHistory90d(id)))
+      const updated = { ...historyData.value }
+      for (let i = 0; i < need90d.length; i++) {
+        if (results[i].status === 'fulfilled') {
+          updated[need90d[i]] = { ...updated[need90d[i]], ...results[i].value }
+        }
+      }
+      historyData.value = updated
+    }
+  }
+}
+
+watch(currentPage, () => {
+  loadHistoryForVisiblePage()
+})
+
 async function loadDashboard() {
   try {
     const { data } = await api.get('/soc/status')
@@ -80,45 +126,7 @@ async function loadDashboard() {
     lastUpdated.value = new Date()
     error.value = ''
 
-    // Only load history for targets visible on current page
-    const visibleIds = new Set(paginatedTargets.value.map(t => t.id))
-    const checkIds = []
-    for (const t of data) {
-      const pref = t._preferredCheck
-      if (pref && visibleIds.has(t.id)) checkIds.push(pref.id)
-    }
-
-    // Always load 4h for checks that don't have it yet
-    const need4h = checkIds.filter(id => !historyData.value[id]?.bar4h)
-    if (need4h.length > 0) {
-      const results = await Promise.allSettled(need4h.map(id => loadHistory4h(id)))
-      const updated = { ...historyData.value }
-      const errors = { ...historyError.value }
-      for (let i = 0; i < need4h.length; i++) {
-        if (results[i].status === 'fulfilled') {
-          updated[need4h[i]] = { ...updated[need4h[i]], ...results[i].value }
-        } else {
-          errors[need4h[i]] = true
-        }
-      }
-      historyData.value = updated
-      historyError.value = errors
-    }
-
-    // Load 90d only if toggle is on, for checks that don't have it yet
-    if (show90d.value) {
-      const need90d = checkIds.filter(id => !historyData.value[id]?.bar90d)
-      if (need90d.length > 0) {
-        const results = await Promise.allSettled(need90d.map(id => loadHistory90d(id)))
-        const updated = { ...historyData.value }
-        for (let i = 0; i < need90d.length; i++) {
-          if (results[i].status === 'fulfilled') {
-            updated[need90d[i]] = { ...updated[need90d[i]], ...results[i].value }
-          }
-        }
-        historyData.value = updated
-      }
-    }
+    await loadHistoryForVisiblePage()
   } catch (e) {
     if (e.response?.status === 401) {
       error.value = 'SOC view requires authentication. Enable public access in Settings or log in.'
@@ -141,7 +149,7 @@ async function loadHistory90d(checkId) {
 }
 
 watch(show90d, (val) => {
-  if (val) loadDashboard()
+  if (val) loadHistoryForVisiblePage()
 })
 
 function getPreferredCheck(target) {
