@@ -1,7 +1,9 @@
 package engine
 
 import (
+	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -650,5 +652,75 @@ func TestUpdateRuleStateCAS(t *testing.T) {
 	}
 	if state.CurrentState != "unhealthy" {
 		t.Fatalf("expected unhealthy, got %s", state.CurrentState)
+	}
+}
+
+type slowDispatcher struct {
+	fn func()
+	wg *sync.WaitGroup
+}
+
+func (s *slowDispatcher) Dispatch(ruleID, oldState, newState string) {
+	defer s.wg.Done()
+	s.fn()
+}
+
+// T-E24: Alert dispatch semaphore bounds concurrent goroutines
+func TestAlertDispatchSemaphore(t *testing.T) {
+	st := newTestStore(t)
+	eng := New(st)
+
+	var concurrent int64
+	var maxConcurrent int64
+	var wg sync.WaitGroup
+
+	sd := &slowDispatcher{
+		fn: func() {
+			cur := atomic.AddInt64(&concurrent, 1)
+			for {
+				old := atomic.LoadInt64(&maxConcurrent)
+				if cur <= old || atomic.CompareAndSwapInt64(&maxConcurrent, old, cur) {
+					break
+				}
+			}
+			time.Sleep(50 * time.Millisecond)
+			atomic.AddInt64(&concurrent, -1)
+		},
+		wg: &wg,
+	}
+	eng.SetDispatcher(sd)
+
+	// Create 20 targets that will all transition healthy→unhealthy
+	for i := 0; i < 20; i++ {
+		tgt := &store.Target{
+			ID: uuid.New().String(), Name: fmt.Sprintf("sem-test-%d", i), Host: "example.com",
+			Enabled: true, Operator: "AND", Category: "Network",
+		}
+		conds := []store.TargetCondition{{
+			CheckType: "http", CheckName: fmt.Sprintf("HTTP-%d", i), Config: "{}",
+			IntervalS: 300, Field: "status", Comparator: "eq", Value: "down",
+			FailCount: 1, FailWindow: 0, ConditionGroup: 0, GroupOperator: "AND",
+		}}
+		if err := st.CreateTargetWithConditions(tgt, conds, ""); err != nil {
+			t.Fatal(err)
+		}
+		checks, err := st.ListChecksByTarget(tgt.ID)
+		if err != nil || len(checks) == 0 {
+			t.Fatal("no checks created")
+		}
+		checkID := checks[0].ID
+		saveResult(t, st, checkID, "down")
+		wg.Add(1)
+		eng.Evaluate(checkID)
+	}
+
+	wg.Wait()
+
+	max := atomic.LoadInt64(&maxConcurrent)
+	if max > 10 {
+		t.Fatalf("max concurrent dispatches = %d, want <= 10", max)
+	}
+	if max == 0 {
+		t.Fatal("no dispatches occurred")
 	}
 }

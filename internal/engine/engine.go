@@ -21,10 +21,11 @@ type Engine struct {
 	dispatcher AlertDispatcher
 	ruleMu     map[string]*sync.Mutex
 	mu         sync.Mutex
+	alertSem   chan struct{}
 }
 
 func New(st *store.Store) *Engine {
-	return &Engine{store: st, ruleMu: make(map[string]*sync.Mutex)}
+	return &Engine{store: st, ruleMu: make(map[string]*sync.Mutex), alertSem: make(chan struct{}, 10)}
 }
 
 // SetDispatcher sets the alert dispatcher for state change notifications.
@@ -140,10 +141,12 @@ func (e *Engine) evaluateRule(rule store.Rule) {
 		slog.Warn("Rule state changed", "rule_id", rule.ID, "rule_name", rule.Name,
 			"from", oldState, "to", newState, "severity", rule.Severity)
 
-		// Dispatch alert asynchronously
+		// Dispatch alert asynchronously (bounded concurrency)
 		if e.dispatcher != nil {
+			e.alertSem <- struct{}{}
 			go func() {
 				defer func() {
+					<-e.alertSem
 					if r := recover(); r != nil {
 						slog.Error("Panic in alert dispatcher", "rule_id", rule.ID, "panic", r)
 					}
