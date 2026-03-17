@@ -8,19 +8,20 @@ Web-managed monitoring platform written in Go + Vue 3. Multi-check monitoring wi
 
 ## Features
 
-- **6 Check Types** — Ping (ICMP), HTTP/HTTPS, TCP, DNS, Page Hash, TLS Certificate
-- **Unified Targets** — Create a target with conditions (check + alert criteria) in one step
+- **8 Check Types** — Ping (ICMP), HTTP/HTTPS, TCP, DNS, Page Hash, TLS Certificate, SNMP v2c, SNMP v3
+- **Unified Targets** — Create a target with conditions (check + alert criteria) in one step. Optional metadata: notes, contacts, project, location tags.
 - **Rules Engine** — Condition groups with AND/OR logic, configurable fail count and fail window thresholds
-- **Alerting** — Email (Resend API), Signal messaging, and generic webhook (JSON POST to any HTTP endpoint, Bearer or Basic auth), with cooldown, re-alert, and recovery notifications
+- **Alerting** — Email (Resend API), Signal messaging, and generic webhook (JSON POST to any HTTP endpoint, Bearer or Basic auth), with cooldown, re-alert, and recovery notifications (with downtime duration)
 - **Dashboard** — 90-day + 4-hour uptime bars, per-target health state, problems sorted to top, 30s auto-refresh
+- **Search** — Full-text search across targets by name, host, or IP. Project/location filters. Saved searches with localStorage.
 - **SLA Compliance** — Per-category SLA thresholds, dedicated SLA page with Chart.js daily uptime charts
-- **SOC View** — Flat status page for security operations center displays (optionally public)
+- **SOC View** — Flat status page for security operations center displays (optionally public), paginated, optional 90-day history toggle
 - **Auth & RBAC** — JWT + server-side sessions, bcrypt, three roles (admin / operator / viewer)
 - **User Management** — Create, suspend, reset passwords, last-admin protection
-- **Backup & Restore** — Config backup (JSON, web UI restore) + full database backup (tar.gz, optional AES-256-GCM encryption, CLI restore). Server-side backup storage with download/delete management.
+- **Backup & Restore** — Config backup (JSON, web UI restore) + full database backup (tar.gz, optional AES-256-GCM encryption, CLI restore). Server-side backup storage with auto-save on download, configurable max copies.
 - **Audit Log** — Comprehensive audit trail for all admin/operator actions
 - **Fail2Ban** — Integration for login brute-force protection, clickable ban detail tables with source IP, timestamps, and expiry
-- **Settings** — Runtime-configurable session timeout, history retention, alerting, SLA thresholds
+- **Settings** — Runtime-configurable session timeout, history retention, alerting, SLA thresholds, SNMP credentials, backup copies
 - **Single Binary** — Vue 3 frontend embedded in Go binary via `go:embed`
 - **Docker Ready** — Multi-stage Dockerfile, single container, single port
 
@@ -57,7 +58,7 @@ docker compose up -d --build
 
 ### Prerequisites
 
-- Go 1.24+
+- Go 1.25+
 - Node.js 22+ (for frontend build)
 - GCC (for SQLite CGO)
 
@@ -129,21 +130,25 @@ Complete SQLite snapshot including all historical data (check results, audit log
 | Route | Page | Access |
 |-------|------|--------|
 | `/` | Dashboard — uptime bars, health state, problems first | all |
+| `/search` | Search targets by name, host, IP with project/location filters | operator+ |
 | `/targets` | Target list + CRUD with inline conditions | all (CRUD: operator+) |
 | `/alerts` | Alert history | all |
 | `/sla` | SLA Compliance — 90-day daily uptime charts per category | all |
-| `/soc` | Status page (optionally public) | configurable |
-| `/settings` | General, SLA, Alerting, Users, Backup & Restore, Audit Log, Fail2Ban | role-based |
+| `/soc` | Status page (optionally public), paginated, 90d toggle | configurable |
+| `/settings` | General, Tags, SLA, Alerting, Backup & Restore, Fail2Ban | role-based |
+| `/users` | User management | operator+ |
+| `/audit-log` | Audit trail | operator+ |
 | `/profile` | Own profile and password change | all |
 
 ## API Overview
 
-40+ endpoints across 12 domains. Key groups:
+45+ endpoints across 13 domains. Key groups:
 
 | Domain | Endpoints | Auth |
 |--------|-----------|------|
 | Auth | login, logout, me, password | public / any |
 | Targets | CRUD, pause/unpause | any / operator+ |
+| Tags | tag options CRUD | admin |
 | Checks | list, run, results | any / operator+ |
 | Dashboard | status, history | any |
 | SLA | history | any |
@@ -168,7 +173,7 @@ internal/
   store/                   SQLite: all tables, migrations, backup
   auth/                    JWT, bcrypt, sessions
   api/                     HTTP router, middleware, handlers
-  checker/                 6 check types (http, tcp, ping, dns, page_hash, tls_cert)
+  checker/                 8 check types (http, tcp, ping, dns, page_hash, tls_cert, snmp_v2c, snmp_v3)
   scheduler/               DB-driven, per-check timers, event channel
   engine/                  Rules evaluator (condition groups, fail thresholds)
   alerter/                 Email (Resend) + Signal + Webhook dispatch, cooldown, re-alert
@@ -184,7 +189,7 @@ docker-compose.yml         Single-service deployment
 
 | Layer | Technology |
 |-------|-----------|
-| Backend | Go 1.24, net/http (stdlib router), SQLite WAL |
+| Backend | Go 1.25, net/http (stdlib router), SQLite WAL |
 | Frontend | Vue 3, Vite, Vue Router, Pinia, Chart.js |
 | Auth | JWT HS256 in HttpOnly cookie, bcrypt |
 | Alerting | Resend API (email), Signal REST API (messaging), Generic webhook (JSON POST, Bearer/Basic auth) |
