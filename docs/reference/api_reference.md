@@ -321,9 +321,9 @@ Creates target, checks, rule, and rule conditions in one transaction. Creator is
   "host": "string (required)",
   "description": "string",
   "enabled": true,
-  "operator": "AND (kept for backward compat, ignored by engine)",
+  "operator": "AND (kept for backward compat, used as fallback for empty group_operator)",
   "category": "Network | Security | Physical Security | Key Services | Other (default: Other)",
-  "preferred_check_type": "string (optional, must match a condition's check_type; defaults to first condition's type)",
+  "preferred_check_type": "string (optional, must match a condition's check_type; defaults to 'ping'; validated against conditions, falls back to first condition's type if no ping)",
   "notes": "string (optional)",
   "contacts": "string (optional)",
   "project": "string (optional, must exist in tag_options)",
@@ -353,6 +353,8 @@ If `group_operator` is omitted, it defaults to the top-level `operator` value fo
 **Failure evaluation modes:**
 - `fail_window > 0`: Counts consecutive matching results from newest (streak mode). Must reach `fail_count` consecutive failures to trigger the condition.
 - `fail_window = 0`: Single result check ("Once" mode). Triggers on a single matching result; `fail_count` is ignored.
+
+**Normalization:** When `fail_count` > 1 and `fail_window` = 0, API auto-sets `fail_window` = `interval_s` (clamped min=interval_s, max=1800)
 
 **Response (201):** Full TargetDetail object (see GET /api/targets/{id}).
 
@@ -747,7 +749,7 @@ Metrics: `query`, `record_type`, `resolved` (array). Trailing dots stripped for 
 { "endpoint": "/index.html", "baseline_hash": "e3b0c44298fc1c14..." }
 ```
 
-Metrics: `hash`, `baseline_hash`, `url`, `baseline_captured`. On first run (empty `baseline_hash`), returns "up" with `baseline_captured: true` and the computed hash. Subsequent runs compare against baseline — "down" on mismatch. Body limited to 10MB.
+Metrics: `hash`, `baseline_hash`, `url`, `baseline_captured`. On first run (empty `baseline_hash`), returns "up" with `baseline_captured: true` and the computed hash. Subsequent runs compare against baseline — "down" on mismatch. Body limited to 2MB.
 
 ### tls_cert
 
@@ -776,7 +778,7 @@ Metrics: `days_left`, `issuer`, `subject`, `not_after`, `not_before`. Uses SNI f
 
 Credentials: uses `snmp_v2c_community` from global settings (not per-check config).
 
-Metrics: `sys_descr`, `sys_uptime`, `sys_contact`, `sys_name`, `cpu_load` (best-effort), `memory_size` (best-effort). Status "up" if SNMP responds, "down" on timeout or auth failure.
+Metrics: `sys_descr`, `sys_uptime_s`, `sys_contact`, `sys_name`, `cpu_avg_pct` (best-effort), `memory_total_kb` (best-effort). Status "up" if SNMP responds, "down" on timeout or auth failure.
 
 ### snmp_v3
 
@@ -791,7 +793,7 @@ Metrics: `sys_descr`, `sys_uptime`, `sys_contact`, `sys_name`, `cpu_load` (best-
 
 Credentials: uses `snmp_v3_*` keys from global settings (username, security_level, auth_protocol, auth_passphrase, privacy_protocol, privacy_passphrase). Not per-check config.
 
-Metrics: same as `snmp_v2c`. Status "up" if SNMP responds, "down" on timeout or auth failure.
+Metrics: same as `snmp_v2c` (`sys_descr`, `sys_uptime_s`, `sys_contact`, `sys_name`, `cpu_avg_pct`, `memory_total_kb`). Status "up" if SNMP responds, "down" on timeout or auth failure.
 
 ---
 
@@ -1062,13 +1064,13 @@ Both fields are empty strings when no webhook has been sent yet.
 
 ### GET /api/settings
 
-Returns all settings as key-value map. Sensitive values (e.g. `resend_api_key`, `snmp_v3_auth_passphrase`, `snmp_v3_privacy_passphrase`) are masked.
+Returns all settings as key-value map. Sensitive values (e.g. `resend_api_key`, `snmp_v3_auth_passphrase`, `snmp_v3_privacy_passphrase`) are masked. Only keys with existing DB rows are returned; unseeded keys absent.
 
 **Response (200):**
 ```json
 {
   "session_timeout_hours": "24",
-  "history_days": "90",
+  "history_days": "3",
   "audit_retention_days": "91",
   "soc_public": "false",
   "alert_method": "email",
@@ -1092,10 +1094,10 @@ Returns all settings as key-value map. Sensitive values (e.g. `resend_api_key`, 
   "sla_other": "99.9",
   "snmp_v2c_community": "public",
   "snmp_v3_username": "",
-  "snmp_v3_security_level": "",
-  "snmp_v3_auth_protocol": "",
+  "snmp_v3_security_level": "authPriv",
+  "snmp_v3_auth_protocol": "SHA",
   "snmp_v3_auth_passphrase": "••••••••",
-  "snmp_v3_privacy_protocol": "",
+  "snmp_v3_privacy_protocol": "AES",
   "snmp_v3_privacy_passphrase": "••••••••",
   "backup_max_copies": "5"
 }
@@ -1142,8 +1144,8 @@ Update one or more settings. Only known keys are accepted. Sending masked values
 | `webhook_basic_username` | string | any string, used when auth_type=basic |
 | `webhook_basic_password` | string | any string (masked in GET as `"••••••••"`), used when auth_type=basic |
 | `webhook_skip_tls` | boolean string | `"true"` or `"false"` |
-| `webhook_last_error` | string | auto-set by system (read-only in practice) |
-| `webhook_last_success` | string | auto-set by system (read-only in practice) |
+| `webhook_last_error` | string | auto-set by system; writable via PUT |
+| `webhook_last_success` | string | auto-set by system; writable via PUT |
 | `snmp_v2c_community` | string | SNMP v2c community string |
 | `snmp_v3_username` | string | SNMP v3 USM username |
 | `snmp_v3_security_level` | string | `"noAuthNoPriv"`, `"authNoPriv"`, or `"authPriv"` |
@@ -1245,7 +1247,7 @@ Content-Disposition: attachment; filename="bekci-backup-20260115-100000.json"
 ```json
 {
   "version": 1,
-  "schema_version": 5,
+  "schema_version": 22,
   "created_at": "2026-01-15T10:00:00Z",
   "app_version": "1.2.0",
   "users": [],
@@ -1255,13 +1257,14 @@ Content-Disposition: attachment; filename="bekci-backup-20260115-100000.json"
   "checks": [],
   "rule_conditions": [],
   "rule_states": [],
-  "recipients": []
+  "recipients": [],
+  "pause_history": []
 }
 ```
 
 ### POST /api/backup/restore
 
-Accepts either multipart form upload (field name: `file`) or raw JSON body. **Destructive** -- wipes all config tables and replaces with backup data. Max body: 10MB.
+Accepts either multipart form upload (field name: `file`) or raw JSON body. **Destructive** -- wipes all config tables and replaces with backup data. Max body: 2MB.
 
 **Request (multipart):**
 ```
@@ -1498,7 +1501,7 @@ Enabled only when `cors_origin` is configured (development). Allows methods: `GE
 
 ### Request Body Limits
 - General endpoints: 1MB max (`readJSON` helper)
-- Backup restore: 10MB max
+- Backup restore: 2MB max
 
 ### Logging
 All HTTP requests are logged at DEBUG level with method, path, status code, and duration.

@@ -6,7 +6,7 @@
 |------|---------|
 | `admin` | Full system control. User management, settings, backup/restore, all monitoring operations. |
 | `operator` | Monitoring operations. Create/edit/delete targets, run checks, manage alert recipients, view audit log. Cannot manage users or system settings. |
-| `viewer` | Read-only access. View targets, checks, results, dashboard, alerts. Cannot create or modify anything. |
+| `viewer` | Read-only access. View targets, checks, results, dashboard, alerts. Cannot create or modify anything except own profile/password. |
 
 Valid roles enforced at user creation and update: `admin`, `operator`, `viewer`. Any other value is rejected (400).
 
@@ -24,7 +24,7 @@ Valid roles enforced at user creation and update: `admin`, `operator`, `viewer`.
    - Create session record in DB (UUID, user_id, expires_at, ip_address)
    - Sign JWT (HS256) with claims: `sub` (user_id), `sid` (session_id), `role`, `exp`, `iat`
 4. On success: reset rate limiter for IP, set HttpOnly cookie (`token`; Secure; SameSite=Strict; MaxAge=session duration), return user info in JSON body
-5. On failure: record failure in rate limiter, audit log entry
+5. On failure: record failure in rate limiter, audit log entry. All failures return generic 401 to prevent enumeration
 
 ### Token Structure (JWT HS256)
 
@@ -156,7 +156,7 @@ Request
 
 | Endpoint | Method | Auth | Admin | Operator | Viewer | Notes |
 |----------|--------|------|-------|----------|--------|-------|
-| `/api/tags` | GET | anyAuth | Y | Y | Y | List all tag options |
+| `/api/tags` | GET | anyAuth | Y | Y | Y | List tag options. Required param: `?group=project\|location`; missing/invalid returns 400 |
 | `/api/tags` | POST | adminAuth | Y | N | N | Create tag option |
 | `/api/tags/{id}` | DELETE | adminAuth | Y | N | N | Delete tag option |
 

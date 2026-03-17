@@ -5,14 +5,14 @@
 | Layer | Technology |
 |-------|-----------|
 | Backend | Go 1.25 (go.mod 1.25.0), net/http stdlib router (Go 1.22+ method routing), SQLite WAL |
-| Database | SQLite 3 via go-sqlite3 (CGO required), WAL mode, `SetMaxOpenConns(1)`, auto-migrate (21 migrations) |
+| Database | SQLite 3 via go-sqlite3 (CGO required), WAL mode, `SetMaxOpenConns(1)`, auto-migrate (22 migrations) |
 | Frontend | Vue 3, Vite 7, Vue Router 4, Pinia 3, Axios, Chart.js + vue-chartjs |
 | Auth | JWT HS256 (golang-jwt/v5) in HttpOnly cookie (`token`), bcrypt cost 12 |
 | Reverse Proxy | Nginx 1.18 (prod only) — SSL termination, security headers, gzip |
 | Email | Resend API |
 | Signal | Signal Messenger via signal-cli REST API |
 | Webhook | Generic JSON POST to any HTTP endpoint (SOAR, Slack, etc.), Bearer or Basic auth |
-| Network | ICMP ping via pro-bing (requires NET_RAW capability), SNMP via gosnmp |
+| Network | ICMP ping via pro-bing (uses privileged raw ICMP if root, otherwise unprivileged UDP), SNMP via gosnmp |
 | Config | YAML base + env var overrides (`BEKCI_` prefix) + auto-generated defaults |
 | Deploy | Docker multi-stage build (local) or bare-metal via Makefile (prod) |
 
@@ -33,7 +33,7 @@
 | **Service** | Docker (`restart: unless-stopped`) | systemd (`bekci.service`, user `bekci:bekci`) |
 | **NET_RAW** | `cap_add: [NET_RAW]` in compose | `AmbientCapabilities=CAP_NET_RAW` in systemd unit |
 | **Reverse proxy** | None (direct access) | Nginx 1.18 on port 443 |
-| **Default creds** | admin / sifresifresifre | admin / sifresifresifre |
+| **Default creds** | admin / admin1234 (code default on first boot; user changes post-boot) | admin / admin1234 (code default on first boot; user changes post-boot) |
 
 > **Note**: Bare-metal Go development on macOS is possible (`make dev`, `make run`) but Docker is the primary local dev/test method. Frontend dev uses Vite HMR via `cd frontend && npm run dev` (proxies `/api` to localhost:65000).
 
@@ -118,8 +118,8 @@ No npm on server — `cmd/bekci/frontend_dist/` is committed to git. Go binary e
 | WriteTimeout | 30s |
 | IdleTimeout | 60s |
 | Default port | 65000 |
-| Gzip | stdlib `compress/gzip` middleware, wraps outermost in router chain. All responses compressed. |
-| Health cache | `/system/health` cached 120s TTL (`sync.Mutex`). No ICMP ping per request. |
+| Gzip | stdlib `compress/gzip` middleware, wraps outermost in router chain. Compressed when client sends Accept-Encoding: gzip. |
+| Health cache | `/api/system/health` cached 120s TTL (`sync.Mutex`). No ICMP ping per request. |
 
 ---
 
@@ -130,10 +130,10 @@ No npm on server — `cmd/bekci/frontend_dist/` is committed to git. Go binary e
 |---------|---------|---------|
 | golang-jwt/jwt/v5 | 5.3.1 | JWT signing & verification |
 | google/uuid | 1.6.0 | UUID generation (target IDs, check IDs, etc.) |
-| mattn/go-sqlite3 | 1.14.19 | SQLite driver (requires CGO) |
+| mattn/go-sqlite3 | 1.14.37 | SQLite driver (requires CGO) |
 | prometheus-community/pro-bing | 0.8.0 | ICMP ping |
 | gosnmp/gosnmp | latest | SNMP v2c/v3 queries |
-| golang.org/x/crypto | 0.48.0 | Bcrypt password hashing, Argon2id KDF (backup encryption) |
+| golang.org/x/crypto | 0.49.0 | Bcrypt password hashing, Argon2id KDF (backup encryption) |
 | gopkg.in/yaml.v3 | 3.0.1 | Config file parsing |
 
 ### Frontend (package.json)
@@ -160,7 +160,7 @@ No npm on server — `cmd/bekci/frontend_dist/` is committed to git. Go binary e
 SearchView and SlaView are lazy-loaded (code-split). SlaView lazy-load saves ~250KB from main bundle (Chart.js loaded on demand).
 
 ### SOC Page Performance
-- **Poll interval:** 30 seconds (status + history refresh)
+- **Poll interval:** 30 seconds (status refresh only; history loaded on page load/navigation, not polls)
 - **90d history:** Off by default. User toggle loads on demand. Not re-fetched on polls — only loaded once when enabled.
 - **Pagination:** 48 hosts per page (12 rows × 4 columns). History fetched only for visible page.
 - **Page change:** `loadHistoryForVisiblePage()` fires immediately on page navigation — no waiting for next poll.

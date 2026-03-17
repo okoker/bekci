@@ -1,6 +1,6 @@
 # Database Schema Reference
 
-**Current schema version:** 21
+**Current schema version:** 22
 **Engine:** SQLite 3 with WAL journal mode
 **Driver:** `github.com/mattn/go-sqlite3` (CGO required)
 
@@ -69,7 +69,7 @@ Key-value config store.
 | Key                    | Default | Added in    |
 |------------------------|---------|-------------|
 | session_timeout_hours  | 24      | migration001 |
-| history_days           | 90      | migration001 |
+| history_days           | 3       | migration001 (re-seeded migration022) |
 | audit_retention_days   | 91      | migration001 (re-seeded migration009) |
 | soc_public             | false   | migration003 |
 | alert_method           | email   | migration011 |
@@ -386,8 +386,9 @@ Append-only audit trail. Purged by `PurgeOldAuditEntries(days)` (runs at startup
 | 019 | migration019   | Add `notes`, `contacts`, `project`, `location` columns (TEXT DEFAULT NULL) to `targets`. Create `tag_options` table for admin-managed project/location tag values. |
 | 020 | migration020   | Create `check_state` table (1 row/check, current status cache). Create `check_daily_rollups` table (1 row/check/day, pre-aggregated uptime). Backfill both from existing `check_results`. Purge raw results older than 3 days. |
 | 021 | migration021   | Add 3 performance indexes: `idx_rule_conditions_check_id` on `rule_conditions(check_id)`, `idx_rule_conditions_rule_id` on `rule_conditions(rule_id, condition_group, sort_order)`, `idx_targets_rule_id` on `targets(rule_id)`. |
+| 022 | migration022   | Update `history_days` seed from 90 to 3 for raw result retention (aligns with A-011 3-day default). |
 
-**Note:** Function declarations appear out of order in the source file (e.g. migration005 before migration004, migration008 before migration007), but the `migrations` slice defines the correct sequential execution order: 001 through 021, strictly in order.
+**Note:** Function declarations appear out of order in the source file (e.g. migration005 before migration004, migration008 before migration007), but the `migrations` slice defines the correct sequential execution order: 001 through 022, strictly in order.
 
 ---
 

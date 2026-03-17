@@ -6,7 +6,7 @@ Two backup types exist in Bekci:
 
 | Type | Scope | Format | Restore |
 |------|-------|--------|---------|
-| **Config Backup** | 9 config tables (users, targets, checks, rules, settings, recipients) | JSON | Web UI upload |
+| **Config Backup** | 9 config tables (users, settings, rules, targets, checks, rule_conditions, rule_states, recipients, pause_history) | JSON | Web UI upload |
 | **Full Backup** | Entire SQLite database (all tables + historical data) + config.yaml | tar.gz (optional AES-256-GCM) | CLI only (`bekci restore-full`) |
 
 ## Full Backup
@@ -26,19 +26,16 @@ Two backup types exist in Bekci:
 
 | Endpoint | Auth | Description |
 |----------|------|-------------|
-| `GET /api/backup/full` | admin | Download full backup (streams to browser) |
+| `POST /api/backup/full` | admin | Download full backup (streams to browser) |
 | `POST /api/backup/full/save` | admin | Save full backup to server |
 | `GET /api/backup/full/list` | admin | List saved backups |
 | `GET /api/backup/full/saved/{filename}` | admin | Download a saved backup |
 | `DELETE /api/backup/full/saved/{filename}` | admin | Delete a saved backup |
 | `GET /api/backup/generate-passphrase` | admin | Generate 4-word passphrase |
 
-#### GET /api/backup/full
+#### POST /api/backup/full
 
-| Param | Required | Description |
-|-------|----------|-------------|
-| `encrypt` | no | `true` to encrypt |
-| `passphrase` | if encrypt=true | Min 8 chars |
+JSON body: `{"encrypt": bool, "passphrase": "string"}` (passphrase min 8 chars, required when encrypt is true).
 
 Response: binary stream with `Content-Disposition: attachment`.
 
@@ -48,11 +45,11 @@ File extensions:
 
 #### GET /api/backup/generate-passphrase
 
-Returns `{"passphrase": "word-word-word-word"}`. Uses crypto/rand from a curated ~960-word list (~40 bits entropy for 4 words).
+Returns `{"passphrase": "word-word-word-word"}`. Uses crypto/rand from a curated 904-word list (~40 bits entropy for 4 words).
 
 #### POST /api/backup/full/save
 
-Same query params as `GET /api/backup/full` (`encrypt`, `passphrase`). Saves to `backup_dir` on the server.
+Same JSON body fields as `POST /api/backup/full` (`encrypt`, `passphrase`). Saves to `backup_dir` on the server.
 
 Response: `{"message": "backup saved", "filename": "bekci-full-20260307-015116.tar.gz", "sha256": "82d676c68f5e..."}`
 
@@ -81,7 +78,7 @@ Env override: `BEKCI_BACKUP_DIR`.
 
 Directory auto-created on first save. Metadata tracked in `{backup_dir}/index.json` — SHA256 hash computed at save time to avoid re-hashing large files on list.
 
-No auto-purge — deletion is manual via the web UI.
+Auto-save on download + auto-prune oldest when `backup_max_copies` exceeded (default 5). Manual delete also available via the web UI.
 
 ### Frontend UI
 
@@ -151,7 +148,7 @@ When declining the bundled config, the wizard prompts for each field with the bu
 ### Safety
 
 - Does NOT auto-start the service — user must manually run `systemctl start bekci`
-- Does NOT modify JWT secret — all users must re-login after restore
+- Does NOT modify JWT secret — sessions table is restored; existing sessions from backup may remain valid
 - Default confirmation is NO — must explicitly type `y`
 - Archive extraction sanitizes filenames (only base names, no path traversal)
 - Copy size limited by tar header (prevents decompression bombs)
@@ -177,7 +174,7 @@ sudo systemctl start bekci
 | File | Purpose |
 |------|---------|
 | `internal/crypto/crypto.go` | AES-256-GCM encrypt/decrypt with Argon2id KDF |
-| `internal/crypto/diceware.go` | Passphrase generator (~960-word list) |
+| `internal/crypto/diceware.go` | Passphrase generator (904-word list) |
 | `internal/crypto/crypto_test.go` | Encrypt/decrypt round-trip, wrong passphrase, edge cases |
 | `internal/crypto/diceware_test.go` | Word count, uniqueness, defaults |
 | `internal/store/full_backup.go` | SQLite online backup API with VACUUM INTO fallback |
