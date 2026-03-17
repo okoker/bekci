@@ -11,7 +11,7 @@ const activeCategory = ref('All')
 const categories = ['All', 'Network', 'Security', 'Physical Security', 'Key Services', 'Other']
 const show90d = ref(false)
 const currentPage = ref(1)
-const pageSize = 50
+const pageSize = 48
 let refreshTimer = null
 let healthTimer = null
 
