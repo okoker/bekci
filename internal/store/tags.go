@@ -1,11 +1,29 @@
 package store
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 type TagOption struct {
 	ID    int    `json:"id"`
 	Group string `json:"group"`
 	Value string `json:"value"`
+}
+
+// CategoryInUseError is returned when attempting to delete a category that has targets assigned.
+type CategoryInUseError struct {
+	Targets []string
+}
+
+func (e *CategoryInUseError) Error() string {
+	return fmt.Sprintf("category has %d assigned targets", len(e.Targets))
+}
+
+// CategoryToSLAKey derives the settings key for a category name.
+// "Physical Security" → "sla_physical_security"
+func CategoryToSLAKey(name string) string {
+	return "sla_" + strings.ToLower(strings.ReplaceAll(name, " ", "_"))
 }
 
 // ListTagOptions returns all tag options for a group ("project" or "location").
@@ -40,7 +58,9 @@ func (s *Store) CreateTagOption(group, value string) (*TagOption, error) {
 	return &TagOption{ID: int(id), Group: group, Value: value}, nil
 }
 
-// DeleteTagOption removes a tag option and clears it from all targets that reference it.
+// DeleteTagOption removes a tag option. For project/location, clears from targets.
+// For category, blocks deletion if targets are assigned (returns CategoryInUseError)
+// and cleans up the associated SLA setting.
 func (s *Store) DeleteTagOption(id int) error {
 	var grp, value string
 	err := s.db.QueryRow(`SELECT grp, value FROM tag_options WHERE id = ?`, id).Scan(&grp, &value)
@@ -48,18 +68,85 @@ func (s *Store) DeleteTagOption(id int) error {
 		return fmt.Errorf("tag option not found")
 	}
 
-	// Clear from targets — grp is "project" or "location" which matches column name
-	col := grp
-	switch col {
-	case "project", "location":
-		// valid column name
-	default:
-		return fmt.Errorf("invalid tag group: %s", col)
-	}
-	if _, err := s.db.Exec(`UPDATE targets SET `+col+` = NULL WHERE `+col+` = ?`, value); err != nil {
-		return err
+	if grp == "category" {
+		if value == "Other" {
+			return fmt.Errorf("cannot delete the 'Other' category")
+		}
+		rows, err := s.db.Query(`SELECT name FROM targets WHERE category = ?`, value)
+		if err != nil {
+			return fmt.Errorf("checking targets: %w", err)
+		}
+		defer rows.Close()
+		var names []string
+		for rows.Next() {
+			var n string
+			if err := rows.Scan(&n); err != nil {
+				return err
+			}
+			names = append(names, n)
+		}
+		if len(names) > 0 {
+			return &CategoryInUseError{Targets: names}
+		}
+		// Clean up SLA setting
+		slaKey := CategoryToSLAKey(value)
+		if _, err := s.db.Exec(`DELETE FROM settings WHERE key = ?`, slaKey); err != nil {
+			return fmt.Errorf("cleanup sla setting: %w", err)
+		}
+	} else {
+		col := grp
+		switch col {
+		case "project", "location":
+			// valid column name
+		default:
+			return fmt.Errorf("invalid tag group: %s", col)
+		}
+		if _, err := s.db.Exec(`UPDATE targets SET `+col+` = NULL WHERE `+col+` = ?`, value); err != nil {
+			return err
+		}
 	}
 
 	_, err = s.db.Exec(`DELETE FROM tag_options WHERE id = ?`, id)
 	return err
+}
+
+// RenameTagOption renames a tag option. For categories, cascades the rename
+// to targets.category and the associated SLA settings key.
+func (s *Store) RenameTagOption(id int, newValue string) error {
+	var grp, oldValue string
+	err := s.db.QueryRow(`SELECT grp, value FROM tag_options WHERE id = ?`, id).Scan(&grp, &oldValue)
+	if err != nil {
+		return fmt.Errorf("tag option not found")
+	}
+
+	if grp == "category" && oldValue == "Other" {
+		return fmt.Errorf("cannot rename the 'Other' category")
+	}
+
+	if _, err := s.db.Exec(`UPDATE tag_options SET value = ? WHERE id = ?`, newValue, id); err != nil {
+		if strings.Contains(err.Error(), "UNIQUE") {
+			return fmt.Errorf("a tag with this name already exists")
+		}
+		return err
+	}
+
+	if grp == "category" {
+		if _, err := s.db.Exec(`UPDATE targets SET category = ? WHERE category = ?`, newValue, oldValue); err != nil {
+			return fmt.Errorf("cascade rename targets: %w", err)
+		}
+		oldKey := CategoryToSLAKey(oldValue)
+		newKey := CategoryToSLAKey(newValue)
+		if _, err := s.db.Exec(`UPDATE settings SET key = ? WHERE key = ?`, newKey, oldKey); err != nil {
+			return fmt.Errorf("rename sla setting: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// ValidateCategory checks if a category name exists in tag_options.
+func (s *Store) ValidateCategory(name string) (bool, error) {
+	var count int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM tag_options WHERE grp = 'category' AND value = ?`, name).Scan(&count)
+	return count > 0, err
 }
