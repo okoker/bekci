@@ -20,7 +20,7 @@ RUN CGO_ENABLED=1 go build -ldflags "-X main.version=${VERSION}" -o /bekci ./cmd
 RUN setcap cap_net_raw+ep /bekci
 
 # Stage 3: Runtime
-FROM alpine:3.21
+FROM alpine:3.23
 RUN apk add --no-cache ca-certificates libcap
 COPY --from=backend /bekci /usr/local/bin/bekci
 RUN mkdir -p /data
