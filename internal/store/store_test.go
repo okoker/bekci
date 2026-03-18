@@ -1241,3 +1241,75 @@ func TestPreferredCheckTypeConsistency(t *testing.T) {
 		t.Fatalf("create: preferred_check_type = %q, want \"http\"", got.PreferredCheckType)
 	}
 }
+
+// T-S23: Baseline schema creates all tables, indexes, and settings correctly
+func TestBaselineSchemaCompleteness(t *testing.T) {
+	s := newTestStore(t)
+
+	// Verify schema version
+	v, err := s.SchemaVersion()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v != 22 {
+		t.Fatalf("schema version = %d, want 22", v)
+	}
+
+	// Verify all expected tables exist
+	expectedTables := []string{
+		"users", "sessions", "settings", "targets", "checks",
+		"check_results", "rules", "rule_conditions", "rule_states",
+		"alert_history", "audit_logs", "target_alert_recipients",
+		"target_pause_history", "tag_options", "check_state",
+		"check_daily_rollups", "schema_version",
+	}
+	for _, table := range expectedTables {
+		var n int
+		err := s.db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`, table).Scan(&n)
+		if err != nil || n == 0 {
+			t.Errorf("missing table: %s", table)
+		}
+	}
+
+	// Verify dropped tables don't exist
+	droppedTables := []string{"projects", "alert_channels", "rule_alerts"}
+	for _, table := range droppedTables {
+		var n int
+		s.db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`, table).Scan(&n)
+		if n != 0 {
+			t.Errorf("dropped table still exists: %s", table)
+		}
+	}
+
+	// Verify key indexes exist
+	expectedIndexes := []string{
+		"idx_sessions_user_id", "idx_sessions_expires_at",
+		"idx_check_results_check_id", "idx_check_results_checked_at",
+		"idx_check_results_check_id_checked_at",
+		"idx_checks_target_id", "idx_ah_rule", "idx_audit_created",
+		"idx_pause_history_target",
+		"idx_rule_conditions_check_id", "idx_rule_conditions_rule_id",
+		"idx_targets_rule_id",
+	}
+	for _, idx := range expectedIndexes {
+		var n int
+		err := s.db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name=?`, idx).Scan(&n)
+		if err != nil || n == 0 {
+			t.Errorf("missing index: %s", idx)
+		}
+	}
+
+	// Verify seed settings count (25 settings at v22)
+	var settingsCount int
+	s.db.QueryRow(`SELECT COUNT(*) FROM settings`).Scan(&settingsCount)
+	if settingsCount != 25 {
+		t.Errorf("settings count = %d, want 25", settingsCount)
+	}
+
+	// Verify critical seed values
+	var historyDays string
+	s.db.QueryRow(`SELECT value FROM settings WHERE key = 'history_days'`).Scan(&historyDays)
+	if historyDays != "3" {
+		t.Errorf("history_days = %q, want \"3\"", historyDays)
+	}
+}
