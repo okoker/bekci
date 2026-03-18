@@ -526,8 +526,8 @@ async function saveSignalSettings() {
   alertSaving.value = true
   try {
     await api.put('/settings', {
-      signal_api_url: alertForm.value.signal_api_url,
-      signal_number: alertForm.value.signal_number,
+      signal_api_url: alertForm.value.signal_api_url || 'http://10.0.9.21:55555/v2/send',
+      signal_number: alertForm.value.signal_number || '+905336075015',
       signal_username: alertForm.value.signal_username,
       signal_password: alertForm.value.signal_password,
     })
@@ -1608,7 +1608,7 @@ onUnmounted(() => {
 
           <div class="form-group">
             <label>Sender Number</label>
-            <input v-model="alertForm.signal_number" type="text" placeholder="+908502851580" />
+            <input v-model="alertForm.signal_number" type="text" placeholder="+905336075015" />
           </div>
 
           <div class="form-row">
