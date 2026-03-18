@@ -11,6 +11,7 @@ services:
       - bekci-data:/data
     environment:
       - BEKCI_DB_PATH=/data/bekci.db
+      - BEKCI_HOST=0.0.0.0
     cap_add:
       - NET_RAW
     ulimits:

@@ -4,11 +4,13 @@ Base URL: `http://<host>:65000/api`
 
 All request/response bodies are JSON (`Content-Type: application/json`) unless noted otherwise.
 
+**Network access:** The API is designed for the embedded Vue frontend only — not for external consumption. The server binds to `127.0.0.1` (localhost) by default, rejecting non-local connections. To allow remote access (e.g., inside a Docker container), set `BEKCI_HOST=0.0.0.0` or `server.host: "0.0.0.0"` in `config.yaml`.
+
 **Compression:** All API responses are gzip-compressed when the client sends `Accept-Encoding: gzip`. Handled by `gzipMiddleware` (stdlib `compress/gzip`), wrapping the outermost layer of the router chain.
 
 ## Authentication
 
-Auth uses HttpOnly cookies. On successful login, the server sets a `token` cookie (HttpOnly, Secure, SameSite=Strict). All authenticated endpoints read the JWT from this cookie automatically — no `Authorization` header needed.
+Auth uses HttpOnly cookies (JWT). These APIs are consumed by the embedded Vue frontend — there is no API key or token-based auth for external clients. On successful login, the server sets a `token` cookie (HttpOnly, Secure, SameSite=Strict). All authenticated endpoints read the JWT from this cookie automatically — no `Authorization` header needed.
 
 **Roles** (hierarchical for RBAC checks):
 - `admin` -- full access

@@ -25,8 +25,8 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Server.Port != 65000 {
 		t.Fatalf("port = %d, want 65000", cfg.Server.Port)
 	}
-	if cfg.Server.Host != "0.0.0.0" {
-		t.Fatalf("host = %q, want %q", cfg.Server.Host, "0.0.0.0")
+	if cfg.Server.Host != "127.0.0.1" {
+		t.Fatalf("host = %q, want %q", cfg.Server.Host, "127.0.0.1")
 	}
 	if cfg.Logging.Level != "warn" {
 		t.Fatalf("log level = %q, want %q", cfg.Logging.Level, "warn")

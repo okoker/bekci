@@ -104,7 +104,7 @@ func applyDefaults(cfg *Config) {
 		cfg.Server.Port = 65000
 	}
 	if cfg.Server.Host == "" {
-		cfg.Server.Host = "0.0.0.0"
+		cfg.Server.Host = "127.0.0.1"
 	}
 	if cfg.Server.DBPath == "" {
 		cfg.Server.DBPath = "bekci.db"
