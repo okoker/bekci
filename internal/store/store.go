@@ -284,7 +284,20 @@ func (s *Store) migrate() error {
 	}
 
 	if current < schemaVersion {
-		return fmt.Errorf("schema version %d is below baseline %d; cannot auto-upgrade (old migrations removed)", current, schemaVersion)
+		// Bridge: apply missing pre-baseline migrations for known versions.
+		// Only v21→v22 is expected (prod was deployed before migration022 existed).
+		if current == 21 {
+			slog.Info("Applying bridge migration 022", "from", current, "to", schemaVersion)
+			if _, err := s.db.Exec(`UPDATE settings SET value = '3' WHERE key = 'history_days' AND value = '90'`); err != nil {
+				return fmt.Errorf("bridge migration 022: %w", err)
+			}
+			if _, err := s.db.Exec(`UPDATE schema_version SET version = ?`, schemaVersion); err != nil {
+				return err
+			}
+			current = schemaVersion
+		} else {
+			return fmt.Errorf("schema version %d is below baseline %d; cannot auto-upgrade (old migrations removed)", current, schemaVersion)
+		}
 	}
 
 	// Future migrations go here (23, 24, ...)
