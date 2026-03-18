@@ -25,6 +25,9 @@ const expandedTargetId = ref(null)
 const expandedDetail = ref(null)
 const expandLoading = ref(false)
 
+// 4h sparkline (per-check, loaded on expand)
+const sparklineData = ref({}) // checkId -> bar4h[]
+
 // Edit modal
 const showEditModal = ref(false)
 const editTargetId = ref(null)
@@ -146,11 +149,56 @@ async function toggleExpand(targetId) {
   try {
     const { data } = await api.get(`/targets/${targetId}`)
     expandedDetail.value = data
+    // Load 4h sparkline for each check (non-blocking)
+    if (data.conditions) {
+      const checkIds = [...new Set(data.conditions.map(c => c.check_id))]
+      Promise.allSettled(
+        checkIds.filter(id => !sparklineData.value[id]).map(async id => {
+          const res = await api.get(`/dashboard/history/${id}?range=4h`)
+          sparklineData.value = { ...sparklineData.value, [id]: pad4hBars(res.data) }
+        })
+      )
+    }
   } catch {
     error.value = 'Failed to load target details'
   } finally {
     expandLoading.value = false
   }
+}
+
+// Pad 4h data to 48 entries (5-min slots, oldest first)
+function pad4hBars(data) {
+  const bars = []
+  const now = new Date()
+  const slotMs = 5 * 60 * 1000
+  const start = new Date(now.getTime() - 4 * 60 * 60 * 1000)
+  for (let i = 0; i < 48; i++) {
+    const slotStart = new Date(start.getTime() + i * slotMs)
+    const slotEnd = new Date(slotStart.getTime() + slotMs)
+    const inSlot = data.filter(r => {
+      const t = new Date(r.checked_at).getTime()
+      return t >= slotStart.getTime() && t < slotEnd.getTime()
+    })
+    if (inSlot.length > 0) {
+      const last = inSlot[inSlot.length - 1]
+      bars.push({ status: last.status, response_ms: last.response_ms, checked_at: last.checked_at })
+    } else {
+      bars.push({ status: 'none', response_ms: 0, checked_at: slotStart.toISOString() })
+    }
+  }
+  return bars
+}
+
+function statusColor(status) {
+  if (status === 'none') return '#d1d5db'
+  return status === 'up' ? '#48bb78' : '#f56565'
+}
+
+function formatTooltip4h(r) {
+  if (!r) return ''
+  const d = new Date(r.checked_at)
+  const timeStr = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+  return `${timeStr}: ${r.status} (${r.response_ms}ms)`
 }
 
 // Delete
@@ -421,6 +469,7 @@ onMounted(() => {
                             <th>Type</th>
                             <th>Interval</th>
                             <th>Enabled</th>
+                            <th>Last 4 hours</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -432,6 +481,19 @@ onMounted(() => {
                             </td>
                             <td>{{ formatInterval(c.interval_s) }}</td>
                             <td><span :class="['badge', c.enabled !== false ? 'badge-active' : 'badge-suspended']">{{ c.enabled !== false ? 'yes' : 'no' }}</span></td>
+                            <td class="sparkline-cell">
+                              <div class="spark-track">
+                                <div v-for="(r, i) in (sparklineData[c.check_id] || [])" :key="i"
+                                  class="spark-tick"
+                                  :style="{ background: statusColor(r.status) }"
+                                  :title="formatTooltip4h(r)">
+                                </div>
+                              </div>
+                              <div v-if="sparklineData[c.check_id]" class="spark-labels">
+                                <span>4h ago</span>
+                                <span>Now</span>
+                              </div>
+                            </td>
                           </tr>
                         </tbody>
                       </table>
@@ -785,6 +847,35 @@ onMounted(() => {
   margin-top: 0.25rem;
 }
 .checks-table th { font-size: 0.7rem; }
+
+/* 4h sparkline */
+.sparkline-cell {
+  min-width: 160px;
+  max-width: 240px;
+}
+.spark-track {
+  display: flex;
+  gap: 1px;
+  height: 20px;
+  align-items: stretch;
+}
+.spark-tick {
+  flex: 1;
+  min-width: 0;
+  border-radius: 1px;
+  transition: opacity 0.15s;
+}
+.spark-tick:hover {
+  opacity: 0.65;
+}
+.spark-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.55rem;
+  color: #a0aec0;
+  margin-top: 1px;
+  padding: 0 1px;
+}
 
 /* Modal */
 .modal-overlay {

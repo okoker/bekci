@@ -326,10 +326,15 @@ onUnmounted(() => {
           {{ cat }} <span class="soc-filter-count">({{ categoryStats[cat].count }})</span>
         </button>
       </div>
-      <label class="soc-toggle" title="Show 90-day uptime history">
-        <input type="checkbox" v-model="show90d" />
-        <span class="soc-toggle-label">90d</span>
-      </label>
+      <div class="soc-toggle-pill">
+        <input type="checkbox" checked disabled class="soc-cb soc-cb-locked" />
+        <span class="soc-toggle-label soc-label-locked">4h</span>
+        <span class="soc-toggle-divider"></span>
+        <label class="soc-toggle-90d">
+          <input type="checkbox" v-model="show90d" class="soc-cb" />
+          <span class="soc-toggle-label">90d</span>
+        </label>
+      </div>
       <div v-if="health" class="health-indicator" @click.stop="togglePopover">
         <div class="health-dots">
           <span class="health-dot" :class="dotColor('net')" title="Network"></span>
@@ -755,19 +760,43 @@ onUnmounted(() => {
   color: #94a3b8;
 }
 
-.soc-toggle {
+.soc-toggle-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-shrink: 0;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 20px;
+  padding: 0.2rem 0.6rem;
+}
+.soc-cb {
+  accent-color: #3b82f6;
+  margin: 0;
+  width: 13px;
+  height: 13px;
+  cursor: pointer;
+}
+.soc-cb-locked {
+  cursor: default;
+  opacity: 0.45;
+}
+.soc-label-locked {
+  opacity: 0.45;
+}
+.soc-toggle-divider {
+  width: 1px;
+  height: 14px;
+  background: #334155;
+}
+.soc-toggle-90d {
   display: flex;
   align-items: center;
   gap: 0.3rem;
   cursor: pointer;
-  flex-shrink: 0;
-}
-.soc-toggle input {
-  accent-color: #3b82f6;
-  cursor: pointer;
 }
 .soc-toggle-label {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   color: #94a3b8;
   font-weight: 500;
 }
