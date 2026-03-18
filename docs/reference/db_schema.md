@@ -21,7 +21,7 @@
 
 ### schema_version
 
-Tracks current migration version. Single row.
+Tracks current schema version. Single row. Stamped to 22 by the baseline schema on fresh install.
 
 | Column  | Type    | Constraints |
 |---------|---------|-------------|
@@ -363,32 +363,34 @@ Append-only audit trail. Purged by `PurgeOldAuditEntries(days)` (runs at startup
 
 ## Migration History
 
-| #   | Function       | Changes |
-|-----|----------------|---------|
-| 001 | migration001   | Create `users`, `sessions`, `settings` tables. Seed default settings. |
-| 002 | migration002   | Create `projects`, `targets`, `checks`, `check_results` tables + indexes. |
-| 003 | migration003   | Add `preferred_check_type` column to targets. Seed `soc_public` setting. |
-| 004 | migration004   | Drop `projects` table. Rebuild `targets` without `project_id` FK. `name` becomes globally unique. |
-| 005 | migration005   | Create `rules`, `rule_conditions`, `rule_states`, `alert_channels`, `rule_alerts`, `alert_history` tables. |
-| 006 | migration006   | Add `operator`, `severity`, `rule_id` columns to targets. Auto-link existing single-target rules. Delete multi-target orphan rules. |
-| 007 | migration007   | Rename `targets.severity` to `targets.category`. Remap old severity values to 'Other'. |
-| 008 | migration008   | Create `audit_logs` table + index. |
-| 009 | migration009   | Re-seed `audit_retention_days` setting (INSERT OR IGNORE). |
-| 010 | migration010   | Remap old granular categories to simplified set: ISP/Router->Network, FW/VPN/SIEM/PAM->Security, IT Server->Key Services. |
-| 011 | migration011   | Create `target_alert_recipients`. Add `phone` to users. Add `target_id`, `recipient_id` to alert_history. Drop `rule_alerts`, `alert_channels`. Seed alerting settings. |
-| 012 | migration012   | Backfill rules for targets that have checks but no rule_id. |
-| 013 | migration013   | Seed 5 SLA threshold settings (`sla_network`, `sla_security`, `sla_physical_security`, `sla_key_services`, `sla_other`), all default `99.9`. |
-| 014 | migration014   | Add `condition_group` (INTEGER DEFAULT 0) and `group_operator` (TEXT DEFAULT 'AND') to `rule_conditions`. Backfill `group_operator` from parent rule's `operator`. |
-| 015 | migration015   | Add `paused_at` (DATETIME DEFAULT NULL) to `targets`. Create `target_pause_history` table with index on `target_id`. |
-| 016 | migration016   | Seed Signal alerting settings: `signal_api_url`, `signal_number`, `signal_username`, `signal_password`. |
-| 017 | migration017   | Create composite index `idx_check_results_check_id_checked_at` on check_results(check_id, checked_at DESC) for dashboard/history performance. |
-| 018 | migration018   | Rebuild `checks` table to add `snmp_v2c` and `snmp_v3` to type CHECK constraint. Seed 7 SNMP settings (`snmp_v2c_community`, `snmp_v3_username`, `snmp_v3_security_level`, `snmp_v3_auth_protocol`, `snmp_v3_auth_passphrase`, `snmp_v3_privacy_protocol`, `snmp_v3_privacy_passphrase`). |
-| 019 | migration019   | Add `notes`, `contacts`, `project`, `location` columns (TEXT DEFAULT NULL) to `targets`. Create `tag_options` table for admin-managed project/location tag values. |
-| 020 | migration020   | Create `check_state` table (1 row/check, current status cache). Create `check_daily_rollups` table (1 row/check/day, pre-aggregated uptime). Backfill both from existing `check_results`. Purge raw results older than 3 days. |
-| 021 | migration021   | Add 3 performance indexes: `idx_rule_conditions_check_id` on `rule_conditions(check_id)`, `idx_rule_conditions_rule_id` on `rule_conditions(rule_id, condition_group, sort_order)`, `idx_targets_rule_id` on `targets(rule_id)`. |
-| 022 | migration022   | Update `history_days` seed from 90 to 3 for raw result retention (aligns with A-011 3-day default). |
+> **A-042 (18/03/2026):** All 22 migration functions were collapsed into a single `baselineSchema` constant in `store.go`. Fresh installs run the baseline SQL and stamp schema version 22. Existing installs at v22 are a no-op. The individual migration functions no longer exist in code — git history preserves them. Future schema changes (v23+) will be added as incremental migrations after the baseline. Databases below v22 cannot auto-upgrade (the old migration code is removed).
 
-**Note:** Function declarations appear out of order in the source file (e.g. migration005 before migration004, migration008 before migration007), but the `migrations` slice defines the correct sequential execution order: 001 through 022, strictly in order.
+The table below is retained as historical context for how the schema evolved:
+
+| #   | Changes |
+|-----|---------|
+| 001 | Create `users`, `sessions`, `settings` tables. Seed default settings. |
+| 002 | Create `projects`, `targets`, `checks`, `check_results` tables + indexes. |
+| 003 | Add `preferred_check_type` column to targets. Seed `soc_public` setting. |
+| 004 | Drop `projects` table. Rebuild `targets` without `project_id` FK. `name` becomes globally unique. |
+| 005 | Create `rules`, `rule_conditions`, `rule_states`, `alert_channels`, `rule_alerts`, `alert_history` tables. |
+| 006 | Add `operator`, `severity`, `rule_id` columns to targets. Auto-link existing single-target rules. Delete multi-target orphan rules. |
+| 007 | Rename `targets.severity` to `targets.category`. Remap old severity values to 'Other'. |
+| 008 | Create `audit_logs` table + index. |
+| 009 | Re-seed `audit_retention_days` setting (INSERT OR IGNORE). |
+| 010 | Remap old granular categories to simplified set: ISP/Router->Network, FW/VPN/SIEM/PAM->Security, IT Server->Key Services. |
+| 011 | Create `target_alert_recipients`. Add `phone` to users. Add `target_id`, `recipient_id` to alert_history. Drop `rule_alerts`, `alert_channels`. Seed alerting settings. |
+| 012 | Backfill rules for targets that have checks but no rule_id. |
+| 013 | Seed 5 SLA threshold settings (`sla_network`, `sla_security`, `sla_physical_security`, `sla_key_services`, `sla_other`), all default `99.9`. |
+| 014 | Add `condition_group` (INTEGER DEFAULT 0) and `group_operator` (TEXT DEFAULT 'AND') to `rule_conditions`. Backfill `group_operator` from parent rule's `operator`. |
+| 015 | Add `paused_at` (DATETIME DEFAULT NULL) to `targets`. Create `target_pause_history` table with index on `target_id`. |
+| 016 | Seed Signal alerting settings: `signal_api_url`, `signal_number`, `signal_username`, `signal_password`. |
+| 017 | Create composite index `idx_check_results_check_id_checked_at` on check_results(check_id, checked_at DESC) for dashboard/history performance. |
+| 018 | Rebuild `checks` table to add `snmp_v2c` and `snmp_v3` to type CHECK constraint. Seed 7 SNMP settings. |
+| 019 | Add `notes`, `contacts`, `project`, `location` columns (TEXT DEFAULT NULL) to `targets`. Create `tag_options` table. |
+| 020 | Create `check_state` and `check_daily_rollups` tables. Backfill from existing `check_results`. Purge raw results older than 3 days. |
+| 021 | Add 3 performance indexes: `idx_rule_conditions_check_id`, `idx_rule_conditions_rule_id`, `idx_targets_rule_id`. |
+| 022 | Update `history_days` seed from 90 to 3 for raw result retention (aligns with A-011 3-day default). |
 
 ---
 

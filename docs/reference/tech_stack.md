@@ -5,7 +5,7 @@
 | Layer | Technology |
 |-------|-----------|
 | Backend | Go 1.25 (go.mod 1.25.0), net/http stdlib router (Go 1.22+ method routing), SQLite WAL |
-| Database | SQLite 3 via go-sqlite3 (CGO required), WAL mode, `SetMaxOpenConns(1)`, auto-migrate (22 migrations) |
+| Database | SQLite 3 via go-sqlite3 (CGO required), WAL mode, `SetMaxOpenConns(1)`, baseline schema v22 (future migrations incremental) |
 | Frontend | Vue 3, Vite 7, Vue Router 4, Pinia 3, Axios, Chart.js + vue-chartjs |
 | Auth | JWT HS256 (golang-jwt/v5) in HttpOnly cookie (`token`), bcrypt cost 12 |
 | Reverse Proxy | Nginx 1.18 (prod only) — SSL termination, security headers, gzip |
@@ -24,7 +24,7 @@
 |---|---|---|
 | **Host** | Docker Desktop on macOS | `ssh cl@dias-bekci` (10.0.9.20) |
 | **URL** | `http://localhost:65000` | `https://dias-bekci` (nginx on 443) |
-| **OS** | Alpine 3.21 (container) | Ubuntu 22.04.5 LTS (kernel 5.15) |
+| **OS** | Alpine 3.23 (container) | Ubuntu 22.04.5 LTS (kernel 5.15) |
 | **Go** | 1.25-alpine (build stage) | 1.25.0 (`/usr/local/go`) |
 | **Node** | 22-alpine (build stage) | None (frontend pre-built in repo) |
 | **DB path** | `/data/bekci.db` (Docker volume `bekci-data`) | `/var/lib/bekci/bekci.db` |
@@ -215,6 +215,7 @@ The single `check_results` table was split into a 3-table architecture to elimin
 - Triggered per check result (async goroutine after `SaveResult`)
 - Per-rule mutex serializes evaluation — prevents duplicate alerts when multiple checks tied to same rule complete simultaneously
 - Atomic CAS state transition: `UPDATE ... WHERE current_state = ?` ensures only one evaluator dispatches alerts per transition
+- Alert dispatch semaphore: buffered channel (cap 10) bounds concurrent alert goroutines — prevents unbounded HTTP/SMTP connections on mass failure
 
 ### HTTP Checker
 - Shared `http.Transport` with connection pooling (100 max idle, 5 per host, 90s idle timeout)
