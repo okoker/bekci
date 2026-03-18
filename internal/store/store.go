@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -40,56 +39,266 @@ func (s *Store) Close() error {
 	return s.db.Close()
 }
 
+const schemaVersion = 22
+
+// baselineSchema is the complete DDL for a fresh install at schema version 22.
+// It is equivalent to running migration001 through migration022 on an empty database.
+const baselineSchema = `
+CREATE TABLE users (
+	id            TEXT PRIMARY KEY,
+	username      TEXT UNIQUE NOT NULL,
+	email         TEXT NOT NULL DEFAULT '',
+	password_hash TEXT NOT NULL,
+	role          TEXT NOT NULL CHECK(role IN ('admin','operator','viewer')),
+	status        TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','suspended')),
+	created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+	updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+	phone         TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE sessions (
+	id         TEXT PRIMARY KEY,
+	user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	expires_at DATETIME NOT NULL,
+	ip_address TEXT,
+	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_sessions_user_id ON sessions(user_id);
+CREATE INDEX idx_sessions_expires_at ON sessions(expires_at);
+
+CREATE TABLE settings (
+	key   TEXT PRIMARY KEY,
+	value TEXT NOT NULL
+);
+
+CREATE TABLE targets (
+	id                   TEXT PRIMARY KEY,
+	name                 TEXT UNIQUE NOT NULL,
+	host                 TEXT NOT NULL,
+	description          TEXT NOT NULL DEFAULT '',
+	enabled              INTEGER NOT NULL DEFAULT 1,
+	preferred_check_type TEXT NOT NULL DEFAULT 'ping',
+	created_at           DATETIME DEFAULT CURRENT_TIMESTAMP,
+	updated_at           DATETIME DEFAULT CURRENT_TIMESTAMP,
+	operator             TEXT NOT NULL DEFAULT 'AND',
+	category             TEXT NOT NULL DEFAULT 'critical',
+	rule_id              TEXT DEFAULT NULL,
+	paused_at            DATETIME DEFAULT NULL,
+	notes                TEXT DEFAULT NULL,
+	contacts             TEXT DEFAULT NULL,
+	project              TEXT DEFAULT NULL,
+	location             TEXT DEFAULT NULL
+);
+
+CREATE INDEX idx_targets_rule_id ON targets(rule_id);
+
+CREATE TABLE checks (
+	id          TEXT PRIMARY KEY,
+	target_id   TEXT NOT NULL REFERENCES targets(id) ON DELETE CASCADE,
+	type        TEXT NOT NULL CHECK(type IN ('http','tcp','ping','dns','page_hash','tls_cert','snmp_v2c','snmp_v3')),
+	name        TEXT NOT NULL,
+	config      TEXT NOT NULL DEFAULT '{}',
+	interval_s  INTEGER NOT NULL DEFAULT 300,
+	enabled     INTEGER NOT NULL DEFAULT 1,
+	created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+	updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_checks_target_id ON checks(target_id);
+
+CREATE TABLE check_results (
+	id          INTEGER PRIMARY KEY AUTOINCREMENT,
+	check_id    TEXT NOT NULL REFERENCES checks(id) ON DELETE CASCADE,
+	status      TEXT NOT NULL CHECK(status IN ('up','down')),
+	response_ms INTEGER NOT NULL DEFAULT 0,
+	message     TEXT NOT NULL DEFAULT '',
+	metrics     TEXT NOT NULL DEFAULT '{}',
+	checked_at  DATETIME NOT NULL
+);
+
+CREATE INDEX idx_check_results_check_id ON check_results(check_id);
+CREATE INDEX idx_check_results_checked_at ON check_results(checked_at);
+CREATE INDEX idx_check_results_check_id_checked_at ON check_results(check_id, checked_at DESC);
+
+CREATE TABLE check_state (
+	check_id    TEXT PRIMARY KEY REFERENCES checks(id) ON DELETE CASCADE,
+	status      TEXT NOT NULL CHECK(status IN ('up','down')),
+	response_ms INTEGER NOT NULL DEFAULT 0,
+	message     TEXT NOT NULL DEFAULT '',
+	metrics     TEXT NOT NULL DEFAULT '{}',
+	checked_at  DATETIME NOT NULL
+);
+
+CREATE TABLE check_daily_rollups (
+	check_id        TEXT NOT NULL REFERENCES checks(id) ON DELETE CASCADE,
+	day             TEXT NOT NULL,
+	total_count     INTEGER NOT NULL DEFAULT 0,
+	up_count        INTEGER NOT NULL DEFAULT 0,
+	down_count      INTEGER NOT NULL DEFAULT 0,
+	avg_response_ms INTEGER NOT NULL DEFAULT 0,
+	max_response_ms INTEGER NOT NULL DEFAULT 0,
+	PRIMARY KEY (check_id, day)
+);
+
+CREATE TABLE rules (
+	id          TEXT PRIMARY KEY,
+	name        TEXT NOT NULL,
+	description TEXT NOT NULL DEFAULT '',
+	operator    TEXT NOT NULL DEFAULT 'AND' CHECK(operator IN ('AND','OR')),
+	severity    TEXT NOT NULL DEFAULT 'critical' CHECK(severity IN ('critical','warning','info')),
+	enabled     INTEGER NOT NULL DEFAULT 1,
+	created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+	updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE rule_conditions (
+	id              TEXT PRIMARY KEY,
+	rule_id         TEXT NOT NULL REFERENCES rules(id) ON DELETE CASCADE,
+	check_id        TEXT NOT NULL REFERENCES checks(id) ON DELETE CASCADE,
+	field           TEXT NOT NULL DEFAULT 'status',
+	comparator      TEXT NOT NULL DEFAULT 'eq',
+	value           TEXT NOT NULL,
+	fail_count      INTEGER NOT NULL DEFAULT 1,
+	fail_window     INTEGER NOT NULL DEFAULT 0,
+	sort_order      INTEGER NOT NULL DEFAULT 0,
+	condition_group INTEGER NOT NULL DEFAULT 0,
+	group_operator  TEXT NOT NULL DEFAULT 'AND'
+);
+
+CREATE INDEX idx_rule_conditions_check_id ON rule_conditions(check_id);
+CREATE INDEX idx_rule_conditions_rule_id ON rule_conditions(rule_id, condition_group, sort_order);
+
+CREATE TABLE rule_states (
+	rule_id        TEXT PRIMARY KEY REFERENCES rules(id) ON DELETE CASCADE,
+	current_state  TEXT NOT NULL DEFAULT 'healthy',
+	last_change    DATETIME,
+	last_evaluated DATETIME
+);
+
+CREATE TABLE alert_history (
+	id              INTEGER PRIMARY KEY AUTOINCREMENT,
+	rule_id         TEXT NOT NULL,
+	channel_id      TEXT,
+	alert_type      TEXT NOT NULL,
+	message         TEXT,
+	sent_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+	acknowledged    INTEGER NOT NULL DEFAULT 0,
+	acknowledged_by TEXT REFERENCES users(id),
+	acknowledged_at DATETIME,
+	target_id       TEXT NOT NULL DEFAULT '',
+	recipient_id    TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX idx_ah_rule ON alert_history(rule_id, sent_at);
+
+CREATE TABLE target_alert_recipients (
+	target_id TEXT NOT NULL REFERENCES targets(id) ON DELETE CASCADE,
+	user_id   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	PRIMARY KEY (target_id, user_id)
+);
+
+CREATE TABLE audit_logs (
+	id            INTEGER PRIMARY KEY AUTOINCREMENT,
+	user_id       TEXT NOT NULL,
+	username      TEXT NOT NULL,
+	action        TEXT NOT NULL,
+	resource_type TEXT NOT NULL DEFAULT '',
+	resource_id   TEXT NOT NULL DEFAULT '',
+	detail        TEXT NOT NULL DEFAULT '',
+	ip_address    TEXT NOT NULL DEFAULT '',
+	status        TEXT NOT NULL DEFAULT 'success',
+	created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_audit_created ON audit_logs(created_at DESC);
+
+CREATE TABLE target_pause_history (
+	id         INTEGER PRIMARY KEY AUTOINCREMENT,
+	target_id  TEXT NOT NULL REFERENCES targets(id) ON DELETE CASCADE,
+	paused_at  DATETIME NOT NULL,
+	resumed_at DATETIME,
+	reason     TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX idx_pause_history_target ON target_pause_history(target_id);
+
+CREATE TABLE tag_options (
+	id    INTEGER PRIMARY KEY AUTOINCREMENT,
+	grp   TEXT NOT NULL CHECK(grp IN ('project', 'location')),
+	value TEXT NOT NULL,
+	UNIQUE(grp, value)
+);
+
+CREATE TABLE schema_version (version INTEGER NOT NULL);
+INSERT INTO schema_version (version) VALUES (22);
+
+INSERT INTO settings (key, value) VALUES ('session_timeout_hours', '24');
+INSERT INTO settings (key, value) VALUES ('history_days', '3');
+INSERT INTO settings (key, value) VALUES ('audit_retention_days', '91');
+INSERT INTO settings (key, value) VALUES ('soc_public', 'false');
+INSERT INTO settings (key, value) VALUES ('alert_method', 'email');
+INSERT INTO settings (key, value) VALUES ('resend_api_key', '');
+INSERT INTO settings (key, value) VALUES ('alert_from_email', '');
+INSERT INTO settings (key, value) VALUES ('alert_cooldown_s', '1800');
+INSERT INTO settings (key, value) VALUES ('alert_realert_s', '3600');
+INSERT INTO settings (key, value) VALUES ('sla_network', '99.9');
+INSERT INTO settings (key, value) VALUES ('sla_security', '99.9');
+INSERT INTO settings (key, value) VALUES ('sla_physical_security', '99.9');
+INSERT INTO settings (key, value) VALUES ('sla_key_services', '99.9');
+INSERT INTO settings (key, value) VALUES ('sla_other', '99.9');
+INSERT INTO settings (key, value) VALUES ('signal_api_url', '');
+INSERT INTO settings (key, value) VALUES ('signal_number', '');
+INSERT INTO settings (key, value) VALUES ('signal_username', '');
+INSERT INTO settings (key, value) VALUES ('signal_password', '');
+INSERT INTO settings (key, value) VALUES ('snmp_v2c_community', 'public');
+INSERT INTO settings (key, value) VALUES ('snmp_v3_username', '');
+INSERT INTO settings (key, value) VALUES ('snmp_v3_security_level', 'authPriv');
+INSERT INTO settings (key, value) VALUES ('snmp_v3_auth_protocol', 'SHA');
+INSERT INTO settings (key, value) VALUES ('snmp_v3_auth_passphrase', '');
+INSERT INTO settings (key, value) VALUES ('snmp_v3_privacy_protocol', 'AES');
+INSERT INTO settings (key, value) VALUES ('snmp_v3_privacy_passphrase', '');
+`
+
 func (s *Store) migrate() error {
-	// Create schema_version table
-	_, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)`)
+	// Check if schema_version table exists (distinguishes fresh install from upgrade)
+	var count int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='schema_version'`).Scan(&count)
 	if err != nil {
-		return fmt.Errorf("creating schema_version table: %w", err)
+		return fmt.Errorf("checking schema_version: %w", err)
 	}
 
+	if count == 0 {
+		// Fresh install — run baseline schema
+		slog.Info("Fresh install: creating baseline schema", "version", schemaVersion)
+		if _, err := s.db.Exec(baselineSchema); err != nil {
+			return fmt.Errorf("baseline schema: %w", err)
+		}
+		return nil
+	}
+
+	// Existing install — run any migrations beyond the baseline version
 	var current int
-	err = s.db.QueryRow(`SELECT version FROM schema_version LIMIT 1`).Scan(&current)
-	if err == sql.ErrNoRows {
-		_, err = s.db.Exec(`INSERT INTO schema_version (version) VALUES (0)`)
-		if err != nil {
-			return err
-		}
-		current = 0
-	} else if err != nil {
-		return err
+	if err := s.db.QueryRow(`SELECT version FROM schema_version LIMIT 1`).Scan(&current); err != nil {
+		return fmt.Errorf("reading schema version: %w", err)
 	}
 
+	if current < schemaVersion {
+		return fmt.Errorf("schema version %d is below baseline %d; cannot auto-upgrade (old migrations removed)", current, schemaVersion)
+	}
+
+	// Future migrations go here (23, 24, ...)
 	migrations := []func() error{
-		s.migration001,
-		s.migration002,
-		s.migration003,
-		s.migration004,
-		s.migration005,
-		s.migration006,
-		s.migration007,
-		s.migration008,
-		s.migration009,
-		s.migration010,
-		s.migration011,
-		s.migration012,
-		s.migration013,
-		s.migration014,
-		s.migration015,
-		s.migration016,
-		s.migration017,
-		s.migration018,
-		s.migration019,
-		s.migration020,
-		s.migration021,
-		s.migration022,
+		// s.migration023,
 	}
 
-	for i := current; i < len(migrations); i++ {
-		slog.Info("Running migration", "version", i+1)
+	for i := current - schemaVersion; i < len(migrations); i++ {
+		ver := schemaVersion + i + 1
+		slog.Info("Running migration", "version", ver)
 		if err := migrations[i](); err != nil {
-			return fmt.Errorf("migration %d: %w", i+1, err)
+			return fmt.Errorf("migration %d: %w", ver, err)
 		}
-		if _, err := s.db.Exec(`UPDATE schema_version SET version = ?`, i+1); err != nil {
+		if _, err := s.db.Exec(`UPDATE schema_version SET version = ?`, ver); err != nil {
 			return err
 		}
 	}
@@ -104,606 +313,4 @@ func (s *Store) SchemaVersion() (int, error) {
 		return 0, fmt.Errorf("reading schema version: %w", err)
 	}
 	return v, nil
-}
-
-// migration001 creates the v2 auth tables.
-func (s *Store) migration001() error {
-	schema := `
-	CREATE TABLE users (
-		id            TEXT PRIMARY KEY,
-		username      TEXT UNIQUE NOT NULL,
-		email         TEXT NOT NULL DEFAULT '',
-		password_hash TEXT NOT NULL,
-		role          TEXT NOT NULL CHECK(role IN ('admin','operator','viewer')),
-		status        TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','suspended')),
-		created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
-		updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP
-	);
-
-	CREATE TABLE sessions (
-		id         TEXT PRIMARY KEY,
-		user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-		expires_at DATETIME NOT NULL,
-		ip_address TEXT,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	);
-
-	CREATE INDEX idx_sessions_user_id ON sessions(user_id);
-	CREATE INDEX idx_sessions_expires_at ON sessions(expires_at);
-
-	CREATE TABLE settings (
-		key   TEXT PRIMARY KEY,
-		value TEXT NOT NULL
-	);
-
-	INSERT INTO settings (key, value) VALUES ('session_timeout_hours', '24');
-	INSERT INTO settings (key, value) VALUES ('history_days', '90');
-INSERT INTO settings (key, value) VALUES ('audit_retention_days', '91');
-	`
-	_, err := s.db.Exec(schema)
-	return err
-}
-
-// migration002 creates the monitoring tables: projects, targets, checks, check_results.
-func (s *Store) migration002() error {
-	schema := `
-	CREATE TABLE projects (
-		id          TEXT PRIMARY KEY,
-		name        TEXT UNIQUE NOT NULL,
-		description TEXT NOT NULL DEFAULT '',
-		created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
-		updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
-	);
-
-	CREATE TABLE targets (
-		id          TEXT PRIMARY KEY,
-		project_id  TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-		name        TEXT NOT NULL,
-		host        TEXT NOT NULL,
-		description TEXT NOT NULL DEFAULT '',
-		enabled     INTEGER NOT NULL DEFAULT 1,
-		created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
-		updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
-		UNIQUE(project_id, name)
-	);
-
-	CREATE TABLE checks (
-		id          TEXT PRIMARY KEY,
-		target_id   TEXT NOT NULL REFERENCES targets(id) ON DELETE CASCADE,
-		type        TEXT NOT NULL CHECK(type IN ('http','tcp','ping','dns','page_hash','tls_cert')),
-		name        TEXT NOT NULL,
-		config      TEXT NOT NULL DEFAULT '{}',
-		interval_s  INTEGER NOT NULL DEFAULT 300,
-		enabled     INTEGER NOT NULL DEFAULT 1,
-		created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
-		updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
-	);
-
-	CREATE TABLE check_results (
-		id          INTEGER PRIMARY KEY AUTOINCREMENT,
-		check_id    TEXT NOT NULL REFERENCES checks(id) ON DELETE CASCADE,
-		status      TEXT NOT NULL CHECK(status IN ('up','down')),
-		response_ms INTEGER NOT NULL DEFAULT 0,
-		message     TEXT NOT NULL DEFAULT '',
-		metrics     TEXT NOT NULL DEFAULT '{}',
-		checked_at  DATETIME NOT NULL
-	);
-
-	CREATE INDEX idx_check_results_check_id ON check_results(check_id);
-	CREATE INDEX idx_check_results_checked_at ON check_results(checked_at);
-	CREATE INDEX idx_targets_project_id ON targets(project_id);
-	CREATE INDEX idx_checks_target_id ON checks(target_id);
-	`
-	_, err := s.db.Exec(schema)
-	return err
-}
-
-// migration003 adds preferred_check_type to targets and soc_public setting.
-func (s *Store) migration003() error {
-	_, err := s.db.Exec(`
-		ALTER TABLE targets ADD COLUMN preferred_check_type TEXT NOT NULL DEFAULT 'ping';
-		INSERT OR IGNORE INTO settings (key, value) VALUES ('soc_public', 'false');
-	`)
-	return err
-}
-
-// migration005 creates rules engine + alerting tables.
-func (s *Store) migration005() error {
-	_, err := s.db.Exec(`
-		CREATE TABLE rules (
-			id          TEXT PRIMARY KEY,
-			name        TEXT NOT NULL,
-			description TEXT NOT NULL DEFAULT '',
-			operator    TEXT NOT NULL DEFAULT 'AND' CHECK(operator IN ('AND','OR')),
-			severity    TEXT NOT NULL DEFAULT 'critical' CHECK(severity IN ('critical','warning','info')),
-			enabled     INTEGER NOT NULL DEFAULT 1,
-			created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
-		);
-
-		CREATE TABLE rule_conditions (
-			id          TEXT PRIMARY KEY,
-			rule_id     TEXT NOT NULL REFERENCES rules(id) ON DELETE CASCADE,
-			check_id    TEXT NOT NULL REFERENCES checks(id) ON DELETE CASCADE,
-			field       TEXT NOT NULL DEFAULT 'status',
-			comparator  TEXT NOT NULL DEFAULT 'eq',
-			value       TEXT NOT NULL,
-			fail_count  INTEGER NOT NULL DEFAULT 1,
-			fail_window INTEGER NOT NULL DEFAULT 0,
-			sort_order  INTEGER NOT NULL DEFAULT 0
-		);
-
-		CREATE TABLE rule_states (
-			rule_id        TEXT PRIMARY KEY REFERENCES rules(id) ON DELETE CASCADE,
-			current_state  TEXT NOT NULL DEFAULT 'healthy',
-			last_change    DATETIME,
-			last_evaluated DATETIME
-		);
-
-		CREATE TABLE alert_channels (
-			id         TEXT PRIMARY KEY,
-			name       TEXT NOT NULL,
-			type       TEXT NOT NULL,
-			config     TEXT NOT NULL DEFAULT '{}',
-			enabled    INTEGER NOT NULL DEFAULT 1,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		);
-
-		CREATE TABLE rule_alerts (
-			id         TEXT PRIMARY KEY,
-			rule_id    TEXT NOT NULL REFERENCES rules(id) ON DELETE CASCADE,
-			channel_id TEXT NOT NULL REFERENCES alert_channels(id) ON DELETE CASCADE,
-			cooldown_s INTEGER NOT NULL DEFAULT 1800,
-			enabled    INTEGER NOT NULL DEFAULT 1
-		);
-
-		CREATE TABLE alert_history (
-			id              INTEGER PRIMARY KEY AUTOINCREMENT,
-			rule_id         TEXT NOT NULL,
-			channel_id      TEXT,
-			alert_type      TEXT NOT NULL,
-			message         TEXT,
-			sent_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
-			acknowledged    INTEGER NOT NULL DEFAULT 0,
-			acknowledged_by TEXT REFERENCES users(id),
-			acknowledged_at DATETIME
-		);
-
-		CREATE INDEX idx_ah_rule ON alert_history(rule_id, sent_at);
-	`)
-	return err
-}
-
-// migration006 adds operator, severity, rule_id to targets for unified target model.
-func (s *Store) migration006() error {
-	_, err := s.db.Exec(`
-		ALTER TABLE targets ADD COLUMN operator TEXT NOT NULL DEFAULT 'AND';
-		ALTER TABLE targets ADD COLUMN severity TEXT NOT NULL DEFAULT 'critical';
-		ALTER TABLE targets ADD COLUMN rule_id TEXT DEFAULT NULL;
-	`)
-	if err != nil {
-		return err
-	}
-
-	// Auto-link existing rules that map to a single target's checks
-	rows, err := s.db.Query(`
-		SELECT r.id, r.operator, r.severity, t.id as target_id
-		FROM rules r
-		JOIN rule_conditions rc ON rc.rule_id = r.id
-		JOIN checks c ON c.id = rc.check_id
-		JOIN targets t ON t.id = c.target_id
-		GROUP BY r.id
-		HAVING COUNT(DISTINCT t.id) = 1
-	`)
-	if err != nil {
-		return nil // non-fatal — dev data only
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var ruleID, op, sev, targetID string
-		if err := rows.Scan(&ruleID, &op, &sev, &targetID); err != nil {
-			continue
-		}
-		s.db.Exec(`UPDATE targets SET rule_id = ?, operator = ?, severity = ? WHERE id = ?`,
-			ruleID, op, sev, targetID)
-	}
-
-	// Delete orphaned rules that span multiple targets
-	s.db.Exec(`
-		DELETE FROM rules WHERE id IN (
-			SELECT r.id FROM rules r
-			JOIN rule_conditions rc ON rc.rule_id = r.id
-			JOIN checks c ON c.id = rc.check_id
-			GROUP BY r.id
-			HAVING COUNT(DISTINCT c.target_id) > 1
-		)
-	`)
-
-	return nil
-}
-
-// migration004 removes projects — targets become standalone.
-func (s *Store) migration004() error {
-	// Disable FK checks for table rebuild
-	if _, err := s.db.Exec(`PRAGMA foreign_keys = OFF`); err != nil {
-		return err
-	}
-	defer s.db.Exec(`PRAGMA foreign_keys = ON`)
-
-	_, err := s.db.Exec(`
-		CREATE TABLE targets_new (
-			id                   TEXT PRIMARY KEY,
-			name                 TEXT UNIQUE NOT NULL,
-			host                 TEXT NOT NULL,
-			description          TEXT NOT NULL DEFAULT '',
-			enabled              INTEGER NOT NULL DEFAULT 1,
-			preferred_check_type TEXT NOT NULL DEFAULT 'ping',
-			created_at           DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at           DATETIME DEFAULT CURRENT_TIMESTAMP
-		);
-
-		INSERT INTO targets_new (id, name, host, description, enabled, preferred_check_type, created_at, updated_at)
-			SELECT id, name, host, description, enabled, preferred_check_type, created_at, updated_at FROM targets;
-
-		DROP TABLE targets;
-		ALTER TABLE targets_new RENAME TO targets;
-		DROP TABLE IF EXISTS projects;
-	`)
-	return err
-}
-
-// migration008 creates the audit_logs table.
-func (s *Store) migration008() error {
-	_, err := s.db.Exec(`
-		CREATE TABLE audit_logs (
-			id            INTEGER PRIMARY KEY AUTOINCREMENT,
-			user_id       TEXT NOT NULL,
-			username      TEXT NOT NULL,
-			action        TEXT NOT NULL,
-			resource_type TEXT NOT NULL DEFAULT '',
-			resource_id   TEXT NOT NULL DEFAULT '',
-			detail        TEXT NOT NULL DEFAULT '',
-			ip_address    TEXT NOT NULL DEFAULT '',
-			status        TEXT NOT NULL DEFAULT 'success',
-			created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
-		);
-		CREATE INDEX idx_audit_created ON audit_logs(created_at DESC);
-	`)
-	return err
-}
-
-// migration007 renames severity to category on targets.
-func (s *Store) migration007() error {
-	_, err := s.db.Exec(`ALTER TABLE targets RENAME COLUMN severity TO category`)
-	if err != nil {
-		return err
-	}
-	// Map old severity values to default category
-	_, err = s.db.Exec(`UPDATE targets SET category = 'Other' WHERE category IN ('critical', 'warning', 'info')`)
-	return err
-}
-
-// migration009 seeds audit_retention_days setting.
-func (s *Store) migration009() error {
-	_, err := s.db.Exec(`INSERT OR IGNORE INTO settings (key, value) VALUES ('audit_retention_days', '91')`)
-	return err
-}
-
-// migration010 remaps old granular categories to simplified set.
-func (s *Store) migration010() error {
-	_, err := s.db.Exec(`
-		UPDATE targets SET category = 'Network' WHERE category IN ('ISP', 'Router/Switch');
-		UPDATE targets SET category = 'Security' WHERE category IN ('FW/WAF', 'VPN', 'SIEM/Logging', 'PAM/DAM', 'Security Other');
-		UPDATE targets SET category = 'Key Services' WHERE category = 'IT Server';
-	`)
-	return err
-}
-
-// migration011 adds alerting support: target_alert_recipients, phone on users, target_id/recipient_id on alert_history,
-// drops unused alert_channels/rule_alerts tables, seeds alerting settings.
-func (s *Store) migration011() error {
-	_, err := s.db.Exec(`
-		CREATE TABLE target_alert_recipients (
-			target_id TEXT NOT NULL REFERENCES targets(id) ON DELETE CASCADE,
-			user_id   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-			PRIMARY KEY (target_id, user_id)
-		);
-
-		ALTER TABLE users ADD COLUMN phone TEXT NOT NULL DEFAULT '';
-
-		ALTER TABLE alert_history ADD COLUMN target_id TEXT NOT NULL DEFAULT '';
-		ALTER TABLE alert_history ADD COLUMN recipient_id TEXT NOT NULL DEFAULT '';
-
-		DROP TABLE IF EXISTS rule_alerts;
-		DROP TABLE IF EXISTS alert_channels;
-
-		INSERT OR IGNORE INTO settings (key, value) VALUES ('alert_method', 'email');
-		INSERT OR IGNORE INTO settings (key, value) VALUES ('resend_api_key', '');
-		INSERT OR IGNORE INTO settings (key, value) VALUES ('alert_from_email', '');
-		INSERT OR IGNORE INTO settings (key, value) VALUES ('alert_cooldown_s', '1800');
-		INSERT OR IGNORE INTO settings (key, value) VALUES ('alert_realert_s', '3600');
-	`)
-	return err
-}
-
-// migration012 backfills rules for targets that have checks but no rule_id.
-func (s *Store) migration012() error {
-	rows, err := s.db.Query(`
-		SELECT t.id, t.name, t.operator
-		FROM targets t
-		JOIN checks c ON c.target_id = t.id
-		WHERE t.rule_id IS NULL
-		GROUP BY t.id
-	`)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-
-	type orphan struct {
-		id, name, operator string
-	}
-	var orphans []orphan
-	for rows.Next() {
-		var o orphan
-		if err := rows.Scan(&o.id, &o.name, &o.operator); err != nil {
-			return err
-		}
-		orphans = append(orphans, o)
-	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-
-	for _, o := range orphans {
-		ruleID := uuid.New().String()
-
-		if _, err := s.db.Exec(`
-			INSERT INTO rules (id, name, description, operator, severity, enabled, created_at, updated_at)
-			VALUES (?, ?, '', ?, 'critical', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-		`, ruleID, o.name+" rule", o.operator); err != nil {
-			return err
-		}
-		if _, err := s.db.Exec(`INSERT INTO rule_states (rule_id, current_state) VALUES (?, 'healthy')`, ruleID); err != nil {
-			return err
-		}
-
-		// Create rule_conditions from existing checks
-		checkRows, err := s.db.Query(`SELECT id FROM checks WHERE target_id = ? ORDER BY created_at ASC`, o.id)
-		if err != nil {
-			return err
-		}
-		order := 0
-		for checkRows.Next() {
-			var checkID string
-			if err := checkRows.Scan(&checkID); err != nil {
-				checkRows.Close()
-				return err
-			}
-			condID := uuid.New().String()
-			if _, err := s.db.Exec(`
-				INSERT INTO rule_conditions (id, rule_id, check_id, field, comparator, value, fail_count, fail_window, sort_order)
-				VALUES (?, ?, ?, 'status', 'eq', 'down', 1, 0, ?)
-			`, condID, ruleID, checkID, order); err != nil {
-				checkRows.Close()
-				return err
-			}
-			order++
-		}
-		checkRows.Close()
-
-		// Link rule to target
-		if _, err := s.db.Exec(`UPDATE targets SET rule_id = ? WHERE id = ?`, ruleID, o.id); err != nil {
-			return err
-		}
-
-		slog.Info("Backfilled rule for target", "target", o.name, "rule_id", ruleID)
-	}
-
-	return nil
-}
-
-// migration013 seeds SLA threshold settings per category.
-func (s *Store) migration013() error {
-	_, err := s.db.Exec(`
-		INSERT OR IGNORE INTO settings (key, value) VALUES ('sla_network', '99.9');
-		INSERT OR IGNORE INTO settings (key, value) VALUES ('sla_security', '99.9');
-		INSERT OR IGNORE INTO settings (key, value) VALUES ('sla_physical_security', '99.9');
-		INSERT OR IGNORE INTO settings (key, value) VALUES ('sla_key_services', '99.9');
-		INSERT OR IGNORE INTO settings (key, value) VALUES ('sla_other', '99.9');
-	`)
-	return err
-}
-
-// migration014 adds condition_group and group_operator to rule_conditions for grouped condition logic.
-func (s *Store) migration014() error {
-	_, err := s.db.Exec(`
-		ALTER TABLE rule_conditions ADD COLUMN condition_group INTEGER NOT NULL DEFAULT 0;
-		ALTER TABLE rule_conditions ADD COLUMN group_operator TEXT NOT NULL DEFAULT 'AND';
-	`)
-	if err != nil {
-		return err
-	}
-	// Backfill: inherit current rule-level operator so existing behavior doesn't change
-	_, err = s.db.Exec(`
-		UPDATE rule_conditions SET group_operator = (
-			SELECT r.operator FROM rules r WHERE r.id = rule_conditions.rule_id
-		)
-	`)
-	return err
-}
-
-// migration015 adds paused_at to targets and creates target_pause_history table.
-func (s *Store) migration015() error {
-	_, err := s.db.Exec(`
-		ALTER TABLE targets ADD COLUMN paused_at DATETIME DEFAULT NULL;
-
-		CREATE TABLE target_pause_history (
-			id         INTEGER PRIMARY KEY AUTOINCREMENT,
-			target_id  TEXT NOT NULL REFERENCES targets(id) ON DELETE CASCADE,
-			paused_at  DATETIME NOT NULL,
-			resumed_at DATETIME,
-			reason     TEXT NOT NULL DEFAULT ''
-		);
-		CREATE INDEX idx_pause_history_target ON target_pause_history(target_id);
-	`)
-	return err
-}
-
-// migration016 adds Signal alerting settings.
-func (s *Store) migration016() error {
-	_, err := s.db.Exec(`
-		INSERT OR IGNORE INTO settings (key, value) VALUES ('signal_api_url',  '');
-		INSERT OR IGNORE INTO settings (key, value) VALUES ('signal_number',   '');
-		INSERT OR IGNORE INTO settings (key, value) VALUES ('signal_username', '');
-		INSERT OR IGNORE INTO settings (key, value) VALUES ('signal_password', '');
-	`)
-	return err
-}
-
-// migration017 adds composite index on check_results for faster lookups.
-func (s *Store) migration017() error {
-	_, err := s.db.Exec(`
-		CREATE INDEX IF NOT EXISTS idx_check_results_check_id_checked_at
-		ON check_results(check_id, checked_at DESC);
-	`)
-	return err
-}
-
-// migration018 adds snmp_v2c and snmp_v3 check types, seeds SNMP settings.
-func (s *Store) migration018() error {
-	if _, err := s.db.Exec(`PRAGMA foreign_keys = OFF`); err != nil {
-		return err
-	}
-	defer s.db.Exec(`PRAGMA foreign_keys = ON`)
-
-	_, err := s.db.Exec(`
-		CREATE TABLE checks_new (
-			id          TEXT PRIMARY KEY,
-			target_id   TEXT NOT NULL REFERENCES targets(id) ON DELETE CASCADE,
-			type        TEXT NOT NULL CHECK(type IN ('http','tcp','ping','dns','page_hash','tls_cert','snmp_v2c','snmp_v3')),
-			name        TEXT NOT NULL,
-			config      TEXT NOT NULL DEFAULT '{}',
-			interval_s  INTEGER NOT NULL DEFAULT 300,
-			enabled     INTEGER NOT NULL DEFAULT 1,
-			created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
-		);
-
-		INSERT INTO checks_new (id, target_id, type, name, config, interval_s, enabled, created_at, updated_at)
-			SELECT id, target_id, type, name, config, interval_s, enabled, created_at, updated_at FROM checks;
-
-		DROP TABLE checks;
-		ALTER TABLE checks_new RENAME TO checks;
-
-		CREATE INDEX idx_checks_target_id ON checks(target_id);
-
-		INSERT OR IGNORE INTO settings (key, value) VALUES ('snmp_v2c_community', 'public');
-		INSERT OR IGNORE INTO settings (key, value) VALUES ('snmp_v3_username', '');
-		INSERT OR IGNORE INTO settings (key, value) VALUES ('snmp_v3_security_level', 'authPriv');
-		INSERT OR IGNORE INTO settings (key, value) VALUES ('snmp_v3_auth_protocol', 'SHA');
-		INSERT OR IGNORE INTO settings (key, value) VALUES ('snmp_v3_auth_passphrase', '');
-		INSERT OR IGNORE INTO settings (key, value) VALUES ('snmp_v3_privacy_protocol', 'AES');
-		INSERT OR IGNORE INTO settings (key, value) VALUES ('snmp_v3_privacy_passphrase', '');
-	`)
-	if err != nil {
-		return err
-	}
-
-	// Verify FK integrity after table rebuild
-	rows, err := s.db.Query(`PRAGMA foreign_key_check`)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-	if rows.Next() {
-		return fmt.Errorf("foreign key check failed after checks table rebuild")
-	}
-	return rows.Err()
-}
-
-// migration019 adds notes, contacts, project, location to targets and creates tag_options table.
-func (s *Store) migration019() error {
-	_, err := s.db.Exec(`
-		ALTER TABLE targets ADD COLUMN notes TEXT DEFAULT NULL;
-		ALTER TABLE targets ADD COLUMN contacts TEXT DEFAULT NULL;
-		ALTER TABLE targets ADD COLUMN project TEXT DEFAULT NULL;
-		ALTER TABLE targets ADD COLUMN location TEXT DEFAULT NULL;
-
-		CREATE TABLE IF NOT EXISTS tag_options (
-			id    INTEGER PRIMARY KEY AUTOINCREMENT,
-			grp   TEXT NOT NULL CHECK(grp IN ('project', 'location')),
-			value TEXT NOT NULL,
-			UNIQUE(grp, value)
-		);
-	`)
-	return err
-}
-
-// migration020 creates check_state and check_daily_rollups tables,
-// backfills from existing check_results, then purges raw results older than 3 days.
-func (s *Store) migration020() error {
-	_, err := s.db.Exec(`
-		CREATE TABLE IF NOT EXISTS check_state (
-			check_id    TEXT PRIMARY KEY REFERENCES checks(id) ON DELETE CASCADE,
-			status      TEXT NOT NULL CHECK(status IN ('up','down')),
-			response_ms INTEGER NOT NULL DEFAULT 0,
-			message     TEXT NOT NULL DEFAULT '',
-			metrics     TEXT NOT NULL DEFAULT '{}',
-			checked_at  DATETIME NOT NULL
-		);
-
-		CREATE TABLE IF NOT EXISTS check_daily_rollups (
-			check_id        TEXT NOT NULL REFERENCES checks(id) ON DELETE CASCADE,
-			day             TEXT NOT NULL,
-			total_count     INTEGER NOT NULL DEFAULT 0,
-			up_count        INTEGER NOT NULL DEFAULT 0,
-			down_count      INTEGER NOT NULL DEFAULT 0,
-			avg_response_ms INTEGER NOT NULL DEFAULT 0,
-			max_response_ms INTEGER NOT NULL DEFAULT 0,
-			PRIMARY KEY (check_id, day)
-		);
-
-		-- Backfill check_state: latest result per check
-		INSERT OR IGNORE INTO check_state (check_id, status, response_ms, message, metrics, checked_at)
-		SELECT cr.check_id, cr.status, cr.response_ms, cr.message, cr.metrics, cr.checked_at
-		FROM check_results cr
-		INNER JOIN (
-			SELECT check_id, MAX(checked_at) as max_at
-			FROM check_results
-			GROUP BY check_id
-		) latest ON cr.check_id = latest.check_id AND cr.checked_at = latest.max_at;
-
-		-- Backfill check_daily_rollups: aggregate per check per day
-		INSERT OR IGNORE INTO check_daily_rollups (check_id, day, total_count, up_count, down_count, avg_response_ms, max_response_ms)
-		SELECT check_id, date(checked_at),
-			COUNT(*),
-			SUM(CASE WHEN status = 'up' THEN 1 ELSE 0 END),
-			SUM(CASE WHEN status = 'down' THEN 1 ELSE 0 END),
-			CAST(AVG(response_ms) AS INTEGER),
-			MAX(response_ms)
-		FROM check_results
-		GROUP BY check_id, date(checked_at);
-
-		-- Purge raw results older than 3 days
-		DELETE FROM check_results WHERE checked_at < datetime('now', '-3 days');
-	`)
-	return err
-}
-
-// migration021 adds missing indexes on rule_conditions and targets for rule evaluation queries.
-func (s *Store) migration021() error {
-	_, err := s.db.Exec(`
-		CREATE INDEX IF NOT EXISTS idx_rule_conditions_check_id ON rule_conditions(check_id);
-		CREATE INDEX IF NOT EXISTS idx_rule_conditions_rule_id ON rule_conditions(rule_id, condition_group, sort_order);
-		CREATE INDEX IF NOT EXISTS idx_targets_rule_id ON targets(rule_id);
-	`)
-	return err
-}
-
-// migration022 fixes A-011: update history_days default from 90 to 3 for raw result retention.
-func (s *Store) migration022() error {
-	_, err := s.db.Exec(`UPDATE settings SET value = '3' WHERE key = 'history_days' AND value = '90'`)
-	return err
 }
