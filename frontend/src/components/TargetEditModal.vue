@@ -109,11 +109,22 @@ function removeGroup(groupIdx) {
 }
 
 function onFailCountChange(cond) {
-  if (cond.fail_count > 1 && (!cond.fail_window || cond.fail_window < cond.interval_s)) {
-    cond.fail_window = cond.interval_s
-  }
-  if (cond.fail_count <= 1) {
+  if (cond.fail_count > 1) {
+    const minWindow = cond.fail_count * cond.interval_s
+    if (!cond.fail_window || cond.fail_window < minWindow) {
+      cond.fail_window = minWindow
+    }
+  } else {
     cond.fail_window = 0
+  }
+}
+
+function onIntervalChange(cond) {
+  if (cond.fail_count > 1) {
+    const minWindow = cond.fail_count * cond.interval_s
+    if (cond.fail_window < minWindow) {
+      cond.fail_window = minWindow
+    }
   }
 }
 
@@ -406,7 +417,7 @@ watch(() => props.show, async (val) => {
                   </div>
                   <div class="form-group">
                     <label>Interval (seconds)</label>
-                    <input type="number" v-model.number="cond.interval_s" min="10" style="max-width: 120px;" />
+                    <input type="number" v-model.number="cond.interval_s" min="10" style="max-width: 120px;" @change="onIntervalChange(cond)" />
                   </div>
 
                   <!-- Type-specific config -->
@@ -577,7 +588,7 @@ watch(() => props.show, async (val) => {
                     <div class="form-group">
                       <label>Time Window</label>
                       <input type="number" v-model.number="cond.fail_window"
-                        :min="cond.interval_s" max="1800"
+                        :min="cond.fail_count * cond.interval_s" max="1800"
                         :disabled="cond.fail_count <= 1"
                         :title="cond.fail_count <= 1 ? 'Set Fail Count > 1 to enable window' : 'Time window for consecutive failures'" />
                     </div>

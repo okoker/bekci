@@ -10,17 +10,19 @@ import (
 )
 
 // normalizeFailWindow auto-sets fail_window when fail_count > 1 and validates bounds.
+// Minimum window = failCount * intervalS (must fit enough checks to reach the threshold).
 func normalizeFailWindow(failCount, failWindow, intervalS int) int {
 	if failCount <= 1 {
 		return failWindow // no change needed for single-check mode
 	}
-	// If fail_count > 1 but no fail_window, default to interval_s
+	minWindow := failCount * intervalS
+	// If fail_count > 1 but no fail_window, default to failCount * intervalS
 	if failWindow <= 0 {
-		failWindow = intervalS
+		failWindow = minWindow
 	}
-	// Clamp: min = interval_s, max = 1800
-	if failWindow < intervalS {
-		failWindow = intervalS
+	// Clamp: min = failCount * intervalS, max = 1800
+	if failWindow < minWindow {
+		failWindow = minWindow
 	}
 	if failWindow > 1800 {
 		failWindow = 1800
