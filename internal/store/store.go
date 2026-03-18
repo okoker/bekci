@@ -41,8 +41,8 @@ func (s *Store) Close() error {
 
 const schemaVersion = 22
 
-// baselineSchema is the complete DDL for a fresh install at schema version 22.
-// It is equivalent to running migration001 through migration022 on an empty database.
+// baselineSchema is the complete DDL for a fresh install at schema version 23.
+// It is equivalent to running migration001 through migration023 on an empty database.
 const baselineSchema = `
 CREATE TABLE users (
 	id            TEXT PRIMARY KEY,
@@ -225,13 +225,19 @@ CREATE INDEX idx_pause_history_target ON target_pause_history(target_id);
 
 CREATE TABLE tag_options (
 	id    INTEGER PRIMARY KEY AUTOINCREMENT,
-	grp   TEXT NOT NULL CHECK(grp IN ('project', 'location')),
+	grp   TEXT NOT NULL CHECK(grp IN ('project', 'location', 'category')),
 	value TEXT NOT NULL,
 	UNIQUE(grp, value)
 );
 
 CREATE TABLE schema_version (version INTEGER NOT NULL);
-INSERT INTO schema_version (version) VALUES (22);
+INSERT INTO schema_version (version) VALUES (23);
+
+INSERT INTO tag_options (grp, value) VALUES ('category', 'Key Services');
+INSERT INTO tag_options (grp, value) VALUES ('category', 'Network');
+INSERT INTO tag_options (grp, value) VALUES ('category', 'Other');
+INSERT INTO tag_options (grp, value) VALUES ('category', 'Physical Security');
+INSERT INTO tag_options (grp, value) VALUES ('category', 'Security');
 
 INSERT INTO settings (key, value) VALUES ('session_timeout_hours', '24');
 INSERT INTO settings (key, value) VALUES ('history_days', '3');
@@ -300,9 +306,9 @@ func (s *Store) migrate() error {
 		}
 	}
 
-	// Future migrations go here (23, 24, ...)
+	// Future migrations go here (24, 25, ...)
 	migrations := []func() error{
-		// s.migration023,
+		s.migration023,
 	}
 
 	for i := current - schemaVersion; i < len(migrations); i++ {
@@ -316,6 +322,32 @@ func (s *Store) migrate() error {
 		}
 	}
 
+	return nil
+}
+
+func (s *Store) migration023() error {
+	// SQLite doesn't support ALTER CHECK, so recreate the table
+	_, err := s.db.Exec(`
+		CREATE TABLE tag_options_new (
+			id    INTEGER PRIMARY KEY AUTOINCREMENT,
+			grp   TEXT NOT NULL CHECK(grp IN ('project', 'location', 'category')),
+			value TEXT NOT NULL,
+			UNIQUE(grp, value)
+		);
+		INSERT INTO tag_options_new (id, grp, value) SELECT id, grp, value FROM tag_options;
+		DROP TABLE tag_options;
+		ALTER TABLE tag_options_new RENAME TO tag_options;
+	`)
+	if err != nil {
+		return fmt.Errorf("recreate tag_options: %w", err)
+	}
+
+	cats := []string{"Key Services", "Network", "Other", "Physical Security", "Security"}
+	for _, c := range cats {
+		if _, err := s.db.Exec(`INSERT OR IGNORE INTO tag_options (grp, value) VALUES ('category', ?)`, c); err != nil {
+			return fmt.Errorf("seed category %q: %w", c, err)
+		}
+	}
 	return nil
 }
 
