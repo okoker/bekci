@@ -228,12 +228,11 @@ func (a *AlertService) CheckRealerts() {
 		return
 	}
 
-	firingRules, err := a.store.GetFiringRules()
+	firingRules, err := a.store.GetFiringRules(realertS)
 	if err != nil {
 		slog.Error("Alerter: failed to get firing rules", "error", err)
 		return
 	}
-
 	for _, fr := range firingRules {
 		lastAlert, _ := a.store.GetLastAlertTime(fr.RuleID)
 		if lastAlert.IsZero() || time.Since(lastAlert) < time.Duration(realertS)*time.Second {

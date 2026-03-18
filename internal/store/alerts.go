@@ -147,9 +147,9 @@ func (s *Store) ListAlertHistory(limit, offset int) ([]AlertHistoryItem, int, er
 
 	rows, err := s.db.Query(`
 		SELECT ah.id, ah.rule_id, ah.target_id,
-		       COALESCE(t.name, '(deleted)') as target_name,
+		       COALESCE(t.name, '(deleted target)') as target_name,
 		       ah.recipient_id,
-		       COALESCE(u.username, '(deleted)') as recipient_name,
+		       COALESCE(u.username, '(deleted user)') as recipient_name,
 		       ah.alert_type, COALESCE(ah.message, ''), ah.sent_at
 		FROM alert_history ah
 		LEFT JOIN targets t ON t.id = ah.target_id
@@ -180,7 +180,8 @@ func (s *Store) ListAlertHistory(limit, offset int) ([]AlertHistoryItem, int, er
 }
 
 // GetFiringRules returns rule IDs that are currently in "unhealthy" state, for re-alerting.
-func (s *Store) GetFiringRules() ([]struct {
+// graceSeconds excludes rules that transitioned recently, preventing races with Dispatch.
+func (s *Store) GetFiringRules(graceSeconds int) ([]struct {
 	RuleID   string
 	TargetID string
 }, error) {
@@ -189,7 +190,8 @@ func (s *Store) GetFiringRules() ([]struct {
 		FROM rule_states rs
 		JOIN targets t ON t.rule_id = rs.rule_id
 		WHERE rs.current_state = 'unhealthy' AND t.enabled = 1 AND t.paused_at IS NULL
-	`)
+		  AND datetime(rs.last_change) < datetime('now', '-' || ? || ' seconds')
+	`, graceSeconds)
 	if err != nil {
 		return nil, err
 	}

@@ -717,7 +717,7 @@ func TestCheckRealertsSignalSuccess(t *testing.T) {
 	defer srv.Close()
 
 	configureSignalAlerting(t, s, srv.URL)
-	if err := s.SetSettings(map[string]string{"alert_realert_s": "1"}); err != nil {
+	if err := s.SetSettings(map[string]string{"alert_realert_s": "2"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.SetTargetRecipients(target.ID, []string{recipient.ID}); err != nil {
@@ -730,7 +730,7 @@ func TestCheckRealertsSignalSuccess(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	time.Sleep(1100 * time.Millisecond)
+	time.Sleep(3 * time.Second)
 	svc.CheckRealerts()
 
 	if hitCount != 1 {
@@ -778,7 +778,7 @@ func TestCheckRealertsEmailSuccess(t *testing.T) {
 
 	withResendURL(t, srv.URL)
 	configureEmailAlerting(t, s, "email-key", "alerts@example.com")
-	if err := s.SetSettings(map[string]string{"alert_realert_s": "1"}); err != nil {
+	if err := s.SetSettings(map[string]string{"alert_realert_s": "2"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.SetTargetRecipients(target.ID, []string{recipient.ID}); err != nil {
@@ -791,7 +791,7 @@ func TestCheckRealertsEmailSuccess(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	time.Sleep(1100 * time.Millisecond)
+	time.Sleep(3 * time.Second)
 	svc.CheckRealerts()
 
 	if hitCount != 1 {
