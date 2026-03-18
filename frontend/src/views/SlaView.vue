@@ -11,15 +11,19 @@ import {
   Filler,
 } from 'chart.js'
 import annotationPlugin from 'chartjs-plugin-annotation'
+import zoomPlugin from 'chartjs-plugin-zoom'
 import api from '../api'
 
-ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Filler, annotationPlugin)
+ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Filler, annotationPlugin, zoomPlugin)
 
 const loading = ref(true)
 const error = ref('')
 const categories = ref([])
 const pauseStats = ref({ count: 0, affected_hosts: 0 })
 const modalCat = ref(null)
+const modalChartRef = ref(null)
+const isZoomed = ref(false)
+const hoveredDatasetIdx = ref(-1)
 
 const palette = [
   '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6',
@@ -150,6 +154,14 @@ function buildChartOptions(cat, isModal) {
         labels: { usePointStyle: true, pointStyle: 'circle', boxWidth: 8, padding: 16, font: { size: 12 } },
       } : { display: false },
       tooltip: {
+        filter(tooltipItem) {
+          const idx = hoveredDatasetIdx.value
+          if (idx < 0) return true
+          // Find the hovered host's value at this x-index
+          const hoveredValue = tooltipItem.chart.data.datasets[idx]?.data[tooltipItem.dataIndex]
+          if (hoveredValue === null || hoveredValue === undefined) return true
+          return Math.abs(tooltipItem.raw - hoveredValue) <= 0.1
+        },
         callbacks: {
           title(items) {
             return items[0]?.label || ''
@@ -181,6 +193,22 @@ function buildChartOptions(cat, isModal) {
           },
         },
       } : {},
+      ...(isModal ? {
+        zoom: {
+          pan: {
+            enabled: true,
+            mode: 'x',
+          },
+          zoom: {
+            wheel: { enabled: true },
+            pinch: { enabled: true },
+            mode: 'x',
+            onZoomComplete() {
+              isZoomed.value = true
+            },
+          },
+        },
+      } : {}),
     },
     scales: {
       x: {
@@ -204,7 +232,10 @@ function buildChartOptions(cat, isModal) {
     },
     onHover(event, elements, chart) {
       if (elements.length > 0) {
-        const idx = elements[0].datasetIndex
+        // elements comes from mode:'index' — find the one closest to cursor Y
+        const nearest = chart.getElementsAtEventForMode(event, 'nearest', { intersect: false }, false)
+        const idx = nearest.length > 0 ? nearest[0].datasetIndex : elements[0].datasetIndex
+        hoveredDatasetIdx.value = idx
         chart.data.datasets.forEach((ds, i) => {
           ds.borderWidth = i === idx ? (isModal ? 3 : 2.5) : 1
           ds.borderColor = i === idx
@@ -212,6 +243,7 @@ function buildChartOptions(cat, isModal) {
             : palette[i % palette.length] + '40'
         })
       } else {
+        hoveredDatasetIdx.value = -1
         chart.data.datasets.forEach((ds, i) => {
           ds.borderWidth = 1.5
           ds.borderColor = palette[i % palette.length]
@@ -229,6 +261,14 @@ function openModal(cat) {
 
 function closeModal() {
   modalCat.value = null
+  isZoomed.value = false
+}
+
+function resetZoom() {
+  if (modalChartRef.value?.chart) {
+    modalChartRef.value.chart.resetZoom()
+    isZoomed.value = false
+  }
 }
 
 function onKeydown(e) {
@@ -323,8 +363,13 @@ onUnmounted(() => {
             </div>
             <button class="modal-close" @click="closeModal">&times;</button>
           </div>
+          <div class="modal-toolbar">
+            <button v-if="isZoomed" class="btn-reset-zoom" @click="resetZoom">Reset zoom</button>
+            <span v-else class="zoom-hint">Scroll to zoom, drag to pan</span>
+          </div>
           <div class="modal-chart-wrap">
             <Line
+              ref="modalChartRef"
               :key="modalCat.name"
               :data="buildChartData(modalCat)"
               :options="buildChartOptions(modalCat, true)"
@@ -555,5 +600,29 @@ onUnmounted(() => {
 .modal-chart-wrap {
   height: 500px;
   position: relative;
+}
+
+.modal-toolbar {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+  min-height: 28px;
+}
+.btn-reset-zoom {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 0.78rem;
+  color: #475569;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-reset-zoom:hover {
+  background: #e2e8f0;
+}
+.zoom-hint {
+  font-size: 0.72rem;
+  color: #94a3b8;
 }
 </style>
