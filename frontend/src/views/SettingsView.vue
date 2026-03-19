@@ -419,6 +419,7 @@ const alertForm = ref({
   signal_number: '',
   signal_username: '',
   signal_password: '',
+  signal_skip_tls: 'false',
   webhook_enabled: 'false',
   webhook_url: '',
   webhook_auth_type: '',
@@ -464,6 +465,7 @@ function loadAlertSettings() {
     signal_number: s.signal_number || '',
     signal_username: s.signal_username || '',
     signal_password: s.signal_password || '',
+    signal_skip_tls: s.signal_skip_tls || 'false',
     webhook_enabled: s.webhook_enabled || 'false',
     webhook_url: s.webhook_url || '',
     webhook_auth_type: s.webhook_auth_type || '',
@@ -536,10 +538,11 @@ async function saveSignalSettings() {
   alertSaving.value = true
   try {
     await api.put('/settings', {
-      signal_api_url: alertForm.value.signal_api_url || 'http://10.0.9.21:55555/v2/send',
-      signal_number: alertForm.value.signal_number || '+905336075015',
+      signal_api_url: alertForm.value.signal_api_url,
+      signal_number: alertForm.value.signal_number,
       signal_username: alertForm.value.signal_username,
       signal_password: alertForm.value.signal_password,
+      signal_skip_tls: alertForm.value.signal_skip_tls,
     })
     alertSuccess.value = 'Signal settings saved'
     await loadSettings()
@@ -1658,12 +1661,12 @@ onUnmounted(() => {
 
           <div class="form-group">
             <label>Send Endpoint URL</label>
-            <input v-model="alertForm.signal_api_url" type="text" placeholder="http://10.0.9.21:55555/v2/send" />
+            <input v-model="alertForm.signal_api_url" type="text" placeholder="https://signal-api.example.com/v2/send" />
           </div>
 
           <div class="form-group">
             <label>Sender Number</label>
-            <input v-model="alertForm.signal_number" type="text" placeholder="+905336075015" />
+            <input v-model="alertForm.signal_number" type="text" placeholder="+1234567890" />
           </div>
 
           <div class="form-row">
@@ -1675,6 +1678,16 @@ onUnmounted(() => {
               <label>Password</label>
               <input v-model="alertForm.signal_password" type="password" autocomplete="off" />
             </div>
+          </div>
+
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox"
+                :checked="alertForm.signal_skip_tls === 'true'"
+                @change="alertForm.signal_skip_tls = $event.target.checked ? 'true' : 'false'" />
+              Skip TLS Verification
+            </label>
+            <span class="text-muted input-hint">Allow self-signed certificates</span>
           </div>
 
           <div class="form-actions">

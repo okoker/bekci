@@ -11,7 +11,7 @@ import (
 )
 
 // SendSignal sends a message via the Signal REST API gateway.
-func SendSignal(apiURL, username, password, senderNumber string, recipients []string, message string) error {
+func SendSignal(apiURL, username, password, senderNumber string, recipients []string, message string, skipTLS bool) error {
 	payload := map[string]any{
 		"message":    message,
 		"number":     senderNumber,
@@ -29,11 +29,13 @@ func SendSignal(apiURL, username, password, senderNumber string, recipients []st
 	req.SetBasicAuth(username, password)
 	req.Header.Set("Content-Type", "application/json")
 
+	transport := &http.Transport{}
+	if skipTLS {
+		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	}
 	client := &http.Client{
-		Timeout: 15 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		},
+		Timeout:   15 * time.Second,
+		Transport: transport,
 	}
 	resp, err := client.Do(req)
 	if err != nil {

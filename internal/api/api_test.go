@@ -428,8 +428,8 @@ func TestSettingsAdminOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	resp.Body.Close()
-	if resp.StatusCode != 200 {
-		t.Fatalf("expected 200 for GET, got %d", resp.StatusCode)
+	if resp.StatusCode != 403 {
+		t.Fatalf("expected 403 for GET (admin-only), got %d", resp.StatusCode)
 	}
 }
 

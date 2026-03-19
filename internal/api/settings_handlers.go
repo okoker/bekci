@@ -28,10 +28,11 @@ var knownSettings = map[string]bool{
 	"smtp_username":    true,
 	"smtp_password":    true,
 	// Signal settings
-	"signal_api_url":  true,
-	"signal_number":   true,
-	"signal_username": true,
-	"signal_password": true,
+	"signal_api_url":   true,
+	"signal_number":    true,
+	"signal_username":  true,
+	"signal_password":  true,
+	"signal_skip_tls":  true,
 	// Webhook settings
 	"webhook_enabled":        true,
 	"webhook_url":            true,
@@ -54,9 +55,10 @@ var knownSettings = map[string]bool{
 
 // Boolean settings that accept "true"/"false" instead of positive integers.
 var boolSettings = map[string]bool{
-	"soc_public":      true,
-	"webhook_enabled": true,
+	"soc_public":       true,
+	"webhook_enabled":  true,
 	"webhook_skip_tls": true,
+	"signal_skip_tls":  true,
 }
 
 // String settings that accept arbitrary text (not validated as positive integers).
@@ -159,6 +161,13 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if v, ok := settings["snmp_v3_privacy_passphrase"]; ok && v != "" {
 		settings["snmp_v3_privacy_passphrase"] = "••••••••"
+	}
+	if v, ok := settings["snmp_v2c_community"]; ok && v != "" {
+		if len(v) > 3 {
+			settings["snmp_v2c_community"] = v[:3] + "***"
+		} else {
+			settings["snmp_v2c_community"] = "***"
+		}
 	}
 	writeJSON(w, http.StatusOK, settings)
 }
@@ -271,6 +280,9 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if v, ok := req["snmp_v3_privacy_passphrase"]; ok && v == "••••••••" {
 		delete(req, "snmp_v3_privacy_passphrase")
+	}
+	if v, ok := req["snmp_v2c_community"]; ok && strings.Contains(v, "***") {
+		delete(req, "snmp_v2c_community")
 	}
 
 	if err := s.store.SetSettings(req); err != nil {

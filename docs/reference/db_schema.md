@@ -1,6 +1,6 @@
 # Database Schema Reference
 
-**Current schema version:** 23
+**Current schema version:** 24
 **Engine:** SQLite 3 with WAL journal mode
 **Driver:** `github.com/mattn/go-sqlite3` (CGO required)
 
@@ -21,7 +21,7 @@
 
 ### schema_version
 
-Tracks current schema version. Single row. Stamped to 23 by the baseline schema on fresh install.
+Tracks current schema version. Single row. Stamped to 24 by the baseline schema on fresh install.
 
 | Column  | Type    | Constraints |
 |---------|---------|-------------|
@@ -86,6 +86,7 @@ Key-value config store.
 | signal_number          |         | migration016 |
 | signal_username        |         | migration016 |
 | signal_password        |         | migration016 |
+| signal_skip_tls        | false   | migration024 |
 | snmp_v2c_community     | public  | migration018 |
 | snmp_v3_username       |         | migration018 |
 | snmp_v3_security_level | authPriv | migration018 |
@@ -367,9 +368,11 @@ Append-only audit trail. Purged by `PurgeOldAuditEntries(days)` (runs at startup
 
 ## Migration History
 
-> **A-042 (18/03/2026):** All 22 migration functions were collapsed into a single `baselineSchema` constant in `store.go`. Fresh installs run the baseline SQL and stamp schema version 23. Existing installs at v22 run migration023 (add 'category' to tag_options). The individual migration functions no longer exist in code — git history preserves them. Databases below v22 cannot auto-upgrade (the old migration code is removed).
+> **A-042 (18/03/2026):** All 22 migration functions were collapsed into a single `baselineSchema` constant in `store.go`. Fresh installs run the baseline SQL and stamp schema version 24. Existing installs at v22 run migration023+024. The individual migration functions no longer exist in code — git history preserves them. Databases below v22 cannot auto-upgrade (the old migration code is removed).
 >
 > **migration023 (19/03/2026):** Recreates `tag_options` table with CHECK constraint expanded to include `'category'`. Seeds 5 default categories (Key Services, Network, Other, Physical Security, Security). SQLite doesn't support ALTER CHECK, so uses create-new/copy/drop/rename pattern.
+>
+> **migration024 (19/03/2026):** Seeds `signal_skip_tls` setting (default `'false'`). Part of C-1 fix — Signal TLS verification now configurable (was hardcoded `InsecureSkipVerify: true`).
 
 The table below is retained as historical context for how the schema evolved:
 

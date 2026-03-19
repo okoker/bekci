@@ -174,7 +174,7 @@ func TestSendSignalSuccess(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	err := SendSignal(srv.URL, "user", "pass", "+1234", []string{"+5678"}, "test message")
+	err := SendSignal(srv.URL, "user", "pass", "+1234", []string{"+5678"}, "test message", false)
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -210,7 +210,7 @@ func TestSendSignalFailure(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	err := SendSignal(srv.URL, "user", "pass", "+1234", []string{"+5678"}, "test")
+	err := SendSignal(srv.URL, "user", "pass", "+1234", []string{"+5678"}, "test", false)
 	if err == nil {
 		t.Fatalf("expected error for 400 response")
 	}

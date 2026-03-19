@@ -5,7 +5,7 @@
 | Layer | Technology |
 |-------|-----------|
 | Backend | Go 1.25 (go.mod 1.25.0), net/http stdlib router (Go 1.22+ method routing), SQLite WAL |
-| Database | SQLite 3 via go-sqlite3 (CGO required), WAL mode, `SetMaxOpenConns(1)`, baseline schema v22 (future migrations incremental) |
+| Database | SQLite 3 via go-sqlite3 (CGO required), WAL mode, `SetMaxOpenConns(1)`, baseline schema v24 (future migrations incremental) |
 | Frontend | Vue 3, Vite 7, Vue Router 4, Pinia 3, Axios, Chart.js + vue-chartjs |
 | Auth | JWT HS256 (golang-jwt/v5) in HttpOnly cookie (`token`), bcrypt cost 12 |
 | Reverse Proxy | Nginx 1.18 (prod only) — SSL termination, security headers, gzip |

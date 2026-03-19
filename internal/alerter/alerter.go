@@ -137,6 +137,9 @@ func (a *AlertService) Dispatch(ruleID, oldState, newState string) {
 		sigUser, _ := a.store.GetSetting("signal_username")
 		sigPass, _ := a.store.GetSetting("signal_password")
 
+		sigSkipStr, _ := a.store.GetSetting("signal_skip_tls")
+		sigSkipTLS := sigSkipStr == "true"
+
 		if sigURL == "" || sigNumber == "" || sigUser == "" || sigPass == "" {
 			slog.Warn("Alerter: signal alerting configured but signal settings incomplete")
 		} else {
@@ -146,7 +149,7 @@ func (a *AlertService) Dispatch(ruleID, oldState, newState string) {
 				if user.Phone == "" {
 					continue
 				}
-				err := SendSignal(sigURL, sigUser, sigPass, sigNumber, []string{user.Phone}, msg)
+				err := SendSignal(sigURL, sigUser, sigPass, sigNumber, []string{user.Phone}, msg, sigSkipTLS)
 				if err != nil {
 					slog.Error("Alerter: failed to send signal",
 						"target", target.Name, "recipient", user.Username, "error", err)
@@ -304,6 +307,9 @@ func (a *AlertService) CheckRealerts() {
 			sigUser, _ := a.store.GetSetting("signal_username")
 			sigPass, _ := a.store.GetSetting("signal_password")
 
+			sigSkipStr, _ := a.store.GetSetting("signal_skip_tls")
+			sigSkipTLS := sigSkipStr == "true"
+
 			if sigURL != "" && sigNumber != "" && sigUser != "" && sigPass != "" {
 				msg := RenderSignalAlert(target.Name, target.Host, "unhealthy", nil, now, nil)
 				msg = strings.Replace(msg, "[ALERT]", "[RE-ALERT]", 1)
@@ -313,7 +319,7 @@ func (a *AlertService) CheckRealerts() {
 					if user.Phone == "" {
 						continue
 					}
-					err := SendSignal(sigURL, sigUser, sigPass, sigNumber, []string{user.Phone}, msg)
+					err := SendSignal(sigURL, sigUser, sigPass, sigNumber, []string{user.Phone}, msg, sigSkipTLS)
 					if err != nil {
 						slog.Error("Alerter: re-alert signal failed",
 							"target", target.Name, "recipient", user.Username, "error", err)
@@ -481,8 +487,11 @@ func (a *AlertService) SendTestSignal(toPhone string) error {
 		return ErrSignalNotConfigured
 	}
 
+	sigSkipStr, _ := a.store.GetSetting("signal_skip_tls")
+	sigSkipTLS := sigSkipStr == "true"
+
 	msg := "\u2705 [Bekci] Test Signal message.\nYour Signal alerting is configured correctly."
-	return SendSignal(sigURL, sigUser, sigPass, sigNumber, []string{toPhone}, msg)
+	return SendSignal(sigURL, sigUser, sigPass, sigNumber, []string{toPhone}, msg, sigSkipTLS)
 }
 
 // ErrWebhookNotConfigured is returned when webhook settings are incomplete.

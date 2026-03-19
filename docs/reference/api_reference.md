@@ -1094,12 +1094,12 @@ Both fields are empty strings when no webhook has been sent yet.
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/api/settings` | any | Get all settings |
+| GET | `/api/settings` | admin | Get all settings |
 | PUT | `/api/settings` | admin | Update settings |
 
 ### GET /api/settings
 
-Returns all settings as key-value map. Sensitive values (e.g. `resend_api_key`, `snmp_v3_auth_passphrase`, `snmp_v3_privacy_passphrase`) are masked. Only keys with existing DB rows are returned; unseeded keys absent.
+Returns all settings as key-value map. **Admin only** (viewers/operators get 403). Sensitive values (e.g. `resend_api_key`, `snmp_v2c_community`, `snmp_v3_auth_passphrase`, `snmp_v3_privacy_passphrase`) are masked. Only keys with existing DB rows are returned; unseeded keys absent.
 
 **Response (200):**
 ```json
@@ -1118,10 +1118,11 @@ Returns all settings as key-value map. Sensitive values (e.g. `resend_api_key`, 
   "smtp_port": "587",
   "smtp_username": "user@example.com",
   "smtp_password": "••••••••",
-  "signal_api_url": "http://10.0.9.21:55555/v2/send",
+  "signal_api_url": "https://signal-api.example.com/v2/send",
   "signal_number": "+1234567890",
   "signal_username": "user",
   "signal_password": "••••••••",
+  "signal_skip_tls": "false",
   "sla_network": "99.9",
   "sla_security": "99.9",
   "sla_physical_security": "99.9",
@@ -1172,6 +1173,7 @@ Update one or more settings. Only known keys are accepted. Sending masked values
 | `signal_number` | string | any string (sender phone number) |
 | `signal_username` | string | any string |
 | `signal_password` | string | any string (masked in GET as `"••••••••"`) |
+| `signal_skip_tls` | boolean string | `"true"` or `"false"` |
 | `webhook_enabled` | boolean string | `"true"` or `"false"` |
 | `webhook_url` | string | must start with `http://` or `https://` (empty to clear) |
 | `webhook_auth_type` | string | `""` (none), `"bearer"`, or `"basic"` |

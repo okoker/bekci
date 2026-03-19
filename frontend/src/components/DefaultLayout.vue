@@ -125,7 +125,7 @@ onUnmounted(() => {
         <router-link to="/alerts" class="nav-link">Alerts</router-link>
         <router-link v-if="auth.isOperator" to="/audit-log" class="nav-link">Audit Log</router-link>
         <router-link v-if="auth.isAdmin" to="/users" class="nav-link">Users</router-link>
-        <router-link to="/settings" class="nav-link">Settings</router-link>
+        <router-link v-if="auth.isAdmin" to="/settings" class="nav-link">Settings</router-link>
       </div>
       <div class="navbar-right">
         <span v-if="appVersion" class="app-version">v{{ appVersion }}</span>

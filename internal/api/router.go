@@ -92,14 +92,14 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("PUT /api/me", s.requireAuth(http.HandlerFunc(s.handleUpdateMe)))
 	mux.Handle("PUT /api/me/password", s.requireAuth(http.HandlerFunc(s.handleChangePassword)))
 
-	// Settings — any authenticated user can view, admin can update
-	mux.Handle("GET /api/settings", s.requireAuth(http.HandlerFunc(s.handleGetSettings)))
-	mux.Handle("PUT /api/settings", s.requireAuth(requireRole("admin")(http.HandlerFunc(s.handleUpdateSettings))))
-
 	// User management — admin only (except list, which operators need for recipient picker)
 	adminAuth := func(h http.HandlerFunc) http.Handler {
 		return s.requireAuth(requireRole("admin")(http.HandlerFunc(h)))
 	}
+
+	// Settings — admin only (H-1 fix: was exposing secrets to viewers/operators)
+	mux.Handle("GET /api/settings", adminAuth(s.handleGetSettings))
+	mux.Handle("PUT /api/settings", adminAuth(s.handleUpdateSettings))
 	mux.Handle("POST /api/users", adminAuth(s.handleCreateUser))
 	mux.Handle("GET /api/users/{id}", adminAuth(s.handleGetUser))
 	mux.Handle("PUT /api/users/{id}", adminAuth(s.handleUpdateUser))

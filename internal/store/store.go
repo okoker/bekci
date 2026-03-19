@@ -41,7 +41,7 @@ func (s *Store) Close() error {
 
 const schemaVersion = 22
 
-// baselineSchema is the complete DDL for a fresh install at schema version 23.
+// baselineSchema is the complete DDL for a fresh install at schema version 24.
 // It is equivalent to running migration001 through migration023 on an empty database.
 const baselineSchema = `
 CREATE TABLE users (
@@ -231,7 +231,7 @@ CREATE TABLE tag_options (
 );
 
 CREATE TABLE schema_version (version INTEGER NOT NULL);
-INSERT INTO schema_version (version) VALUES (23);
+INSERT INTO schema_version (version) VALUES (24);
 
 INSERT INTO tag_options (grp, value) VALUES ('category', 'Key Services');
 INSERT INTO tag_options (grp, value) VALUES ('category', 'Network');
@@ -257,6 +257,7 @@ INSERT INTO settings (key, value) VALUES ('signal_api_url', '');
 INSERT INTO settings (key, value) VALUES ('signal_number', '');
 INSERT INTO settings (key, value) VALUES ('signal_username', '');
 INSERT INTO settings (key, value) VALUES ('signal_password', '');
+INSERT INTO settings (key, value) VALUES ('signal_skip_tls', 'false');
 INSERT INTO settings (key, value) VALUES ('snmp_v2c_community', 'public');
 INSERT INTO settings (key, value) VALUES ('snmp_v3_username', '');
 INSERT INTO settings (key, value) VALUES ('snmp_v3_security_level', 'authPriv');
@@ -309,6 +310,7 @@ func (s *Store) migrate() error {
 	// Future migrations go here (24, 25, ...)
 	migrations := []func() error{
 		s.migration023,
+		s.migration024,
 	}
 
 	for i := current - schemaVersion; i < len(migrations); i++ {
@@ -349,6 +351,11 @@ func (s *Store) migration023() error {
 		}
 	}
 	return nil
+}
+
+func (s *Store) migration024() error {
+	_, err := s.db.Exec(`INSERT OR IGNORE INTO settings (key, value) VALUES ('signal_skip_tls', 'false')`)
+	return err
 }
 
 // SchemaVersion returns the current database schema version.

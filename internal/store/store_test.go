@@ -881,8 +881,8 @@ func TestMigration017_CompositeIndex(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if version != 23 {
-		t.Fatalf("schema_version = %d, want 23", version)
+	if version != 24 {
+		t.Fatalf("schema_version = %d, want 24", version)
 	}
 
 	// Verify index exists
@@ -1251,8 +1251,8 @@ func TestBaselineSchemaCompleteness(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v != 23 {
-		t.Fatalf("schema version = %d, want 23", v)
+	if v != 24 {
+		t.Fatalf("schema version = %d, want 24", v)
 	}
 
 	// Verify all expected tables exist
@@ -1299,11 +1299,11 @@ func TestBaselineSchemaCompleteness(t *testing.T) {
 		}
 	}
 
-	// Verify seed settings count (25 settings at v23)
+	// Verify seed settings count (26 settings at v24)
 	var settingsCount int
 	s.db.QueryRow(`SELECT COUNT(*) FROM settings`).Scan(&settingsCount)
-	if settingsCount != 25 {
-		t.Errorf("settings count = %d, want 25", settingsCount)
+	if settingsCount != 26 {
+		t.Errorf("settings count = %d, want 26", settingsCount)
 	}
 
 	// Verify critical seed values
