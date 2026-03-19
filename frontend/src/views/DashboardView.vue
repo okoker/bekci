@@ -9,7 +9,15 @@ const loading = ref(true)
 const error = ref('')
 const lastUpdated = ref(null)
 const activeCategory = ref('All')
-const categories = ['All', 'Network', 'Security', 'Physical Security', 'Key Services', 'Other']
+const categoriesRaw = ref([])
+const categories = computed(() => {
+  const sorted = [...categoriesRaw.value].sort((a, b) => {
+    if (a === 'Other') return 1
+    if (b === 'Other') return -1
+    return a.localeCompare(b)
+  })
+  return ['All', ...sorted]
+})
 const currentPage = ref(1)
 const pageSize = 10
 
@@ -24,6 +32,13 @@ let refreshTimer = null
 // Pre-built empty bar arrays (gray placeholders before data loads)
 const empty90d = Array.from({ length: 90 }, () => ({ date: '', uptime_pct: -1, total_checks: 0 }))
 const empty4h = Array.from({ length: 48 }, () => ({ status: 'none', response_ms: 0, checked_at: '' }))
+
+async function loadCategories() {
+  try {
+    const { data } = await api.get('/tags?group=category')
+    categoriesRaw.value = data.map(c => c.value)
+  } catch { /* ignore */ }
+}
 
 async function loadDashboard() {
   try {
@@ -261,17 +276,25 @@ function slaClass(target) {
   return ''
 }
 
-function categoryClass(cat) {
-  if (cat === 'Security') return 'badge-cat-security'
-  if (cat === 'Network') return 'badge-cat-network'
-  if (cat === 'Physical Security') return 'badge-cat-physical'
-  if (cat === 'Key Services') return 'badge-cat-server'
-  return 'badge-cat-other'
+const categoryPalette = [
+  '#3b82f6', '#8b5cf6', '#f59e0b', '#ec4899', '#10b981',
+  '#06b6d4', '#f97316', '#6366f1', '#14b8a6', '#e11d48',
+]
+
+function categoryColor(cat) {
+  const sorted = [...categoriesRaw.value].sort((a, b) => {
+    if (a === 'Other') return 1
+    if (b === 'Other') return -1
+    return a.localeCompare(b)
+  })
+  const idx = sorted.indexOf(cat)
+  if (idx < 0) return '#94a3b8'
+  return categoryPalette[idx % categoryPalette.length]
 }
 
 const categoryStats = computed(() => {
   const stats = {}
-  for (const cat of categories) {
+  for (const cat of categories.value) {
     if (cat === 'All') {
       stats[cat] = {
         count: dashboardData.value.length,
@@ -291,6 +314,7 @@ function getWorstUptime(target) {
 }
 
 onMounted(() => {
+  loadCategories()
   loadDashboard()
   refreshTimer = setInterval(() => {
     loadDashboard()
@@ -354,7 +378,7 @@ onUnmounted(() => {
                 {{ target._preferredCheck?.uptime_90d_pct.toFixed(1) }}%
               </span>
             </template>
-            <span :class="['badge', categoryClass(target.category)]" style="font-size: 0.6rem;">
+            <span class="badge" :style="{ background: categoryColor(target.category) + '22', color: categoryColor(target.category), fontSize: '0.6rem' }">
               {{ target.category }}
             </span>
             <template v-if="isTargetPaused(target)">
@@ -651,26 +675,6 @@ onUnmounted(() => {
   opacity: 0.75;
 }
 
-.badge-cat-security {
-  background: #ede9fe;
-  color: #6d28d9;
-}
-.badge-cat-network {
-  background: #dbeafe;
-  color: #1d4ed8;
-}
-.badge-cat-physical {
-  background: #fef3c7;
-  color: #92400e;
-}
-.badge-cat-server {
-  background: #fce7f3;
-  color: #9d174d;
-}
-.badge-cat-other {
-  background: #e5e7eb;
-  color: #374151;
-}
 
 /* Uptime bars — thin vertical barcode style */
 .uptime-bars-row {

@@ -1896,11 +1896,11 @@ onUnmounted(() => {
             <template v-if="editingCategoryId === t.id">
               <input v-model="editingCategoryValue" class="tag-rename-input" @keyup.enter="saveRenameCategory(t)" @keyup.escape="cancelRenameCategory" />
               <button class="btn btn-sm btn-primary" @click="saveRenameCategory(t)">Save</button>
-              <button class="btn btn-sm" @click="cancelRenameCategory">Cancel</button>
+              <button class="btn btn-sm btn-danger" @click="cancelRenameCategory">Cancel</button>
             </template>
             <template v-else>
               <span>{{ t.value }}</span>
-              <button v-if="t.value !== 'Other'" class="btn btn-sm" @click="startRenameCategory(t)" title="Rename">Rename</button>
+              <button v-if="t.value !== 'Other'" class="btn btn-sm btn-primary" @click="startRenameCategory(t)" title="Rename">Rename</button>
               <button v-if="t.value !== 'Other'" class="btn btn-sm btn-danger" @click="deleteTag(t.id)">Delete</button>
             </template>
             <div v-if="categoryDeleteError && categoryDeleteError.id === t.id" class="category-delete-notice">
@@ -2592,11 +2592,13 @@ onUnmounted(() => {
 .tag-item {
   display: flex;
   flex-wrap: wrap;
-  justify-content: space-between;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.5rem;
   padding: 0.4rem 0;
   border-bottom: 1px solid var(--border);
+}
+.tag-item > span {
+  flex: 1;
 }
 .tag-add-row {
   display: flex;
