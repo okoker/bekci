@@ -8,7 +8,15 @@ const loading = ref(true)
 const error = ref('')
 const lastUpdated = ref(null)
 const activeCategory = ref('All')
-const categories = ['All', 'Network', 'Security', 'Physical Security', 'Key Services', 'Other']
+const categoriesRaw = ref([])
+const categories = computed(() => {
+  const sorted = [...categoriesRaw.value].sort((a, b) => {
+    if (a === 'Other') return 1
+    if (b === 'Other') return -1
+    return a.localeCompare(b)
+  })
+  return ['All', ...sorted]
+})
 const show90d = ref(false)
 const currentPage = ref(1)
 const pageSize = 48
@@ -113,6 +121,13 @@ async function loadHistoryForVisiblePage() {
 watch(currentPage, () => {
   loadHistoryForVisiblePage()
 })
+
+async function loadCategories() {
+  try {
+    const { data } = await api.get('/tags?group=category')
+    categoriesRaw.value = data.map(c => c.value)
+  } catch { /* ignore */ }
+}
 
 async function loadDashboard() {
   try {
@@ -224,12 +239,20 @@ function getWorstUptime(target) {
   return Math.min(...target.checks.map(c => c.uptime_90d_pct >= 0 ? c.uptime_90d_pct : 100))
 }
 
-function categoryClass(cat) {
-  if (cat === 'Security') return 'soc-cat-security'
-  if (cat === 'Network') return 'soc-cat-network'
-  if (cat === 'Physical Security') return 'soc-cat-physical'
-  if (cat === 'Key Services') return 'soc-cat-server'
-  return 'soc-cat-other'
+const categoryPalette = [
+  '#3b82f6', '#8b5cf6', '#f59e0b', '#ec4899', '#10b981',
+  '#06b6d4', '#f97316', '#6366f1', '#14b8a6', '#e11d48',
+]
+
+function categoryColor(cat) {
+  const sorted = [...categoriesRaw.value].sort((a, b) => {
+    if (a === 'Other') return 1
+    if (b === 'Other') return -1
+    return a.localeCompare(b)
+  })
+  const idx = sorted.indexOf(cat)
+  if (idx < 0) return '#94a3b8'
+  return categoryPalette[idx % categoryPalette.length]
 }
 
 function slaLabel(target) {
@@ -301,6 +324,7 @@ function formatTooltip4h(r) {
 }
 
 onMounted(() => {
+  loadCategories()
   loadDashboard()
   refreshTimer = setInterval(loadDashboard, 30000)
   fetchHealth()
@@ -370,7 +394,7 @@ onUnmounted(() => {
             {{ target._preferredCheck?.uptime_90d_pct.toFixed(1) }}%
           </span>
           <div class="soc-header-badges">
-            <span :class="['soc-cat-badge', categoryClass(target.category)]">{{ target.category }}</span>
+            <span class="soc-cat-badge" :style="{ background: categoryColor(target.category) + '22', color: categoryColor(target.category), borderColor: categoryColor(target.category) + '44' }">{{ target.category }}</span>
             <span v-if="isTargetPaused(target)" class="soc-status-badge soc-badge-paused">PAUSED</span>
             <template v-else>
               <span v-if="slaLabel(target)" :class="['soc-status-badge', slaClass(target)]">{{ slaLabel(target) }}</span>
@@ -676,32 +700,11 @@ onUnmounted(() => {
   gap: 0.4rem;
 }
 .soc-cat-badge {
-  font-size: 0.6rem;
+  font-size: 0.7rem;
   font-weight: 600;
-  padding: 0.1rem 0.4rem;
-  border-radius: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-.soc-cat-security {
-  background: rgba(139, 92, 246, 0.2);
-  color: #a78bfa;
-}
-.soc-cat-network {
-  background: rgba(59, 130, 246, 0.2);
-  color: #93c5fd;
-}
-.soc-cat-physical {
-  background: rgba(245, 158, 11, 0.2);
-  color: #fbbf24;
-}
-.soc-cat-server {
-  background: rgba(219, 39, 119, 0.2);
-  color: #f9a8d4;
-}
-.soc-cat-other {
-  background: rgba(148, 163, 184, 0.15);
-  color: #94a3b8;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  border: 1px solid;
 }
 
 /* Dark theme overrides for health popover */

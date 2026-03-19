@@ -11,6 +11,7 @@ const targets = ref([])
 const projectOptions = ref([])
 const locationOptions = ref([])
 const allUsers = ref([])
+const categoryNames = ref([])
 const loading = ref(false)
 const error = ref('')
 const success = ref('')
@@ -115,6 +116,18 @@ function recipientNames(recipientIds) {
     const u = allUsers.value.find(u => u.id === id)
     return u ? u.username : id.slice(0, 8)
   })
+}
+
+async function loadCategories() {
+  try {
+    const { data } = await api.get('/tags?group=category')
+    const sorted = data.map(c => c.value).sort((a, b) => {
+      if (a === 'Other') return 1
+      if (b === 'Other') return -1
+      return a.localeCompare(b)
+    })
+    categoryNames.value = sorted
+  } catch { /* ignore */ }
 }
 
 async function loadData() {
@@ -278,12 +291,15 @@ function stateClass(state) {
   return 'badge-unknown'
 }
 
-function categoryClass(cat) {
-  if (cat === 'Security') return 'badge-cat-security'
-  if (cat === 'Network') return 'badge-cat-network'
-  if (cat === 'Physical Security') return 'badge-cat-physical'
-  if (cat === 'Key Services') return 'badge-cat-server'
-  return 'badge-cat-other'
+const categoryPalette = [
+  '#3b82f6', '#8b5cf6', '#f59e0b', '#ec4899', '#10b981',
+  '#06b6d4', '#f97316', '#6366f1', '#14b8a6', '#e11d48',
+]
+
+function categoryColor(cat) {
+  const idx = categoryNames.value.indexOf(cat)
+  if (idx < 0) return '#94a3b8'
+  return categoryPalette[idx % categoryPalette.length]
 }
 
 function formatInterval(s) {
@@ -310,6 +326,7 @@ async function onTargetSaved() {
 }
 
 onMounted(() => {
+  loadCategories()
   loadData()
   loadSavedSearches()
 })
@@ -400,7 +417,7 @@ onMounted(() => {
                   </span>
                   <span v-else class="text-muted">—</span>
                 </td>
-                <td><span :class="['badge', categoryClass(t.category)]">{{ t.category }}</span></td>
+                <td><span class="badge" :style="{ background: categoryColor(t.category) + '22', color: categoryColor(t.category), borderColor: categoryColor(t.category) + '44' }">{{ t.category }}</span></td>
                 <td>
                   <span v-if="t.project" class="badge badge-tag-project">{{ t.project }}</span>
                   <span v-else class="text-muted">&mdash;</span>
@@ -736,26 +753,6 @@ onMounted(() => {
 .badge-paused {
   background: #e0e7ff;
   color: #4338ca;
-}
-.badge-cat-security {
-  background: #ede9fe;
-  color: #6d28d9;
-}
-.badge-cat-network {
-  background: #dbeafe;
-  color: #1d4ed8;
-}
-.badge-cat-server {
-  background: #fce7f3;
-  color: #9d174d;
-}
-.badge-cat-physical {
-  background: #fef3c7;
-  color: #92400e;
-}
-.badge-cat-other {
-  background: #e5e7eb;
-  color: #374151;
 }
 .badge-type {
   background: #e0e7ff;
