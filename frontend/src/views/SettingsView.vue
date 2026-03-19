@@ -27,13 +27,23 @@ const labels = {
   soc_public: 'SOC View Public Access',
 }
 
-const slaKeys = [
-  { key: 'sla_network', label: 'Network' },
-  { key: 'sla_security', label: 'Security' },
-  { key: 'sla_physical_security', label: 'Physical Security' },
-  { key: 'sla_key_services', label: 'Key Services' },
-  { key: 'sla_other', label: 'Other' },
-]
+const slaKeys = ref([])
+
+function deriveSLAKey(name) {
+  return 'sla_' + name.toLowerCase().replace(/ /g, '_')
+}
+
+async function loadSLAKeys() {
+  try {
+    const { data } = await api.get('/tags?group=category')
+    data.sort((a, b) => {
+      if (a.value === 'Other') return 1
+      if (b.value === 'Other') return -1
+      return a.value.localeCompare(b.value)
+    })
+    slaKeys.value = data.map(c => ({ key: deriveSLAKey(c.value), label: c.value }))
+  } catch { /* ignore */ }
+}
 
 const boolSettings = new Set(['soc_public'])
 const showSlaInfo = ref(false)
@@ -45,7 +55,7 @@ async function loadSettings() {
   try {
     const { data } = await api.get('/settings')
     // Default SLA keys to "0" if missing so inputs aren't blank
-    for (const s of slaKeys) {
+    for (const s of slaKeys.value) {
       if (!(s.key in data)) data[s.key] = '99.5'
     }
     // Default backup_max_copies if not yet saved
@@ -61,7 +71,7 @@ async function saveSettings() {
   loading.value = true
   try {
     const payload = {}
-    const knownKeys = new Set([...generalKeys, ...slaKeys.map(s => s.key)])
+    const knownKeys = new Set([...generalKeys, ...slaKeys.value.map(s => s.key)])
     for (const [k, v] of Object.entries(settings.value)) {
       if (knownKeys.has(k)) payload[k] = String(v)
     }
@@ -672,27 +682,37 @@ const projectTags = ref([])
 const locationTags = ref([])
 const newProjectTag = ref('')
 const newLocationTag = ref('')
+const categoryTags = ref([])
+const newCategoryTag = ref('')
+const editingCategoryId = ref(null)
+const editingCategoryValue = ref('')
+const categoryDeleteError = ref(null)
 
 async function loadTags() {
   try {
-    const [p, l] = await Promise.all([
+    const [p, l, c] = await Promise.all([
       api.get('/tags?group=project'),
-      api.get('/tags?group=location')
+      api.get('/tags?group=location'),
+      api.get('/tags?group=category')
     ])
     projectTags.value = p.data
     locationTags.value = l.data
+    categoryTags.value = c.data
   } catch (e) {
     error.value = 'Failed to load tags'
   }
 }
 
 async function addTag(group) {
-  const value = group === 'project' ? newProjectTag.value.trim() : newLocationTag.value.trim()
+  const value = group === 'project' ? newProjectTag.value.trim()
+    : group === 'location' ? newLocationTag.value.trim()
+    : newCategoryTag.value.trim()
   if (!value) return
   try {
     await api.post('/tags', { group, value })
     if (group === 'project') newProjectTag.value = ''
-    else newLocationTag.value = ''
+    else if (group === 'location') newLocationTag.value = ''
+    else newCategoryTag.value = ''
     await loadTags()
     success.value = 'Tag added'
   } catch (e) {
@@ -701,13 +721,47 @@ async function addTag(group) {
 }
 
 async function deleteTag(id) {
+  categoryDeleteError.value = null
   if (!confirm('Delete this tag? It will be removed from all targets using it.')) return
   try {
     await api.delete(`/tags/${id}`)
     await loadTags()
     success.value = 'Tag deleted'
   } catch (e) {
+    if (e.response?.status === 409 && e.response?.data?.targets) {
+      categoryDeleteError.value = {
+        id,
+        targets: e.response.data.targets
+      }
+      return
+    }
     error.value = e.response?.data?.error || 'Failed to delete tag'
+  }
+}
+
+function startRenameCategory(tag) {
+  editingCategoryId.value = tag.id
+  editingCategoryValue.value = tag.value
+}
+
+function cancelRenameCategory() {
+  editingCategoryId.value = null
+  editingCategoryValue.value = ''
+}
+
+async function saveRenameCategory(tag) {
+  const newValue = editingCategoryValue.value.trim()
+  if (!newValue || newValue === tag.value) {
+    cancelRenameCategory()
+    return
+  }
+  try {
+    await api.put(`/tags/${tag.id}`, { value: newValue })
+    cancelRenameCategory()
+    await loadTags()
+    success.value = 'Category renamed'
+  } catch (e) {
+    error.value = e.response?.data?.error || 'Failed to rename category'
   }
 }
 
@@ -860,6 +914,7 @@ watch(() => route.path, (path) => {
 })
 
 onMounted(async () => {
+  await loadSLAKeys()
   await loadSettings()
   loadSnmpSettings()
   // Trigger initial data load for routed tabs
@@ -1834,6 +1889,33 @@ onUnmounted(() => {
       <div v-if="success" class="success-msg" @click="success = ''">{{ success }}</div>
 
       <div class="card" style="margin-bottom: 1.5rem;">
+        <h3>Categories</h3>
+        <p class="text-muted" style="margin-bottom: 0.75rem;">Target categories used for grouping in SLA, SOC, and dashboard views.</p>
+        <div class="tag-list">
+          <div v-for="t in categoryTags" :key="t.id" class="tag-item">
+            <template v-if="editingCategoryId === t.id">
+              <input v-model="editingCategoryValue" class="tag-rename-input" @keyup.enter="saveRenameCategory(t)" @keyup.escape="cancelRenameCategory" />
+              <button class="btn btn-sm btn-primary" @click="saveRenameCategory(t)">Save</button>
+              <button class="btn btn-sm" @click="cancelRenameCategory">Cancel</button>
+            </template>
+            <template v-else>
+              <span>{{ t.value }}</span>
+              <button v-if="t.value !== 'Other'" class="btn btn-sm" @click="startRenameCategory(t)" title="Rename">Rename</button>
+              <button v-if="t.value !== 'Other'" class="btn btn-sm btn-danger" @click="deleteTag(t.id)">Delete</button>
+            </template>
+            <div v-if="categoryDeleteError && categoryDeleteError.id === t.id" class="category-delete-notice">
+              Cannot delete — reassign these targets first: {{ categoryDeleteError.targets.join(', ') }}
+            </div>
+          </div>
+          <div v-if="categoryTags.length === 0" class="text-muted">No categories defined yet.</div>
+        </div>
+        <div class="tag-add-row">
+          <input v-model="newCategoryTag" placeholder="New category name" @keyup.enter="addTag('category')" />
+          <button class="btn btn-sm btn-primary" @click="addTag('category')">Add</button>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom: 1.5rem;">
         <h3>Project Tags</h3>
         <p class="text-muted" style="margin-bottom: 0.75rem;">Assign project names to targets for grouping and filtering.</p>
         <div class="tag-list">
@@ -2509,8 +2591,10 @@ onUnmounted(() => {
 }
 .tag-item {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
+  gap: 0.25rem;
   padding: 0.4rem 0;
   border-bottom: 1px solid var(--border);
 }
@@ -2528,5 +2612,21 @@ onUnmounted(() => {
   font-size: 0.875rem;
   background: #fff;
   color: #1e293b;
+}
+.tag-rename-input {
+  flex: 1;
+  max-width: 200px;
+  font-size: 0.85rem;
+  padding: 0.2rem 0.5rem;
+}
+.category-delete-notice {
+  width: 100%;
+  margin-top: 0.35rem;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.8rem;
+  color: #b45309;
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  border-radius: 4px;
 }
 </style>

@@ -14,6 +14,7 @@ const form = ref(getEmptyForm())
 const formError = ref('')
 const projectOptions = ref([])
 const locationOptions = ref([])
+const categoryOptions = ref([])
 
 const checkTypes = [
   { value: 'http', label: 'HTTP/HTTPS' },
@@ -165,12 +166,14 @@ async function loadAllUsers() {
 
 async function loadTagOptions() {
   try {
-    const [p, l] = await Promise.all([
+    const [p, l, c] = await Promise.all([
       api.get('/tags?group=project'),
-      api.get('/tags?group=location')
+      api.get('/tags?group=location'),
+      api.get('/tags?group=category')
     ])
     projectOptions.value = p.data
     locationOptions.value = l.data
+    categoryOptions.value = c.data
   } catch { /* ignore */ }
 }
 
@@ -320,11 +323,7 @@ watch(() => props.show, async (val) => {
           <label class="required">Category</label>
           <select v-model="form.category" required>
             <option value="" disabled>Select category</option>
-            <option value="Network">Network</option>
-            <option value="Security">Security</option>
-            <option value="Physical Security">Physical Security</option>
-            <option value="Key Services">Key Services</option>
-            <option value="Other">Other</option>
+            <option v-for="c in categoryOptions" :key="c.id" :value="c.value">{{ c.value }}</option>
           </select>
         </div>
         <div v-if="form.conditions.length > 1" class="form-group">
