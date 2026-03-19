@@ -324,7 +324,7 @@ Creates target, checks, rule, and rule conditions in one transaction. Creator is
   "description": "string",
   "enabled": true,
   "operator": "AND (kept for backward compat, used as fallback for empty group_operator)",
-  "category": "Network | Security | Physical Security | Key Services | Other (default: Other)",
+  "category": "string (must exist in tag_options where grp='category', default: Other)",
   "preferred_check_type": "string (optional, must match a condition's check_type; defaults to 'ping'; validated against conditions, falls back to first condition's type if no ping)",
   "notes": "string (optional)",
   "contacts": "string (optional)",
@@ -505,9 +505,10 @@ Unpauses the target and immediately triggers RunNow on all its checks.
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/api/tags?group=project\|location` | any | List tag values for a group |
+| GET | `/api/tags?group=project\|location\|category` | any | List tag values for a group |
 | POST | `/api/tags` | admin | Create a tag value |
-| DELETE | `/api/tags/{id}` | admin | Delete a tag value (cascade-clears from targets) |
+| PUT | `/api/tags/{id}` | admin | Rename a tag value (category: cascades to targets + SLA key) |
+| DELETE | `/api/tags/{id}` | admin | Delete a tag value (project/location: cascade-clears; category: blocked if in use) |
 
 ### GET /api/tags
 
@@ -515,7 +516,7 @@ Unpauses the target and immediately triggers RunNow on all its checks.
 
 | Param | Required | Values |
 |-------|----------|--------|
-| `group` | Yes | `project` or `location` |
+| `group` | Yes | `project`, `location`, or `category` |
 
 **Response (200):**
 ```json
@@ -534,7 +535,7 @@ Unpauses the target and immediately triggers RunNow on all its checks.
 **Request:**
 ```json
 {
-  "group": "project | location",
+  "group": "project | location | category",
   "value": "string (required)"
 }
 ```
@@ -550,9 +551,14 @@ Unpauses the target and immediately triggers RunNow on all its checks.
 | Empty value | 400 |
 | Duplicate value in group | 409 |
 
-### DELETE /api/tags/{id}
+### PUT /api/tags/{id}
 
-Deletes the tag option and sets the corresponding field to NULL on all targets using it.
+Renames a tag option. For categories: cascades to `targets.category` and renames the SLA settings key. "Other" category cannot be renamed.
+
+**Request:**
+```json
+{ "value": "New Name" }
+```
 
 **Response (200):**
 ```json
@@ -562,6 +568,33 @@ Deletes the tag option and sets the corresponding field to NULL on all targets u
 | Error | Code |
 |-------|------|
 | Tag not found | 404 |
+| Empty value | 400 |
+| Duplicate name | 409 |
+| Cannot rename "Other" | 400 |
+
+### DELETE /api/tags/{id}
+
+For project/location: deletes the tag and sets the field to NULL on all targets using it.
+For category: blocked if any targets use this category. "Other" cannot be deleted.
+
+**Response (200):**
+```json
+{ "status": "ok" }
+```
+
+**Error (409 — category in use):**
+```json
+{
+  "error": "category has 3 assigned targets",
+  "targets": ["Web Server", "Firewall-01", "DB Server"]
+}
+```
+
+| Error | Code |
+|-------|------|
+| Tag not found | 404 |
+| Cannot delete "Other" | 400 |
+| Category has assigned targets | 409 |
 
 ---
 
@@ -888,7 +921,7 @@ Returns enabled targets with their checks, last status, response time, and 90-da
 
 ### GET /api/sla/history
 
-Returns all categories with per-target daily uptime arrays for the preferred check. Disabled targets (`enabled=false`) are filtered out. Categories are returned in fixed order: Network, Security, Physical Security, Key Services, Other, then any unknown categories appended.
+Returns all categories with per-target daily uptime arrays for the preferred check. Disabled targets (`enabled=false`) are filtered out. Categories are loaded dynamically from `tag_options` (grp='category'), sorted alphabetically with "Other" always last.
 
 **Response (200):**
 ```json

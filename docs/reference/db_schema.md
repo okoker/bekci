@@ -1,6 +1,6 @@
 # Database Schema Reference
 
-**Current schema version:** 22
+**Current schema version:** 23
 **Engine:** SQLite 3 with WAL journal mode
 **Driver:** `github.com/mattn/go-sqlite3` (CGO required)
 
@@ -21,7 +21,7 @@
 
 ### schema_version
 
-Tracks current schema version. Single row. Stamped to 22 by the baseline schema on fresh install.
+Tracks current schema version. Single row. Stamped to 23 by the baseline schema on fresh install.
 
 | Column  | Type    | Constraints |
 |---------|---------|-------------|
@@ -128,21 +128,25 @@ Key-value config store.
 
 ### tag_options
 
-*(migration019)*
+*(migration019, updated migration023)*
 
-Admin-managed list of allowed tag values for project and location fields on targets.
+Admin-managed list of allowed tag values for project, location, and category fields on targets.
 
-| Column | Type    | Constraints                                      |
-|--------|---------|--------------------------------------------------|
-| id     | INTEGER | **PK** AUTOINCREMENT                             |
-| grp    | TEXT    | NOT NULL, CHECK(grp IN ('project', 'location'))  |
-| value  | TEXT    | NOT NULL                                         |
+| Column | Type    | Constraints                                                  |
+|--------|---------|--------------------------------------------------------------|
+| id     | INTEGER | **PK** AUTOINCREMENT                                        |
+| grp    | TEXT    | NOT NULL, CHECK(grp IN ('project', 'location', 'category')) |
+| value  | TEXT    | NOT NULL                                                     |
 
 **Unique:** (grp, value) composite
 
+**Seeded categories** (migration023): Key Services, Network, Other, Physical Security, Security.
+
 **Notes:**
 - Column named `grp` (not `group`) to avoid SQL reserved word.
-- Deleting a tag option cascade-clears the corresponding field on all targets referencing that value (app-level, not DDL cascade).
+- For project/location: deleting a tag option cascade-clears the corresponding field on all targets (app-level, not DDL cascade).
+- For category: delete is blocked if any targets use that category (returns 409 with target names). Rename cascades to `targets.category` and renames the corresponding `sla_*` settings key. "Other" cannot be renamed or deleted.
+- SLA key derivation: `"sla_" + lowercase(replace(name, " ", "_"))` — e.g. "Physical Security" → `sla_physical_security`.
 
 ### checks
 
@@ -363,7 +367,9 @@ Append-only audit trail. Purged by `PurgeOldAuditEntries(days)` (runs at startup
 
 ## Migration History
 
-> **A-042 (18/03/2026):** All 22 migration functions were collapsed into a single `baselineSchema` constant in `store.go`. Fresh installs run the baseline SQL and stamp schema version 22. Existing installs at v22 are a no-op. The individual migration functions no longer exist in code — git history preserves them. Future schema changes (v23+) will be added as incremental migrations after the baseline. Databases below v22 cannot auto-upgrade (the old migration code is removed).
+> **A-042 (18/03/2026):** All 22 migration functions were collapsed into a single `baselineSchema` constant in `store.go`. Fresh installs run the baseline SQL and stamp schema version 23. Existing installs at v22 run migration023 (add 'category' to tag_options). The individual migration functions no longer exist in code — git history preserves them. Databases below v22 cannot auto-upgrade (the old migration code is removed).
+>
+> **migration023 (19/03/2026):** Recreates `tag_options` table with CHECK constraint expanded to include `'category'`. Seeds 5 default categories (Key Services, Network, Other, Physical Security, Security). SQLite doesn't support ALTER CHECK, so uses create-new/copy/drop/rename pattern.
 
 The table below is retained as historical context for how the schema evolved:
 
