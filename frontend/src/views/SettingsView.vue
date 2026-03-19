@@ -431,6 +431,7 @@ const alertForm = ref({
 
 // Track which alerting sections are expanded (first open by default)
 const alertSections = ref({ general: true, email: false, signal: false, webhook: false })
+const tagSections = ref({ project: true, location: false, category: false })
 
 // SNMP credentials (separate from alerting)
 const snmpForm = ref({
@@ -725,7 +726,7 @@ async function addTag(group) {
 
 async function deleteTag(id) {
   categoryDeleteError.value = null
-  if (!confirm('Delete this tag? It will be removed from all targets using it.')) return
+  if (!confirm('Are you sure you want to delete this category?')) return
   try {
     await api.delete(`/tags/${id}`)
     await loadTags()
@@ -889,6 +890,11 @@ watch(fullBackupExpanded, (val) => {
 })
 
 watch(activeTab, (tab) => {
+  // Clear messages from previous tab
+  success.value = ''
+  error.value = ''
+  alertSuccess.value = ''
+  alertError.value = ''
   if (tab === 'fail2ban') {
     startF2BPolling()
   } else {
@@ -1901,62 +1907,92 @@ onUnmounted(() => {
       <div v-if="error" class="error-msg">{{ error }}</div>
       <div v-if="success" class="success-msg" @click="success = ''">{{ success }}</div>
 
-      <div class="card" style="margin-bottom: 1.5rem;">
-        <h3>Categories</h3>
-        <p class="text-muted" style="margin-bottom: 0.75rem;">Target categories used for grouping in SLA, SOC, and dashboard views.</p>
-        <div class="tag-list">
-          <div v-for="t in categoryTags" :key="t.id" class="tag-item">
-            <template v-if="editingCategoryId === t.id">
-              <input v-model="editingCategoryValue" class="tag-rename-input" @keyup.enter="saveRenameCategory(t)" @keyup.escape="cancelRenameCategory" />
-              <button class="btn btn-sm btn-primary" @click="saveRenameCategory(t)">Save</button>
-              <button class="btn btn-sm btn-danger" @click="cancelRenameCategory">Cancel</button>
-            </template>
-            <template v-else>
-              <span>{{ t.value }}</span>
-              <button v-if="t.value !== 'Other'" class="btn btn-sm btn-primary" @click="startRenameCategory(t)" title="Rename">Rename</button>
-              <button v-if="t.value !== 'Other'" class="btn btn-sm btn-danger" @click="deleteTag(t.id)">Delete</button>
-            </template>
-            <div v-if="categoryDeleteError && categoryDeleteError.id === t.id" class="category-delete-notice">
-              Cannot delete — reassign these targets first: {{ categoryDeleteError.targets.join(', ') }}
+      <div class="card collapsible-card" :class="{ expanded: tagSections.project }" style="margin-bottom: 1rem;">
+        <div class="collapsible-header" @click="tagSections.project = !tagSections.project">
+          <div class="collapsible-title-row">
+            <span class="collapse-arrow" :class="{ open: tagSections.project }">&#9654;</span>
+            <h3 style="margin: 0;">Project Tags</h3>
+          </div>
+          <span class="collapsible-hint">{{ tagSections.project ? 'collapse' : 'expand' }}</span>
+        </div>
+        <div class="collapsible-body" :class="{ open: tagSections.project }">
+          <div class="collapsible-inner">
+            <p class="text-muted" style="margin-bottom: 0.75rem;">Assign project names to targets for grouping and filtering.</p>
+            <div class="tag-list">
+              <div v-for="t in projectTags" :key="t.id" class="tag-item">
+                <span>{{ t.value }}</span>
+                <button class="btn btn-sm btn-danger" @click="deleteTag(t.id)">Delete</button>
+              </div>
+              <div v-if="projectTags.length === 0" class="text-muted">No project tags defined yet.</div>
+            </div>
+            <div class="tag-add-row">
+              <input v-model="newProjectTag" placeholder="New project name" @keyup.enter="addTag('project')" />
+              <button class="btn btn-sm btn-primary" @click="addTag('project')">Add</button>
             </div>
           </div>
-          <div v-if="categoryTags.length === 0" class="text-muted">No categories defined yet.</div>
-        </div>
-        <div class="tag-add-row">
-          <input v-model="newCategoryTag" placeholder="New category name" @keyup.enter="addTag('category')" />
-          <button class="btn btn-sm btn-primary" @click="addTag('category')">Add</button>
         </div>
       </div>
 
-      <div class="card" style="margin-bottom: 1.5rem;">
-        <h3>Project Tags</h3>
-        <p class="text-muted" style="margin-bottom: 0.75rem;">Assign project names to targets for grouping and filtering.</p>
-        <div class="tag-list">
-          <div v-for="t in projectTags" :key="t.id" class="tag-item">
-            <span>{{ t.value }}</span>
-            <button class="btn btn-sm btn-danger" @click="deleteTag(t.id)">Delete</button>
+      <div class="card collapsible-card" :class="{ expanded: tagSections.location }" style="margin-bottom: 1rem;">
+        <div class="collapsible-header" @click="tagSections.location = !tagSections.location">
+          <div class="collapsible-title-row">
+            <span class="collapse-arrow" :class="{ open: tagSections.location }">&#9654;</span>
+            <h3 style="margin: 0;">Location Tags</h3>
           </div>
-          <div v-if="projectTags.length === 0" class="text-muted">No project tags defined yet.</div>
+          <span class="collapsible-hint">{{ tagSections.location ? 'collapse' : 'expand' }}</span>
         </div>
-        <div class="tag-add-row">
-          <input v-model="newProjectTag" placeholder="New project name" @keyup.enter="addTag('project')" />
-          <button class="btn btn-sm btn-primary" @click="addTag('project')">Add</button>
+        <div class="collapsible-body" :class="{ open: tagSections.location }">
+          <div class="collapsible-inner">
+            <p class="text-muted" style="margin-bottom: 0.75rem;">Assign locations (datacenter, room, etc.) to targets.</p>
+            <div class="tag-list">
+              <div v-for="t in locationTags" :key="t.id" class="tag-item">
+                <span>{{ t.value }}</span>
+                <button class="btn btn-sm btn-danger" @click="deleteTag(t.id)">Delete</button>
+              </div>
+              <div v-if="locationTags.length === 0" class="text-muted">No location tags defined yet.</div>
+            </div>
+            <div class="tag-add-row">
+              <input v-model="newLocationTag" placeholder="New location name" @keyup.enter="addTag('location')" />
+              <button class="btn btn-sm btn-primary" @click="addTag('location')">Add</button>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="card">
-        <h3>Location Tags</h3>
-        <p class="text-muted" style="margin-bottom: 0.75rem;">Assign locations (datacenter, room, etc.) to targets.</p>
-        <div class="tag-list">
-          <div v-for="t in locationTags" :key="t.id" class="tag-item">
-            <span>{{ t.value }}</span>
-            <button class="btn btn-sm btn-danger" @click="deleteTag(t.id)">Delete</button>
+      <div class="card collapsible-card" :class="{ expanded: tagSections.category }" style="margin-bottom: 1rem;">
+        <div class="collapsible-header" @click="tagSections.category = !tagSections.category">
+          <div class="collapsible-title-row">
+            <span class="collapse-arrow" :class="{ open: tagSections.category }">&#9654;</span>
+            <h3 style="margin: 0;">Categories</h3>
           </div>
-          <div v-if="locationTags.length === 0" class="text-muted">No location tags defined yet.</div>
+          <span class="collapsible-hint">{{ tagSections.category ? 'collapse' : 'expand' }}</span>
         </div>
-        <div class="tag-add-row">
-          <input v-model="newLocationTag" placeholder="New location name" @keyup.enter="addTag('location')" />
-          <button class="btn btn-sm btn-primary" @click="addTag('location')">Add</button>
+        <div class="collapsible-body" :class="{ open: tagSections.category }">
+          <div class="collapsible-inner">
+            <p class="text-muted" style="margin-bottom: 0.75rem;">Target categories used for grouping in SLA, SOC, and dashboard views.</p>
+            <div class="tag-list">
+              <div v-for="t in categoryTags" :key="t.id" class="tag-item">
+                <template v-if="editingCategoryId === t.id">
+                  <input v-model="editingCategoryValue" class="tag-rename-input" @keyup.enter="saveRenameCategory(t)" @keyup.escape="cancelRenameCategory" />
+                  <button class="btn btn-sm btn-primary" @click="saveRenameCategory(t)">Save</button>
+                  <button class="btn btn-sm btn-danger" @click="cancelRenameCategory">Cancel</button>
+                </template>
+                <template v-else>
+                  <span>{{ t.value }}</span>
+                  <button v-if="t.value !== 'Other'" class="btn btn-sm btn-primary" @click="startRenameCategory(t)" title="Rename">Rename</button>
+                  <button v-if="t.value !== 'Other'" class="btn btn-sm btn-danger" @click="deleteTag(t.id)">Delete</button>
+                </template>
+                <div v-if="categoryDeleteError && categoryDeleteError.id === t.id" class="category-delete-notice">
+                  Cannot delete — reassign these targets first: {{ categoryDeleteError.targets.join(', ') }}
+                </div>
+              </div>
+              <div v-if="categoryTags.length === 0" class="text-muted">No categories defined yet.</div>
+            </div>
+            <div class="tag-add-row">
+              <input v-model="newCategoryTag" placeholder="New category name" @keyup.enter="addTag('category')" />
+              <button class="btn btn-sm btn-primary" @click="addTag('category')">Add</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -2305,6 +2341,11 @@ onUnmounted(() => {
 .sla-info-table td:first-child {
   white-space: nowrap;
   width: 90px;
+}
+table.sla-info-table th:not(:first-child),
+table.sla-info-table td:not(:first-child) {
+  text-align: left;
+  width: auto;
 }
 .sla-info-note {
   margin: 0.75rem 0 0;
