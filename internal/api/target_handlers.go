@@ -31,10 +31,6 @@ func normalizeFailWindow(failCount, failWindow, intervalS int) int {
 }
 
 var validOperators = map[string]bool{"AND": true, "OR": true}
-var validCategories = map[string]bool{
-	"Network": true, "Security": true, "Physical Security": true,
-	"Key Services": true, "Other": true,
-}
 var validCheckTypes = map[string]bool{
 	"http": true, "tcp": true, "ping": true,
 	"dns": true, "page_hash": true, "tls_cert": true,
@@ -102,7 +98,7 @@ func (s *Server) handleCreateTarget(w http.ResponseWriter, r *http.Request) {
 	if req.Category == "" {
 		req.Category = "Other"
 	}
-	if !validCategories[req.Category] {
+	if valid, _ := s.store.ValidateCategory(req.Category); !valid {
 		writeError(w, http.StatusBadRequest, "invalid category")
 		return
 	}
@@ -283,7 +279,7 @@ func (s *Server) handleUpdateTarget(w http.ResponseWriter, r *http.Request) {
 	if req.Category == "" {
 		req.Category = "Other"
 	}
-	if !validCategories[req.Category] {
+	if valid, _ := s.store.ValidateCategory(req.Category); !valid {
 		writeError(w, http.StatusBadRequest, "invalid category")
 		return
 	}

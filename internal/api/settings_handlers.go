@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/bekci/internal/store"
 )
 
 // Known settings with their validation rules.
@@ -48,12 +50,6 @@ var knownSettings = map[string]bool{
 	"snmp_v3_auth_passphrase":    true,
 	"snmp_v3_privacy_protocol":   true,
 	"snmp_v3_privacy_passphrase": true,
-	// SLA thresholds (per category, float 0–100)
-	"sla_network":           true,
-	"sla_security":          true,
-	"sla_physical_security": true,
-	"sla_key_services":      true,
-	"sla_other":             true,
 }
 
 // Boolean settings that accept "true"/"false" instead of positive integers.
@@ -110,12 +106,20 @@ var maxSettings = map[string]int{
 }
 
 // Float settings validated as 0–100 range (SLA thresholds).
-var floatSettings = map[string]bool{
-	"sla_network":           true,
-	"sla_security":          true,
-	"sla_physical_security": true,
-	"sla_key_services":      true,
-	"sla_other":             true,
+var floatSettings = map[string]bool{}
+
+// isSLAKey checks if a settings key matches an existing category's derived SLA key.
+func (s *Server) isSLAKey(key string) bool {
+	if !strings.HasPrefix(key, "sla_") {
+		return false
+	}
+	cats, _ := s.store.ListTagOptions("category")
+	for _, c := range cats {
+		if store.CategoryToSLAKey(c.Value) == key {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
@@ -126,7 +130,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	// Strip stale/unknown keys so frontend never sees them
 	for key := range settings {
-		if !knownSettings[key] {
+		if !knownSettings[key] && !s.isSLAKey(key) {
 			delete(settings, key)
 		}
 	}
@@ -168,7 +172,7 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 
 	// Validate: only known keys, type-appropriate values
 	for key, val := range req {
-		if !knownSettings[key] {
+		if !knownSettings[key] && !s.isSLAKey(key) {
 			s.audit(r, "update_settings", "settings", "", "unknown key="+key, "failure")
 			writeError(w, http.StatusBadRequest, "unknown setting: "+key)
 			return
@@ -178,7 +182,7 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusBadRequest, "setting "+key+" must be 'true' or 'false'")
 				return
 			}
-		} else if floatSettings[key] {
+		} else if floatSettings[key] || s.isSLAKey(key) {
 			// Normalize: strip trailing zeros/dot for clean storage
 			f, err := strconv.ParseFloat(strings.TrimSpace(val), 64)
 			if err != nil || f < 0 || f > 100 {

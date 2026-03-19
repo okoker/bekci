@@ -3,12 +3,12 @@ package api
 import (
 	"log/slog"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
-)
 
-// Fixed category ordering for SLA page.
-var slaCategories = []string{"Network", "Security", "Physical Security", "Key Services", "Other"}
+	"github.com/bekci/internal/store"
+)
 
 type slaDailyUptime struct {
 	Date      string  `json:"date"`
@@ -44,17 +44,25 @@ func (s *Server) handleSLAHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Load SLA thresholds
+	// Load categories from DB
+	cats, err := s.store.ListTagOptions("category")
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load categories")
+		return
+	}
+
+	// Load SLA thresholds dynamically
 	allSettings, err := s.store.GetAllSettings()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to load settings")
 		return
 	}
 	slaThresholds := make(map[string]float64)
-	for cat, key := range categoryToSLAKey {
+	for _, cat := range cats {
+		key := store.CategoryToSLAKey(cat.Value)
 		if v, ok := allSettings[key]; ok {
 			if f, err := strconv.ParseFloat(strings.TrimSpace(v), 64); err == nil {
-				slaThresholds[cat] = f
+				slaThresholds[cat.Value] = f
 			}
 		}
 	}
@@ -114,30 +122,26 @@ func (s *Server) handleSLAHistory(w http.ResponseWriter, r *http.Request) {
 	// Pause stats for current calendar month
 	pauseCount, pauseHosts, _ := s.store.GetMonthlyPauseStats()
 
-	// Build ordered response: known categories first, then any unknown
+	// Sort: alphabetical, "Other" last
+	sort.Slice(cats, func(i, j int) bool {
+		if cats[i].Value == "Other" {
+			return false
+		}
+		if cats[j].Value == "Other" {
+			return true
+		}
+		return cats[i].Value < cats[j].Value
+	})
+
 	resp := slaHistoryResponse{
 		PauseStats: slaPauseStats{Count: pauseCount, AffectedHosts: pauseHosts},
 	}
-	seen := make(map[string]bool)
-
-	for _, cat := range slaCategories {
-		seen[cat] = true
+	for _, cat := range cats {
 		resp.Categories = append(resp.Categories, slaCategory{
-			Name:         cat,
-			SLAThreshold: slaThresholds[cat],
-			Targets:      orEmptyTargets(catTargets[cat]),
+			Name:         cat.Value,
+			SLAThreshold: slaThresholds[cat.Value],
+			Targets:      orEmptyTargets(catTargets[cat.Value]),
 		})
-	}
-
-	// Append any unknown categories
-	for cat, tgts := range catTargets {
-		if !seen[cat] {
-			resp.Categories = append(resp.Categories, slaCategory{
-				Name:         cat,
-				SLAThreshold: slaThresholds[cat],
-				Targets:      tgts,
-			})
-		}
 	}
 
 	writeJSON(w, http.StatusOK, resp)

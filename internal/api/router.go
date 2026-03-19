@@ -154,6 +154,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/tags", anyAuth(s.handleListTags))
 	mux.Handle("POST /api/tags", adminAuth(s.handleCreateTag))
 	mux.Handle("DELETE /api/tags/{id}", adminAuth(s.handleDeleteTag))
+	mux.Handle("PUT /api/tags/{id}", adminAuth(s.handleRenameTag))
 
 	// Checks (read-only + run)
 	mux.Handle("GET /api/targets/{id}/checks", anyAuth(s.handleListChecks))

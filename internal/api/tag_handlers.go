@@ -4,12 +4,14 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/bekci/internal/store"
 )
 
 func (s *Server) handleListTags(w http.ResponseWriter, r *http.Request) {
 	group := r.URL.Query().Get("group")
-	if group != "project" && group != "location" {
-		writeError(w, http.StatusBadRequest, "group must be 'project' or 'location'")
+	if group != "project" && group != "location" && group != "category" {
+		writeError(w, http.StatusBadRequest, "group must be 'project', 'location', or 'category'")
 		return
 	}
 	tags, err := s.store.ListTagOptions(group)
@@ -30,8 +32,8 @@ func (s *Server) handleCreateTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Value = strings.TrimSpace(req.Value)
-	if req.Group != "project" && req.Group != "location" {
-		writeError(w, http.StatusBadRequest, "group must be 'project' or 'location'")
+	if req.Group != "project" && req.Group != "location" && req.Group != "category" {
+		writeError(w, http.StatusBadRequest, "group must be 'project', 'location', or 'category'")
 		return
 	}
 	if req.Value == "" {
@@ -59,13 +61,63 @@ func (s *Server) handleDeleteTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.store.DeleteTagOption(id); err != nil {
+		if catErr, ok := err.(*store.CategoryInUseError); ok {
+			writeJSON(w, http.StatusConflict, map[string]any{
+				"error":   catErr.Error(),
+				"targets": catErr.Targets,
+			})
+			return
+		}
 		if strings.Contains(err.Error(), "not found") {
 			writeError(w, http.StatusNotFound, "tag not found")
+			return
+		}
+		if strings.Contains(err.Error(), "cannot delete") {
+			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 		writeError(w, http.StatusInternalServerError, "failed to delete tag")
 		return
 	}
 	s.audit(r, "delete_tag", "tag", idStr, "", "success")
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (s *Server) handleRenameTag(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid tag id")
+		return
+	}
+	var req struct {
+		Value string `json:"value"`
+	}
+	if err := readJSON(w, r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	req.Value = strings.TrimSpace(req.Value)
+	if req.Value == "" {
+		writeError(w, http.StatusBadRequest, "value is required")
+		return
+	}
+	if err := s.store.RenameTagOption(id, req.Value); err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			writeError(w, http.StatusNotFound, "tag not found")
+			return
+		}
+		if strings.Contains(err.Error(), "already exists") {
+			writeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		if strings.Contains(err.Error(), "cannot rename") {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to rename tag")
+		return
+	}
+	s.audit(r, "rename_tag", "tag", idStr, "new_value="+req.Value, "success")
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }

@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/bekci/internal/store"
 )
 
 type dashboardCheck struct {
@@ -33,31 +35,24 @@ type dashboardTarget struct {
 	Checks             []dashboardCheck `json:"checks"`
 }
 
-// categoryToSLAKey maps target category names to settings keys.
-var categoryToSLAKey = map[string]string{
-	"Network":           "sla_network",
-	"Security":          "sla_security",
-	"Physical Security": "sla_physical_security",
-	"Key Services":      "sla_key_services",
-	"Other":             "sla_other",
-}
-
 func (s *Server) buildDashboardTargets() ([]dashboardTarget, error) {
 	targets, err := s.store.ListTargets()
 	if err != nil {
 		return nil, err
 	}
 
-	// Load SLA thresholds once
+	// Load SLA thresholds dynamically from categories
+	cats, _ := s.store.ListTagOptions("category")
 	allSettings, err := s.store.GetAllSettings()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load settings: %w", err)
 	}
 	slaThresholds := make(map[string]float64)
-	for cat, key := range categoryToSLAKey {
+	for _, cat := range cats {
+		key := store.CategoryToSLAKey(cat.Value)
 		if v, ok := allSettings[key]; ok {
 			if f, err := strconv.ParseFloat(strings.TrimSpace(v), 64); err == nil {
-				slaThresholds[cat] = f
+				slaThresholds[cat.Value] = f
 			}
 		}
 	}
