@@ -220,7 +220,7 @@ function isTargetPaused(target) {
 
 const categoryStats = computed(() => {
   const stats = {}
-  for (const cat of categories) {
+  for (const cat of categories.value) {
     if (cat === 'All') {
       stats[cat] = {
         count: dashboardData.value.length,
