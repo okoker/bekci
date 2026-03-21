@@ -231,7 +231,7 @@ func (s *Server) autoSaveBackupCopy(data []byte, filename string, encrypted bool
 	}
 
 	// Ensure backup directory exists
-	if err := os.MkdirAll(s.backupDir, 0755); err != nil {
+	if err := os.MkdirAll(s.backupDir, 0700); err != nil {
 		slog.Warn("Auto-save backup: failed to create directory", "error", err)
 		return
 	}
@@ -372,7 +372,7 @@ func (s *Server) handleSaveFullBackup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Ensure backup directory exists
-	if err := os.MkdirAll(s.backupDir, 0755); err != nil {
+	if err := os.MkdirAll(s.backupDir, 0700); err != nil {
 		slog.Error("Failed to create backup directory", "error", err, "path", s.backupDir)
 		writeError(w, http.StatusInternalServerError, "backup failed")
 		return

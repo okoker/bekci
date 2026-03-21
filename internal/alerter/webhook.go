@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"time"
 )
@@ -63,6 +64,7 @@ func SendWebhook(url string, auth WebhookAuth, skipTLS bool, payload WebhookPayl
 
 	transport := &http.Transport{}
 	if skipTLS {
+		slog.Warn("webhook TLS verification disabled — connection is not secure", "url", url)
 		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	}
 	client := &http.Client{Timeout: 10 * time.Second, Transport: transport}
