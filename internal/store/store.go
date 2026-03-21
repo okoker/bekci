@@ -28,9 +28,11 @@ func New(dbPath string) (*Store, error) {
 		return nil, fmt.Errorf("migrating database: %w", err)
 	}
 
-	os.Chmod(dbPath, 0600)
-	os.Chmod(dbPath+"-wal", 0600)
-	os.Chmod(dbPath+"-shm", 0600)
+	for _, f := range []string{dbPath, dbPath + "-wal", dbPath + "-shm"} {
+		if err := os.Chmod(f, 0600); err != nil && !os.IsNotExist(err) {
+			slog.Warn("failed to chmod database file", "path", f, "error", err)
+		}
+	}
 	return s, nil
 }
 
