@@ -56,23 +56,27 @@ func (s *Server) handleRestore(w http.ResponseWriter, r *http.Request) {
 	if isMultipart {
 		// Multipart form: parse and read the "file" field
 		if err := r.ParseMultipartForm(10 << 20); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid form data: "+err.Error())
+			slog.Error("Restore: invalid form data", "error", err)
+			writeError(w, http.StatusBadRequest, "invalid form data")
 			return
 		}
 		file, _, err := r.FormFile("file")
 		if err != nil {
-			writeError(w, http.StatusBadRequest, "missing file field: "+err.Error())
+			slog.Error("Restore: missing file field", "error", err)
+			writeError(w, http.StatusBadRequest, "missing file field")
 			return
 		}
 		defer file.Close()
 		if err := json.NewDecoder(file).Decode(&data); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid JSON in uploaded file: "+err.Error())
+			slog.Error("Restore: invalid JSON in file", "error", err)
+			writeError(w, http.StatusBadRequest, "invalid JSON in uploaded file")
 			return
 		}
 	} else {
 		// Raw JSON body (including no Content-Type header)
 		if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+			slog.Error("Restore: invalid JSON body", "error", err)
+			writeError(w, http.StatusBadRequest, "invalid JSON")
 			return
 		}
 	}

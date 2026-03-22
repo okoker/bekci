@@ -3,8 +3,10 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 func (s *Server) handleListRecipients(w http.ResponseWriter, r *http.Request) {
@@ -41,6 +43,15 @@ func (s *Server) handleSetRecipients(w http.ResponseWriter, r *http.Request) {
 	if err != nil || t == nil {
 		writeError(w, http.StatusNotFound, "target not found")
 		return
+	}
+
+	// Validate all user IDs exist
+	for _, uid := range req.UserIDs {
+		u, err := s.store.GetUserByID(uid)
+		if err != nil || u == nil {
+			writeError(w, http.StatusBadRequest, "invalid user ID: "+uid)
+			return
+		}
 	}
 
 	if err := s.store.SetTargetRecipients(id, req.UserIDs); err != nil {
@@ -94,7 +105,11 @@ func (s *Server) handleTestEmail(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = json.NewDecoder(r.Body).Decode(&req)
 
-	toEmail := req.Email
+	toEmail := strings.TrimSpace(req.Email)
+	if toEmail != "" && !validEmail(toEmail) {
+		writeError(w, http.StatusBadRequest, "invalid email address")
+		return
+	}
 	if toEmail == "" {
 		user, err := s.store.GetUserByID(claims.Subject)
 		if err != nil || user == nil {
@@ -110,8 +125,9 @@ func (s *Server) handleTestEmail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.alerter.SendTestEmail(toEmail); err != nil {
+		slog.Error("Test email failed", "to", toEmail, "error", err)
 		s.audit(r, "test_email", "settings", "", "to="+toEmail+" error="+err.Error(), "failure")
-		writeError(w, http.StatusInternalServerError, "failed to send test email: "+err.Error())
+		writeError(w, http.StatusInternalServerError, "failed to send test email — check server logs")
 		return
 	}
 
@@ -146,8 +162,9 @@ func (s *Server) handleTestSignal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.alerter.SendTestSignal(req.Phone); err != nil {
+		slog.Error("Test signal failed", "to", req.Phone, "error", err)
 		s.audit(r, "test_signal", "settings", "", "to="+req.Phone+" error="+err.Error(), "failure")
-		writeError(w, http.StatusInternalServerError, "failed to send test signal: "+err.Error())
+		writeError(w, http.StatusInternalServerError, "failed to send test signal — check server logs")
 		return
 	}
 
@@ -163,8 +180,9 @@ func (s *Server) handleTestWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.alerter.SendTestWebhook(); err != nil {
+		slog.Error("Test webhook failed", "error", err)
 		s.audit(r, "test_webhook", "settings", "", "error="+err.Error(), "failure")
-		writeError(w, http.StatusInternalServerError, "failed to send test webhook: "+err.Error())
+		writeError(w, http.StatusInternalServerError, "failed to send test webhook — check server logs")
 		return
 	}
 

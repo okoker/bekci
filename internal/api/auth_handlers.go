@@ -22,6 +22,10 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "username and password are required")
 		return
 	}
+	if len(req.Password) > 32 {
+		writeError(w, http.StatusBadRequest, "password must be at most 32 characters")
+		return
+	}
 
 	ip := clientIP(r)
 
@@ -118,6 +122,18 @@ func (s *Server) handleUpdateMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	req.Email = maxLen(strings.TrimSpace(req.Email), 100)
+	req.Phone = maxLen(strings.TrimSpace(req.Phone), 20)
+
+	if req.Email != "" && !validEmail(req.Email) {
+		writeError(w, http.StatusBadRequest, "invalid email address")
+		return
+	}
+	if req.Phone != "" && !validPhone(req.Phone) {
+		writeError(w, http.StatusBadRequest, "invalid phone number")
+		return
+	}
+
 	user, err := s.store.GetUserByID(claims.Subject)
 	if err != nil || user == nil {
 		writeError(w, http.StatusNotFound, "user not found")
@@ -152,8 +168,8 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if len(req.New) < 15 {
-		writeError(w, http.StatusBadRequest, "password must be at least 15 characters")
+	if len(req.New) < 15 || len(req.New) > 32 {
+		writeError(w, http.StatusBadRequest, "password must be 15-32 characters")
 		return
 	}
 

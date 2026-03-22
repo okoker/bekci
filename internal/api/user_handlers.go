@@ -41,12 +41,19 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	req.Email = strings.TrimSpace(req.Email)
 	req.Role = strings.TrimSpace(req.Role)
 
+	req.Username = maxLen(req.Username, 50)
+	req.Email = maxLen(req.Email, 100)
+
 	if req.Username == "" || req.Password == "" || req.Role == "" {
 		writeError(w, http.StatusBadRequest, "username, password, and role are required")
 		return
 	}
-	if len(req.Password) < 15 {
-		writeError(w, http.StatusBadRequest, "password must be at least 15 characters")
+	if len(req.Password) < 15 || len(req.Password) > 32 {
+		writeError(w, http.StatusBadRequest, "password must be 15-32 characters")
+		return
+	}
+	if req.Email != "" && !validEmail(req.Email) {
+		writeError(w, http.StatusBadRequest, "invalid email address")
 		return
 	}
 	if req.Role != "admin" && req.Role != "operator" && req.Role != "viewer" {
@@ -127,6 +134,18 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := readJSON(w, r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	req.Email = maxLen(strings.TrimSpace(req.Email), 100)
+	req.Phone = maxLen(strings.TrimSpace(req.Phone), 20)
+
+	if req.Email != "" && !validEmail(req.Email) {
+		writeError(w, http.StatusBadRequest, "invalid email address")
+		return
+	}
+	if req.Phone != "" && !validPhone(req.Phone) {
+		writeError(w, http.StatusBadRequest, "invalid phone number")
 		return
 	}
 
@@ -241,8 +260,8 @@ func (s *Server) handleResetPassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if len(req.Password) < 15 {
-		writeError(w, http.StatusBadRequest, "password must be at least 15 characters")
+	if len(req.Password) < 15 || len(req.Password) > 32 {
+		writeError(w, http.StatusBadRequest, "password must be 15-32 characters")
 		return
 	}
 

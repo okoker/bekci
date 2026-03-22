@@ -31,7 +31,7 @@ func (s *Server) handleCreateTag(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	req.Value = strings.TrimSpace(req.Value)
+	req.Value = maxLen(strings.TrimSpace(req.Value), 50)
 	if req.Group != "project" && req.Group != "location" && req.Group != "category" {
 		writeError(w, http.StatusBadRequest, "group must be 'project', 'location', or 'category'")
 		return
@@ -97,7 +97,7 @@ func (s *Server) handleRenameTag(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	req.Value = strings.TrimSpace(req.Value)
+	req.Value = maxLen(strings.TrimSpace(req.Value), 50)
 	if req.Value == "" {
 		writeError(w, http.StatusBadRequest, "value is required")
 		return

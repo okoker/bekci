@@ -239,6 +239,16 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusBadRequest, "snmp_v3_privacy_protocol must be 'DES' or 'AES'")
 				return
 			}
+		} else if key == "smtp_port" {
+			if val != "" && !validPort(val) {
+				writeError(w, http.StatusBadRequest, "smtp_port must be a valid port number (1-65535)")
+				return
+			}
+		} else if key == "signal_api_url" {
+			if val != "" && !validURL(val) {
+				writeError(w, http.StatusBadRequest, "signal_api_url must start with http:// or https://")
+				return
+			}
 		} else if stringSettings[key] {
 			// Accept any string (including empty for clearing API keys)
 			continue

@@ -82,10 +82,21 @@ func (s *Server) handleCreateTarget(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	req.Name = strings.TrimSpace(req.Name)
-	req.Host = strings.TrimSpace(req.Host)
+	req.Name = maxLen(strings.TrimSpace(req.Name), 200)
+	req.Host = maxLen(strings.TrimSpace(req.Host), 500)
+	req.Description = maxLen(req.Description, 2000)
+	if req.Notes != nil {
+		v := maxLen(*req.Notes, 2000); req.Notes = &v
+	}
+	if req.Contacts != nil {
+		v := maxLen(*req.Contacts, 2000); req.Contacts = &v
+	}
 	if req.Name == "" || req.Host == "" {
 		writeError(w, http.StatusBadRequest, "name and host are required")
+		return
+	}
+	if req.PreferredCheckType != "" && !validCheckTypes[req.PreferredCheckType] {
+		writeError(w, http.StatusBadRequest, "invalid preferred_check_type")
 		return
 	}
 	if req.Operator == "" {
@@ -121,6 +132,7 @@ func (s *Server) handleCreateTarget(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "invalid check_type in condition")
 			return
 		}
+		c.CheckName = maxLen(c.CheckName, 200)
 		if c.CheckName == "" {
 			writeError(w, http.StatusBadRequest, "check_name required in condition")
 			return
@@ -132,8 +144,11 @@ func (s *Server) handleCreateTarget(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "invalid JSON in condition config")
 			return
 		}
-		if c.IntervalS <= 0 {
-			c.IntervalS = 300
+		if c.IntervalS < 10 {
+			c.IntervalS = 10
+		}
+		if c.IntervalS > 86400 {
+			c.IntervalS = 86400
 		}
 		if c.Value == "" {
 			c.Value = "down"
@@ -149,6 +164,9 @@ func (s *Server) handleCreateTarget(w http.ResponseWriter, r *http.Request) {
 		failCount := c.FailCount
 		if failCount <= 0 {
 			failCount = 1
+		}
+		if failCount > 100 {
+			failCount = 100
 		}
 		failWindow := normalizeFailWindow(failCount, c.FailWindow, c.IntervalS)
 		conds = append(conds, store.TargetCondition{
@@ -263,10 +281,21 @@ func (s *Server) handleUpdateTarget(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	req.Name = strings.TrimSpace(req.Name)
-	req.Host = strings.TrimSpace(req.Host)
+	req.Name = maxLen(strings.TrimSpace(req.Name), 200)
+	req.Host = maxLen(strings.TrimSpace(req.Host), 500)
+	req.Description = maxLen(req.Description, 2000)
+	if req.Notes != nil {
+		v := maxLen(*req.Notes, 2000); req.Notes = &v
+	}
+	if req.Contacts != nil {
+		v := maxLen(*req.Contacts, 2000); req.Contacts = &v
+	}
 	if req.Name == "" || req.Host == "" {
 		writeError(w, http.StatusBadRequest, "name and host are required")
+		return
+	}
+	if req.PreferredCheckType != "" && !validCheckTypes[req.PreferredCheckType] {
+		writeError(w, http.StatusBadRequest, "invalid preferred_check_type")
 		return
 	}
 	if req.Operator == "" {
@@ -302,6 +331,7 @@ func (s *Server) handleUpdateTarget(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "invalid check_type in condition")
 			return
 		}
+		c.CheckName = maxLen(c.CheckName, 200)
 		if c.CheckName == "" {
 			writeError(w, http.StatusBadRequest, "check_name required in condition")
 			return
@@ -313,8 +343,11 @@ func (s *Server) handleUpdateTarget(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "invalid JSON in condition config")
 			return
 		}
-		if c.IntervalS <= 0 {
-			c.IntervalS = 300
+		if c.IntervalS < 10 {
+			c.IntervalS = 10
+		}
+		if c.IntervalS > 86400 {
+			c.IntervalS = 86400
 		}
 		if c.Value == "" {
 			c.Value = "down"
@@ -330,6 +363,9 @@ func (s *Server) handleUpdateTarget(w http.ResponseWriter, r *http.Request) {
 		failCount := c.FailCount
 		if failCount <= 0 {
 			failCount = 1
+		}
+		if failCount > 100 {
+			failCount = 100
 		}
 		failWindow := normalizeFailWindow(failCount, c.FailWindow, c.IntervalS)
 		conds = append(conds, store.TargetCondition{
