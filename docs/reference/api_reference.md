@@ -1450,12 +1450,12 @@ Public liveness check.
 
 ### GET /api/system/health
 
-Returns network connectivity (ICMP ping to 1.1.1.1), disk usage, and CPU load. **Cached with 120s TTL** — repeated requests within the window return the cached response without performing an ICMP ping.
+Returns network connectivity (ICMP ping to 1.1.1.1), disk usage, CPU load, and scheduler status. Net/disk/cpu **cached with 120s TTL**. Scheduler status **always fresh** (atomic read).
 
 **Response (200):**
 ```json
 {
-  "version": "2.8.0",
+  "version": "3.3.1",
   "net": {
     "status": "ok",
     "latency_ms": 12
@@ -1467,11 +1467,19 @@ Returns network connectivity (ICMP ping to 1.1.1.1), disk usage, and CPU load. *
   "cpu": {
     "load1": 0.45,
     "num_cpu": 4
+  },
+  "scheduler": {
+    "status": "ok",
+    "last_tick": "2026-03-22T10:05:00Z",
+    "active_checks": 243,
+    "stale_seconds": 32
   }
 }
 ```
 
 `net.status`: `"ok"` or `"unreachable"`. When unreachable, `latency_ms` is `-1`.
+
+`scheduler.status`: `"ok"` (last tick within 120s), `"stale"` (no tick for >120s), or `"starting"` (never ticked yet). When stale, audit log entries are written every 60s.
 
 ### GET /api/fail2ban/status
 

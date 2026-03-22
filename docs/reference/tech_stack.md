@@ -119,7 +119,7 @@ No npm on server — `cmd/bekci/frontend_dist/` is committed to git. Go binary e
 | IdleTimeout | 60s |
 | Default port | 65000 |
 | Gzip | stdlib `compress/gzip` middleware, wraps outermost in router chain. Compressed when client sends Accept-Encoding: gzip. |
-| Health cache | `/api/system/health` cached 120s TTL (`sync.Mutex`). No ICMP ping per request. |
+| Health cache | `/api/system/health` — net/disk/cpu cached 120s TTL (`sync.Mutex`), scheduler status always fresh (atomic read). |
 
 ---
 
@@ -176,7 +176,13 @@ SearchView and SlaView are lazy-loaded (code-split). SlaView lazy-load saves ~25
 - Concurrency semaphore: buffered channel caps in-flight checks at 200
 - Per-check mutex (`TryLock`) prevents overlapping runs of the same check
 - Safety-net poll: reloads all enabled checks from DB every 60s
+- Heartbeat: `lastTick` atomic timestamp updated every 60s tick. Exposed via `LastTick()` and `ActiveCheckCount()` methods. Health endpoint reports scheduler status (ok/stale/starting). Stale threshold: 120s (2x tick interval).
 - SNMP settings cache: `getCachedSetting()` method with 15m TTL. All 7 SNMP keys cached together — avoids 7 DB reads per SNMP check execution. Long TTL justified because SNMP credentials change rarely (admin action only).
+
+### Self-Health Monitoring
+- **Scheduler dead man's switch**: 4th navbar dot (green/red), popover with age + check count, red banner on all pages when stale (auto-dismisses on recovery). Audit log entries every 60s while stale.
+- **Crash detection**: `.shutdown_clean` marker file written on graceful SIGTERM, consumed on startup. Missing marker = unclean restart → 4 red audit log entries + system alert to configured recipients.
+- **System alerts**: `system_alert_admins` (bool) + `system_alert_users` (CSV user IDs). Sent directly from main.go startup (bypasses scheduler). Uses configured alert channels (email/signal/webhook).
 
 ### Data Architecture (A-011)
 
