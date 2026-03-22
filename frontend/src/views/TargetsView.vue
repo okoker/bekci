@@ -18,7 +18,22 @@ const activeCategory = ref('All')
 const activeProject = ref('All')
 const activeLocation = ref('All')
 const showGuide = ref(false)
-const categories = ['All', 'Network', 'Security', 'Physical Security', 'Key Services', 'Other']
+const categoriesRaw = ref([])
+const categories = computed(() => {
+  const sorted = [...categoriesRaw.value].sort((a, b) => {
+    if (a === 'Other') return 1
+    if (b === 'Other') return -1
+    return a.localeCompare(b)
+  })
+  return ['All', ...sorted]
+})
+
+async function loadCategories() {
+  try {
+    const { data } = await api.get('/tags?group=category')
+    categoriesRaw.value = data.map(c => c.value)
+  } catch { /* ignore */ }
+}
 
 // Edit modal state
 const showForm = ref(false)
@@ -250,6 +265,7 @@ function categoryClass(cat) {
 }
 
 onMounted(async () => {
+  loadCategories()
   await loadTargets()
   const editId = route.query.edit
   if (editId) {
