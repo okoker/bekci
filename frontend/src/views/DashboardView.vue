@@ -747,33 +747,4 @@ onUnmounted(() => {
 }
 
 /* Pagination */
-.pagination {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 1rem;
-  margin-top: 0.5rem;
-  padding: 0.5rem 0;
-}
-.page-btn {
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  padding: 0.35rem 0.85rem;
-  font-size: 0.8rem;
-  font-weight: 500;
-  color: #475569;
-  cursor: pointer;
-}
-.page-btn:hover:not(:disabled) {
-  background: #e2e8f0;
-}
-.page-btn:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-.page-info {
-  font-size: 0.8rem;
-  color: #64748b;
-}
 </style>

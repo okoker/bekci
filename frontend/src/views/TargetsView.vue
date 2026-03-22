@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useRoute } from 'vue-router'
 import TargetEditModal from '../components/TargetEditModal.vue'
@@ -40,6 +40,20 @@ const filteredTargets = computed(() => {
   if (activeLocation.value !== 'All') list = list.filter(t => t.location === activeLocation.value)
   return list
 })
+
+const currentPage = ref(1)
+const pageSize = 50
+
+const paginatedTargets = computed(() => {
+  const start = (currentPage.value - 1) * pageSize
+  return filteredTargets.value.slice(start, start + pageSize)
+})
+
+const totalPages = computed(() => {
+  return Math.max(1, Math.ceil(filteredTargets.value.length / pageSize))
+})
+
+watch([activeCategory, activeProject, activeLocation], () => { currentPage.value = 1 })
 
 function categoryCount(cat) {
   if (cat === 'All') return targets.value.length
@@ -294,7 +308,7 @@ onMounted(async () => {
           </tr>
         </thead>
         <tbody>
-          <template v-for="t in filteredTargets" :key="t.id">
+          <template v-for="t in paginatedTargets" :key="t.id">
             <tr :class="{ 'row-expanded': expandedTargetId === t.id, 'row-disabled': !t.enabled }" @click="toggleTarget(t.id)" style="cursor: pointer;">
               <td>
                 <span class="expand-icon">{{ expandedTargetId === t.id ? '&#9660;' : '&#9654;' }}</span>
@@ -364,6 +378,12 @@ onMounted(async () => {
           </template>
         </tbody>
       </table>
+
+      <div v-if="totalPages > 1" class="pagination">
+        <button class="page-btn" :disabled="currentPage <= 1" @click="currentPage--">&laquo; Prev</button>
+        <span class="page-info">{{ currentPage }} / {{ totalPages }} ({{ filteredTargets.length }} targets)</span>
+        <button class="page-btn" :disabled="currentPage >= totalPages" @click="currentPage++">&raquo; Next</button>
+      </div>
 
       <!-- Guide -->
       <div v-if="!loading" class="guide-bar">
