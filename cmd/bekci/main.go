@@ -211,6 +211,28 @@ func main() {
 		}
 	}()
 
+	// Systemd watchdog — if NOTIFY_SOCKET is set, send heartbeat every 30s
+	if notifySocket := os.Getenv("NOTIFY_SOCKET"); notifySocket != "" {
+		go func() {
+			ticker := time.NewTicker(30 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					conn, err := net.Dial("unixgram", notifySocket)
+					if err != nil {
+						continue
+					}
+					conn.Write([]byte("WATCHDOG=1"))
+					conn.Close()
+				}
+			}
+		}()
+		slog.Info("Systemd watchdog enabled", "socket", notifySocket)
+	}
+
 	// Hourly cleanup: sessions + old results
 	go func() {
 		ticker := time.NewTicker(1 * time.Hour)
