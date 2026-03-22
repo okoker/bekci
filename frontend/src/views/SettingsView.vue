@@ -345,20 +345,40 @@ async function createUser() {
   }
 }
 
-async function toggleSuspend(user) {
+const suspendingUser = ref(null) // user object for suspend confirmation modal
+
+function confirmSuspend(user) {
+  suspendingUser.value = user
+}
+
+async function toggleSuspend() {
+  const user = suspendingUser.value
+  if (!user) return
   userError.value = ''
   try {
     await api.put(`/users/${user.id}/suspend`, { suspended: user.status === 'active' })
     userSuccess.value = `User ${user.status === 'active' ? 'suspended' : 'activated'}`
+    suspendingUser.value = null
     await loadUsers()
   } catch (e) {
     userError.value = e.response?.data?.error || 'Failed to update user'
+    suspendingUser.value = null
   }
 }
 
+const editingUser = ref(null) // full user object for modal
+
 function openEditUser(u) {
-  userShowEdit.value = userShowEdit.value === u.id ? null : u.id
+  editingUser.value = u
   editUserForm.value = { email: u.email || '', phone: u.phone || '', role: u.role }
+  resetPwForm.value = { password: '' }
+  userShowEdit.value = u.id
+}
+
+function closeEditModal() {
+  editingUser.value = null
+  userShowEdit.value = null
+  resetPwForm.value = { password: '' }
 }
 
 async function saveEditUser(userId) {
@@ -366,7 +386,7 @@ async function saveEditUser(userId) {
   try {
     await api.put(`/users/${userId}`, editUserForm.value)
     userSuccess.value = 'User updated'
-    userShowEdit.value = null
+    closeEditModal()
     await loadUsers()
   } catch (e) {
     userError.value = e.response?.data?.error || 'Failed to update user'
@@ -1323,40 +1343,61 @@ onUnmounted(() => {
               <td><span :class="'badge badge-' + u.status">{{ u.status }}</span></td>
               <td class="actions">
                 <button class="btn btn-sm" @click="openEditUser(u)">Edit</button>
-                <button class="btn btn-sm" @click="toggleSuspend(u)">
+                <button class="btn btn-sm" @click="confirmSuspend(u)">
                   {{ u.status === 'active' ? 'Suspend' : 'Activate' }}
                 </button>
-                <button class="btn btn-sm" @click="userShowResetPw = (userShowResetPw === u.id ? null : u.id)">
-                  Reset PW
-                </button>
-                <div v-if="userShowEdit === u.id" class="inline-form" style="margin-top:0.4rem;">
-                  <div class="form-group compact">
-                    <label>Email</label>
-                    <input v-model="editUserForm.email" type="email" placeholder="user@example.com" />
-                  </div>
-                  <div class="form-group compact">
-                    <label>Phone</label>
-                    <input v-model="editUserForm.phone" type="tel" placeholder="+1234567890" />
-                  </div>
-                  <div class="form-group compact">
-                    <label>Role</label>
-                    <select v-model="editUserForm.role">
-                      <option value="admin">admin</option>
-                      <option value="operator">operator</option>
-                      <option value="viewer">viewer</option>
-                    </select>
-                  </div>
-                  <button class="btn btn-sm btn-primary" @click="saveEditUser(u.id)">Save</button>
-                  <button class="btn btn-sm" @click="userShowEdit = null">Cancel</button>
-                </div>
-                <div v-if="userShowResetPw === u.id" class="inline-form">
-                  <input v-model="resetPwForm.password" type="password" placeholder="New password" minlength="15" />
-                  <button class="btn btn-sm btn-primary" @click="resetPassword(u.id)">Set</button>
-                </div>
               </td>
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <!-- Suspend/Activate Confirmation Modal -->
+      <div v-if="suspendingUser" class="modal-overlay" @click.self="suspendingUser = null">
+        <div class="modal-card">
+          <h3>{{ suspendingUser.status === 'active' ? 'Suspend' : 'Activate' }} {{ suspendingUser.username }}?</h3>
+          <p v-if="suspendingUser.status === 'active'">This user will be <strong>locked out</strong> and unable to log in until reactivated.</p>
+          <p v-else>This user will regain access and be able to log in again.</p>
+          <div class="form-actions">
+            <button class="btn btn-primary" @click="toggleSuspend">{{ suspendingUser.status === 'active' ? 'Suspend' : 'Activate' }}</button>
+            <button class="btn" @click="suspendingUser = null">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Edit User Modal -->
+      <div v-if="editingUser" class="modal-overlay" @click.self="closeEditModal">
+        <div class="modal-card" style="max-width: 480px;">
+          <h3>Edit {{ editingUser.username }}</h3>
+          <div class="form-group">
+            <label>Email</label>
+            <input v-model="editUserForm.email" type="email" placeholder="user@example.com" />
+          </div>
+          <div class="form-group">
+            <label>Phone</label>
+            <input v-model="editUserForm.phone" type="tel" placeholder="+1234567890" />
+          </div>
+          <div class="form-group">
+            <label>Role</label>
+            <select v-model="editUserForm.role">
+              <option value="admin">Admin</option>
+              <option value="operator">Operator</option>
+              <option value="viewer">Viewer</option>
+            </select>
+          </div>
+          <div class="form-actions" style="margin-bottom: 1rem;">
+            <button class="btn btn-primary" @click="saveEditUser(editingUser.id)">Save</button>
+            <button class="btn" @click="closeEditModal">Cancel</button>
+          </div>
+          <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 0 0 1rem;" />
+          <div class="form-group">
+            <label>Reset Password</label>
+            <div style="display: flex; gap: 0.5rem;">
+              <input v-model="resetPwForm.password" type="password" placeholder="New password (min 15 chars)" minlength="15" style="flex: 1;" />
+              <button class="btn btn-sm" @click="resetPassword(editingUser.id)" :disabled="!resetPwForm.password || resetPwForm.password.length < 15">Set</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="privileges-bar">
