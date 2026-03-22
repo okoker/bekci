@@ -62,6 +62,13 @@ function dotColor(metric) {
     if (c.load1 < c.num_cpu * 2) return 'dot-yellow'
     return 'dot-red'
   }
+  if (metric === 'scheduler') {
+    const s = health.value.scheduler
+    if (!s) return 'dot-grey'
+    if (s.status === 'ok') return 'dot-green'
+    if (s.status === 'starting') return 'dot-yellow'
+    return 'dot-red'
+  }
   return 'dot-grey'
 }
 
@@ -82,6 +89,18 @@ const cpuLabel = computed(() => {
   const c = health.value.cpu
   if (c.load1 < 0) return 'Load: —'
   return `Load: ${c.load1} (${c.num_cpu} cores)`
+})
+
+const schedulerLabel = computed(() => {
+  if (!health.value || !health.value.scheduler) return 'Scheduler: —'
+  const s = health.value.scheduler
+  if (s.status === 'starting') return 'Scheduler: Starting...'
+  if (s.status === 'stale') return `Scheduler: STALE (${s.stale_seconds}s ago)`
+  return `Scheduler: OK (${s.stale_seconds}s ago, ${s.active_checks} checks)`
+})
+
+const schedulerStale = computed(() => {
+  return health.value?.scheduler?.status === 'stale'
 })
 
 function togglePopover() {
@@ -134,11 +153,13 @@ onUnmounted(() => {
             <span class="health-dot" :class="dotColor('net')" title="Network"></span>
             <span class="health-dot" :class="dotColor('disk')" title="Disk"></span>
             <span class="health-dot" :class="dotColor('cpu')" title="CPU"></span>
+            <span class="health-dot" :class="dotColor('scheduler')" title="Scheduler"></span>
           </div>
           <div v-if="showPopover" class="health-popover">
             <div class="health-row" :class="dotColor('net')">{{ netLabel }}</div>
             <div class="health-row" :class="dotColor('disk')">{{ diskLabel }}</div>
             <div class="health-row" :class="dotColor('cpu')">{{ cpuLabel }}</div>
+            <div class="health-row" :class="dotColor('scheduler')">{{ schedulerLabel }}</div>
           </div>
         </div>
         <div class="user-menu">
@@ -154,6 +175,9 @@ onUnmounted(() => {
         </div>
       </div>
     </nav>
+    <div v-if="schedulerStale" class="stale-banner">
+      Monitoring engine not responding — dashboard data may be outdated
+    </div>
     <main class="content">
       <slot />
     </main>

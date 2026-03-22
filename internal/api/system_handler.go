@@ -1,6 +1,8 @@
 package api
 
 import (
+	"fmt"
+	"log/slog"
 	"math"
 	"net/http"
 	"os"
@@ -9,9 +11,11 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
+	"github.com/bekci/internal/store"
 	probing "github.com/prometheus-community/pro-bing"
 )
 
@@ -21,6 +25,8 @@ var (
 	healthCacheMu   sync.Mutex
 	healthCacheTTL  = 120 * time.Second
 )
+
+const schedulerStaleThreshold = 120 * time.Second // 2x the 60s tick
 
 type netHealth struct {
 	Status    string `json:"status"`
@@ -37,6 +43,13 @@ type cpuHealth struct {
 	NumCPU int     `json:"num_cpu"`
 }
 
+type schedulerHealth struct {
+	Status       string `json:"status"`
+	LastTick     string `json:"last_tick,omitempty"`
+	ActiveChecks int    `json:"active_checks"`
+	StaleSec     int    `json:"stale_seconds"`
+}
+
 func (s *Server) handleSystemHealth(w http.ResponseWriter, r *http.Request) {
 	healthCacheMu.Lock()
 	if time.Since(healthCacheTime) < healthCacheTTL && healthCache != nil {
@@ -48,10 +61,11 @@ func (s *Server) handleSystemHealth(w http.ResponseWriter, r *http.Request) {
 	healthCacheMu.Unlock()
 
 	result := map[string]any{
-		"version": s.version,
-		"net":     checkNet(),
-		"disk":    checkDisk(s.dbPath),
-		"cpu":     checkCPU(),
+		"version":   s.version,
+		"net":       checkNet(),
+		"disk":      checkDisk(s.dbPath),
+		"cpu":       checkCPU(),
+		"scheduler": s.checkScheduler(),
 	}
 
 	healthCacheMu.Lock()
@@ -60,6 +74,46 @@ func (s *Server) handleSystemHealth(w http.ResponseWriter, r *http.Request) {
 	healthCacheMu.Unlock()
 
 	writeJSON(w, http.StatusOK, result)
+}
+
+var lastStaleAudit atomic.Int64 // unix seconds of last stale audit entry
+
+func (s *Server) checkScheduler() schedulerHealth {
+	lt := s.scheduler.LastTick()
+	active := s.scheduler.ActiveCheckCount()
+
+	if lt.IsZero() {
+		return schedulerHealth{Status: "starting", ActiveChecks: active}
+	}
+
+	staleSec := int(time.Since(lt).Seconds())
+	status := "ok"
+	if time.Since(lt) > schedulerStaleThreshold {
+		status = "stale"
+		// Write audit log entry at most once per 60s while stale
+		now := time.Now().Unix()
+		lastAudit := lastStaleAudit.Load()
+		if now-lastAudit >= 60 {
+			if lastStaleAudit.CompareAndSwap(lastAudit, now) {
+				slog.Warn("Scheduler stale", "last_tick_seconds_ago", staleSec)
+				s.store.CreateAuditEntry(&store.AuditEntry{
+					UserID:       "system",
+					Username:     "system",
+					Action:       "scheduler_stale",
+					ResourceType: "system",
+					Detail:       fmt.Sprintf("Scheduler stale — no tick for %ds", staleSec),
+					Status:       "failure",
+				})
+			}
+		}
+	}
+
+	return schedulerHealth{
+		Status:       status,
+		LastTick:     lt.UTC().Format(time.RFC3339),
+		ActiveChecks: active,
+		StaleSec:     staleSec,
+	}
 }
 
 // checkNet pings 1.1.1.1 (Cloudflare DNS) with a single ICMP packet.

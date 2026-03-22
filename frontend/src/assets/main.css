@@ -127,6 +127,16 @@ a:hover { text-decoration: underline; }
   padding: 1rem 0.75rem;
 }
 
+.stale-banner {
+  background: #dc2626;
+  color: #fff;
+  text-align: center;
+  padding: 0.5rem 1rem;
+  font-weight: 600;
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+}
+
 /* ─── Page ───────────────────────────────────────────────── */
 .page {
   max-width: 1100px;

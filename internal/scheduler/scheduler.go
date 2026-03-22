@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"math/rand"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/bekci/internal/checker"
@@ -32,6 +33,8 @@ type Scheduler struct {
 	settingsCache   map[string]string
 	settingsCacheAt time.Time
 	settingsCacheMu sync.Mutex
+
+	lastTick atomic.Int64 // unix nanos of last ticker tick
 }
 
 // SetEngine sets the rule evaluator called after each check result.
@@ -78,6 +81,7 @@ func New(st *store.Store) *Scheduler {
 func (s *Scheduler) Start(ctx context.Context) {
 	s.ctx, s.cancel = context.WithCancel(ctx)
 	s.loadChecks()
+	s.lastTick.Store(time.Now().UnixNano())
 
 	// Safety-net poll: every 60s, reload checks
 	go func() {
@@ -89,6 +93,7 @@ func (s *Scheduler) Start(ctx context.Context) {
 				return
 			case <-ticker.C:
 				s.loadChecks()
+				s.lastTick.Store(time.Now().UnixNano())
 			}
 		}
 	}()
@@ -127,6 +132,23 @@ func (s *Scheduler) Stop() {
 // Reload re-reads the DB and updates timers.
 func (s *Scheduler) Reload() {
 	s.loadChecks()
+}
+
+// LastTick returns the time of the most recent scheduler tick.
+// Returns zero time if the scheduler has never ticked.
+func (s *Scheduler) LastTick() time.Time {
+	ns := s.lastTick.Load()
+	if ns == 0 {
+		return time.Time{}
+	}
+	return time.Unix(0, ns)
+}
+
+// ActiveCheckCount returns the number of scheduled checks.
+func (s *Scheduler) ActiveCheckCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.timers)
 }
 
 // RunNow sends a check ID to the event channel for immediate execution.
