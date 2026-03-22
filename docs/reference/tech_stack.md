@@ -76,6 +76,7 @@ Nginx handles SSL termination, security headers, and compression in front of the
 | EnvironmentFile | `/etc/bekci/env` |
 | Restart | on-failure, RestartSec=5 |
 | AmbientCapabilities | CAP_NET_RAW |
+| WatchdogSec | 120 (Go process sends WATCHDOG=1 every 30s; if process hangs, systemd kills+restarts) |
 
 ---
 
