@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"syscall"
 	"time"
@@ -106,6 +107,33 @@ func main() {
 		}
 		slog.Warn("Created initial admin user — change the password after first login",
 			"username", cfg.InitAdmin.Username)
+	}
+
+	// Check shutdown marker — detect unclean restarts
+	shutdownMarker := filepath.Join(filepath.Dir(cfg.Server.DBPath), ".shutdown_clean")
+	if _, err := os.Stat(shutdownMarker); os.IsNotExist(err) {
+		// First boot has no marker — only log if DB already existed (not a fresh install)
+		if count > 0 {
+			slog.Warn("UNCLEAN RESTART DETECTED — Bekci was not shut down cleanly")
+			entries := []string{
+				"SYSTEM RESTART DETECTED — Bekci was not shut down cleanly",
+				"Previous instance may have crashed or been killed",
+				"Check system logs (journalctl -u bekci) for details",
+				"Dashboard data during the outage period may be incomplete",
+			}
+			for _, detail := range entries {
+				db.CreateAuditEntry(&store.AuditEntry{
+					UserID:       "system",
+					Username:     "system",
+					Action:       "unclean_restart",
+					ResourceType: "system",
+					Detail:       detail,
+					Status:       "failure",
+				})
+			}
+		}
+	} else {
+		os.Remove(shutdownMarker)
 	}
 
 	// Initialize auth service
@@ -256,6 +284,11 @@ func main() {
 	defer shutdownCancel()
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
 		slog.Error("HTTP server shutdown error", "error", err)
+	}
+
+	// Write clean shutdown marker
+	if err := os.WriteFile(shutdownMarker, []byte(time.Now().UTC().Format(time.RFC3339)+"\n"), 0600); err != nil {
+		slog.Error("Failed to write shutdown marker", "error", err)
 	}
 	slog.Warn("Shutdown complete")
 }
