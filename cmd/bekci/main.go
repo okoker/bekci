@@ -314,6 +314,12 @@ func main() {
 	<-sigCh
 
 	slog.Warn("Shutting down...")
+
+	// Write clean shutdown marker early — before HTTP drain which could hit Docker's stop timeout
+	if err := os.WriteFile(shutdownMarker, []byte(time.Now().UTC().Format(time.RFC3339)+"\n"), 0600); err != nil {
+		slog.Error("Failed to write shutdown marker", "error", err)
+	}
+
 	sched.Stop()
 	apiServer.Close()
 	cancel()
@@ -322,11 +328,6 @@ func main() {
 	defer shutdownCancel()
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
 		slog.Error("HTTP server shutdown error", "error", err)
-	}
-
-	// Write clean shutdown marker
-	if err := os.WriteFile(shutdownMarker, []byte(time.Now().UTC().Format(time.RFC3339)+"\n"), 0600); err != nil {
-		slog.Error("Failed to write shutdown marker", "error", err)
 	}
 	slog.Warn("Shutdown complete")
 }
