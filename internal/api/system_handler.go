@@ -51,27 +51,27 @@ type schedulerHealth struct {
 }
 
 func (s *Server) handleSystemHealth(w http.ResponseWriter, r *http.Request) {
+	// Net/disk/cpu are expensive (ICMP ping, syscalls) — cache them
 	healthCacheMu.Lock()
-	if time.Since(healthCacheTime) < healthCacheTTL && healthCache != nil {
-		cached := healthCache
-		healthCacheMu.Unlock()
-		writeJSON(w, http.StatusOK, cached)
-		return
+	cached := healthCache
+	if time.Since(healthCacheTime) >= healthCacheTTL || cached == nil {
+		cached = map[string]any{
+			"version": s.version,
+			"net":     checkNet(),
+			"disk":    checkDisk(s.dbPath),
+			"cpu":     checkCPU(),
+		}
+		healthCache = cached
+		healthCacheTime = time.Now()
 	}
 	healthCacheMu.Unlock()
 
-	result := map[string]any{
-		"version":   s.version,
-		"net":       checkNet(),
-		"disk":      checkDisk(s.dbPath),
-		"cpu":       checkCPU(),
-		"scheduler": s.checkScheduler(),
+	// Scheduler check is free (atomic read) — always fresh
+	result := make(map[string]any, len(cached.(map[string]any))+1)
+	for k, v := range cached.(map[string]any) {
+		result[k] = v
 	}
-
-	healthCacheMu.Lock()
-	healthCache = result
-	healthCacheTime = time.Now()
-	healthCacheMu.Unlock()
+	result["scheduler"] = s.checkScheduler()
 
 	writeJSON(w, http.StatusOK, result)
 }
