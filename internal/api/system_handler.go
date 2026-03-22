@@ -1,8 +1,6 @@
 package api
 
 import (
-	"fmt"
-	"log/slog"
 	"math"
 	"net/http"
 	"os"
@@ -11,11 +9,9 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
-	"github.com/bekci/internal/store"
 	probing "github.com/prometheus-community/pro-bing"
 )
 
@@ -76,8 +72,6 @@ func (s *Server) handleSystemHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
-var lastStaleAudit atomic.Int64 // unix seconds of last stale audit entry
-
 func (s *Server) checkScheduler() schedulerHealth {
 	lt := s.scheduler.LastTick()
 	active := s.scheduler.ActiveCheckCount()
@@ -90,22 +84,6 @@ func (s *Server) checkScheduler() schedulerHealth {
 	status := "ok"
 	if time.Since(lt) > schedulerStaleThreshold {
 		status = "stale"
-		// Write audit log entry at most once per 60s while stale
-		now := time.Now().Unix()
-		lastAudit := lastStaleAudit.Load()
-		if now-lastAudit >= 60 {
-			if lastStaleAudit.CompareAndSwap(lastAudit, now) {
-				slog.Warn("Scheduler stale", "last_tick_seconds_ago", staleSec)
-				s.store.CreateAuditEntry(&store.AuditEntry{
-					UserID:       "system",
-					Username:     "system",
-					Action:       "scheduler_stale",
-					ResourceType: "system",
-					Detail:       fmt.Sprintf("Scheduler stale — no tick for %ds", staleSec),
-					Status:       "failure",
-				})
-			}
-		}
 	}
 
 	return schedulerHealth{

@@ -111,8 +111,11 @@ func main() {
 
 	// Check shutdown marker — detect unclean restarts
 	shutdownMarker := filepath.Join(filepath.Dir(cfg.Server.DBPath), ".shutdown_clean")
-	if _, err := os.Stat(shutdownMarker); os.IsNotExist(err) {
-		// First boot has no marker — only log if DB already existed (not a fresh install)
+	if _, err := os.Stat(shutdownMarker); err == nil {
+		// Marker exists — clean restart
+		os.Remove(shutdownMarker)
+	} else if os.IsNotExist(err) {
+		// No marker — unclean restart (only log if DB already existed, not first boot)
 		if count > 0 {
 			slog.Warn("UNCLEAN RESTART DETECTED — Bekci was not shut down cleanly")
 			entries := []string{
@@ -138,7 +141,8 @@ func main() {
 			)
 		}
 	} else {
-		os.Remove(shutdownMarker)
+		// Unexpected error (permission denied, etc.) — log but don't assume unclean
+		slog.Warn("Could not check shutdown marker", "path", shutdownMarker, "error", err)
 	}
 
 	// Initialize auth service
@@ -177,6 +181,35 @@ func main() {
 
 	// Start scheduler
 	go sched.Start(ctx)
+
+	// Scheduler stale monitor — independent goroutine checks heartbeat every 60s
+	go func() {
+		ticker := time.NewTicker(60 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				lt := sched.LastTick()
+				if lt.IsZero() {
+					continue
+				}
+				if time.Since(lt) > 120*time.Second {
+					staleSec := int(time.Since(lt).Seconds())
+					slog.Warn("Scheduler stale", "last_tick_seconds_ago", staleSec)
+					db.CreateAuditEntry(&store.AuditEntry{
+						UserID:       "system",
+						Username:     "system",
+						Action:       "scheduler_stale",
+						ResourceType: "system",
+						Detail:       fmt.Sprintf("Scheduler stale — no tick for %ds", staleSec),
+						Status:       "failure",
+					})
+				}
+			}
+		}
+	}()
 
 	// Hourly cleanup: sessions + old results
 	go func() {

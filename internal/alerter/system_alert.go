@@ -2,6 +2,7 @@ package alerter
 
 import (
 	"fmt"
+	"html"
 	"log/slog"
 	"strings"
 
@@ -12,6 +13,12 @@ import (
 // Used for unclean restart notifications. Sends via all configured channels (email, signal, webhook).
 // Does not go through the normal Dispatch flow — no cooldowns, no rules.
 func SendSystemAlert(st *store.Store, subject, message string) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("Panic in SendSystemAlert", "panic", r)
+		}
+	}()
+
 	// Resolve recipients
 	var recipients []store.User
 
@@ -75,7 +82,7 @@ func SendSystemAlert(st *store.Store, subject, message string) {
 			}
 		}
 		if len(emails) > 0 && fromEmail != "" {
-			htmlBody := fmt.Sprintf("<h2>%s</h2><p>%s</p>", subject, message)
+			htmlBody := fmt.Sprintf("<h2>%s</h2><p>%s</p>", html.EscapeString(subject), html.EscapeString(message))
 			var err error
 			if provider == "smtp" {
 				host, _ := st.GetSetting("smtp_host")
