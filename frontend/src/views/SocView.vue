@@ -50,6 +50,13 @@ function dotColor(metric) {
     if (c.load1 < 0) return 'dot-grey'
     return c.load1 < c.num_cpu ? 'dot-green' : c.load1 < c.num_cpu * 2 ? 'dot-yellow' : 'dot-red'
   }
+  if (metric === 'scheduler') {
+    const s = health.value.scheduler
+    if (!s) return 'dot-grey'
+    if (s.status === 'ok') return 'dot-green'
+    if (s.status === 'starting') return 'dot-yellow'
+    return 'dot-red'
+  }
   return 'dot-grey'
 }
 
@@ -67,6 +74,13 @@ const cpuLabel = computed(() => {
   if (!health.value) return 'Load: —'
   const c = health.value.cpu
   return c.load1 < 0 ? 'Load: —' : `Load: ${c.load1} (${c.num_cpu} cores)`
+})
+const schedulerLabel = computed(() => {
+  if (!health.value || !health.value.scheduler) return 'Scheduler: —'
+  const s = health.value.scheduler
+  if (s.status === 'starting') return 'Scheduler: Starting...'
+  if (s.status === 'stale') return `Scheduler: STALE (${s.stale_seconds}s ago)`
+  return `Scheduler: OK (${s.stale_seconds}s ago, ${s.active_checks} checks)`
 })
 
 function togglePopover() { showPopover.value = !showPopover.value }
@@ -364,11 +378,13 @@ onUnmounted(() => {
           <span class="health-dot" :class="dotColor('net')" title="Network"></span>
           <span class="health-dot" :class="dotColor('disk')" title="Disk"></span>
           <span class="health-dot" :class="dotColor('cpu')" title="CPU"></span>
+          <span class="health-dot" :class="dotColor('scheduler')" title="Scheduler"></span>
         </div>
         <div v-if="showPopover" class="health-popover soc-health-popover">
           <div class="health-row" :class="dotColor('net')">{{ netLabel }}</div>
           <div class="health-row" :class="dotColor('disk')">{{ diskLabel }}</div>
           <div class="health-row" :class="dotColor('cpu')">{{ cpuLabel }}</div>
+          <div class="health-row" :class="dotColor('scheduler')">{{ schedulerLabel }}</div>
         </div>
       </div>
       <span v-if="lastUpdated" class="soc-updated">
