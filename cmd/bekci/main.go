@@ -131,6 +131,11 @@ func main() {
 					Status:       "failure",
 				})
 			}
+			// Send system alert to configured recipients
+			go alerter.SendSystemAlert(db,
+				"Bekci restarted unexpectedly",
+				"Previous instance did not shut down cleanly. Check audit log for details.",
+			)
 		}
 	} else {
 		os.Remove(shutdownMarker)

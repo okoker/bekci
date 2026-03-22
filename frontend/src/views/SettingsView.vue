@@ -427,10 +427,12 @@ const alertForm = ref({
   webhook_basic_username: '',
   webhook_basic_password: '',
   webhook_skip_tls: 'false',
+  system_alert_admins: 'true',
+  system_alert_users: '',
 })
 
 // Track which alerting sections are expanded (first open by default)
-const alertSections = ref({ general: true, email: false, signal: false, webhook: false })
+const alertSections = ref({ general: true, email: false, signal: false, webhook: false, system: false })
 const tagSections = ref({ project: true, location: false, category: false })
 
 // SNMP credentials (separate from alerting)
@@ -474,6 +476,8 @@ function loadAlertSettings() {
     webhook_basic_username: s.webhook_basic_username || '',
     webhook_basic_password: s.webhook_basic_password || '',
     webhook_skip_tls: s.webhook_skip_tls || 'false',
+    system_alert_admins: s.system_alert_admins || 'true',
+    system_alert_users: s.system_alert_users || '',
   }
   // Pre-populate test phone from logged-in user's profile
   if (!signalTestPhone.value) {
@@ -577,6 +581,46 @@ async function saveWebhookSettings() {
   } finally {
     alertSaving.value = false
   }
+}
+
+async function saveSystemAlertSettings() {
+  alertError.value = ''
+  alertSuccess.value = ''
+  alertSaving.value = true
+  try {
+    await api.put('/settings', {
+      system_alert_admins: alertForm.value.system_alert_admins,
+      system_alert_users: alertForm.value.system_alert_users,
+    })
+    alertSuccess.value = 'System alert settings saved'
+    await loadSettings()
+    loadAlertSettings()
+  } catch (e) {
+    alertError.value = e.response?.data?.error || 'Failed to save system alert settings'
+  } finally {
+    alertSaving.value = false
+  }
+}
+
+// Computed: selected user IDs for multi-select
+const systemAlertUserIds = computed({
+  get() {
+    const val = alertForm.value.system_alert_users
+    return val ? val.split(',').filter(Boolean) : []
+  },
+  set(ids) {
+    alertForm.value.system_alert_users = ids.join(',')
+  }
+})
+
+function toggleSystemAlertUser(userId) {
+  const ids = new Set(systemAlertUserIds.value)
+  if (ids.has(userId)) {
+    ids.delete(userId)
+  } else {
+    ids.add(userId)
+  }
+  systemAlertUserIds.value = [...ids]
 }
 
 function loadSnmpSettings() {
@@ -909,6 +953,7 @@ watch(activeTab, (tab) => {
   }
   if (tab === 'alerting') {
     loadAlertSettings()
+    loadUsers()
   }
   if (tab === 'tags') {
     loadTags()
@@ -1802,6 +1847,51 @@ onUnmounted(() => {
             </div>
           </div>
         </div>
+
+        <!-- System Alerts -->
+        <div class="card collapsible-card" :class="{ expanded: alertSections.system }" style="margin-bottom: 1rem;">
+          <div class="collapsible-header" @click="alertSections.system = !alertSections.system">
+            <div class="collapsible-title-row">
+              <span class="collapse-arrow" :class="{ open: alertSections.system }">&#9654;</span>
+              <h3 style="margin: 0;">System Alerts</h3>
+            </div>
+            <span class="collapsible-hint">{{ alertSections.system ? 'collapse' : 'expand' }}</span>
+          </div>
+          <div class="collapsible-body" :class="{ open: alertSections.system }">
+            <div class="collapsible-inner">
+          <p class="text-muted" style="margin: 0 0 1rem;">Recipients for system alerts (unclean restarts, scheduler failures). Alerts are sent via the configured alert method above.</p>
+
+          <div class="form-group">
+            <label>
+              <input type="checkbox"
+                :checked="alertForm.system_alert_admins === 'true'"
+                @change="alertForm.system_alert_admins = $event.target.checked ? 'true' : 'false'" />
+              All admin users
+            </label>
+            <span class="text-muted input-hint">Send system alerts to every user with admin role who has email/phone configured</span>
+          </div>
+
+          <div class="form-group">
+            <label>Additional recipients</label>
+            <div class="user-select-list">
+              <label v-for="u in users.filter(u => u.status === 'active')" :key="u.id" class="user-select-item">
+                <input type="checkbox"
+                  :checked="systemAlertUserIds.includes(u.id)"
+                  @change="toggleSystemAlertUser(u.id)" />
+                {{ u.username }} <span class="text-muted">({{ u.role }})</span>
+              </label>
+            </div>
+            <span class="text-muted input-hint">Select specific users to receive system alerts (in addition to admins if enabled above)</span>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn btn-primary" :disabled="alertSaving" @click="saveSystemAlertSettings">
+              {{ alertSaving ? 'Saving...' : 'Save' }}
+            </button>
+          </div>
+            </div>
+          </div>
+        </div>
     </div>
 
     <!-- ── Fail2Ban Tab ── -->
@@ -2684,5 +2774,29 @@ table.sla-info-table td:not(:first-child) {
   background: #fef3c7;
   border: 1px solid #fde68a;
   border-radius: 4px;
+}
+.user-select-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0.5rem;
+  background: #f8fafc;
+}
+.user-select-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.user-select-item:hover {
+  background: #e2e8f0;
+  border-radius: 4px;
+  padding: 0.1rem 0.3rem;
+  margin: -0.1rem -0.3rem;
 }
 </style>

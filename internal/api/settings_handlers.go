@@ -51,14 +51,18 @@ var knownSettings = map[string]bool{
 	"snmp_v3_auth_passphrase":    true,
 	"snmp_v3_privacy_protocol":   true,
 	"snmp_v3_privacy_passphrase": true,
+	// System alert settings
+	"system_alert_admins": true,
+	"system_alert_users":  true,
 }
 
 // Boolean settings that accept "true"/"false" instead of positive integers.
 var boolSettings = map[string]bool{
-	"soc_public":       true,
-	"webhook_enabled":  true,
-	"webhook_skip_tls": true,
-	"signal_skip_tls":  true,
+	"soc_public":         true,
+	"webhook_enabled":    true,
+	"webhook_skip_tls":   true,
+	"signal_skip_tls":    true,
+	"system_alert_admins": true,
 }
 
 // String settings that accept arbitrary text (not validated as positive integers).
@@ -90,6 +94,8 @@ var stringSettings = map[string]bool{
 	"snmp_v3_auth_passphrase":    true,
 	"snmp_v3_privacy_protocol":   true,
 	"snmp_v3_privacy_passphrase": true,
+	// System alert settings
+	"system_alert_users": true,
 }
 
 // Zero-allowed integer settings (allow 0 as a valid value, e.g. to disable re-alerting).
