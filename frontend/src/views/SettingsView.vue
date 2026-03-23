@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
+import { ref, nextTick, onMounted, onUnmounted, watch, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import api from '../api'
@@ -273,6 +273,7 @@ const auditLimit = 50
 const auditLoading = ref(false)
 const auditError = ref('')
 const auditSearch = ref('')
+const auditSearchInput = ref(null)
 let auditSearchTimer = null
 
 const auditTotalPages = computed(() => Math.ceil(auditTotal.value / auditLimit) || 1)
@@ -979,6 +980,7 @@ watch(activeTab, (tab) => {
   if (tab === 'audit') {
     auditPage.value = 1
     loadAuditLog()
+    nextTick(() => auditSearchInput.value?.focus())
   }
   if (tab === 'users') {
     loadUsers()
@@ -1005,7 +1007,7 @@ onMounted(async () => {
   loadSnmpSettings()
   // Trigger initial data load for routed tabs
   if (activeTab.value === 'users') loadUsers()
-  if (activeTab.value === 'audit') { auditPage.value = 1; loadAuditLog() }
+  if (activeTab.value === 'audit') { auditPage.value = 1; loadAuditLog(); nextTick(() => auditSearchInput.value?.focus()) }
 })
 
 onUnmounted(() => {
@@ -1247,8 +1249,9 @@ onUnmounted(() => {
     <!-- ── Audit Log Tab ── -->
     <div v-if="activeTab === 'audit' && auth.isOperator">
       <div class="audit-header">
-        <span class="text-muted">{{ auditTotal }} entries</span>
+        <span class="text-muted">{{ auditTotal }} events</span>
         <input
+          ref="auditSearchInput"
           v-model="auditSearch"
           @input="onAuditSearch"
           type="text"
@@ -1277,7 +1280,7 @@ onUnmounted(() => {
               <td colspan="7" style="text-align:center; color:#94a3b8;">Loading...</td>
             </tr>
             <tr v-else-if="auditEntries.length === 0">
-              <td colspan="7" style="text-align:center; color:#94a3b8;">No audit entries</td>
+              <td colspan="7" style="text-align:center; color:#94a3b8;">No audit events</td>
             </tr>
             <tr v-for="e in auditEntries" :key="e.id">
               <td class="nowrap">{{ fmtDate(e.created_at) }}</td>
