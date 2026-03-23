@@ -4,7 +4,8 @@ import api from '../api'
 
 const props = defineProps({
   show: { type: Boolean, default: false },
-  targetId: { type: String, default: null }
+  targetId: { type: String, default: null },
+  cloneSourceId: { type: String, default: null }
 })
 
 const emit = defineEmits(['close', 'saved'])
@@ -291,6 +292,13 @@ watch(() => props.show, async (val) => {
   loadTagOptions()
   if (props.targetId) {
     await loadTargetDetail(props.targetId)
+  } else if (props.cloneSourceId) {
+    await loadTargetDetail(props.cloneSourceId)
+    // Clear IDs so save creates new target + new checks
+    form.value.name = 'Clone of ' + form.value.name
+    form.value.host = ''
+    form.value.conditions = form.value.conditions.map(c => ({ ...c, check_id: '' }))
+    selectedRecipients.value = []
   } else {
     form.value = getEmptyForm()
     selectedRecipients.value = []
@@ -301,7 +309,7 @@ watch(() => props.show, async (val) => {
 <template>
   <div v-if="show" class="modal-overlay">
     <div class="modal-card modal-wide">
-      <h3>{{ targetId ? 'Edit Target' : 'New Target' }}</h3>
+      <h3>{{ targetId ? 'Edit Target' : cloneSourceId ? 'Clone Target' : 'New Target' }}</h3>
       <div v-if="formError" class="error-msg" style="margin-bottom: 0.75rem;">{{ formError }}</div>
       <form @submit.prevent="saveTarget">
         <!-- Target fields -->

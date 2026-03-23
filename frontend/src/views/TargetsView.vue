@@ -35,9 +35,10 @@ async function loadCategories() {
   } catch { /* ignore */ }
 }
 
-// Edit modal state
+// Edit/Clone modal state
 const showForm = ref(false)
 const editingTargetId = ref(null)
+const cloneSourceId = ref(null)
 
 const projectValues = computed(() => {
   const vals = new Set(targets.value.map(t => t.project).filter(Boolean))
@@ -91,6 +92,14 @@ async function loadTargets() {
 // Open form
 function openForm(target = null) {
   editingTargetId.value = target ? target.id : null
+  cloneSourceId.value = null
+  showForm.value = true
+  error.value = ''
+}
+
+function cloneTarget(target) {
+  editingTargetId.value = null
+  cloneSourceId.value = target.id
   showForm.value = true
   error.value = ''
 }
@@ -355,6 +364,7 @@ onMounted(async () => {
                   <button v-else class="btn btn-sm btn-pause" @click="pauseTarget(t.id)">Pause</button>
                   <button class="btn btn-sm" @click="runAllChecks(t.id)">Run Now</button>
                   <button class="btn btn-sm" @click="openForm(t)">Edit</button>
+                  <button class="btn btn-sm" @click="cloneTarget(t)">Clone</button>
                   <button class="btn btn-sm btn-danger" @click="deleteTarget(t.id)">Delete</button>
                 </template>
               </td>
@@ -552,7 +562,7 @@ onMounted(async () => {
     </div>
 
     <!-- Target edit modal (shared component) -->
-    <TargetEditModal :show="showForm" :target-id="editingTargetId" @close="showForm = false" @saved="onTargetSaved" />
+    <TargetEditModal :show="showForm" :target-id="editingTargetId" :clone-source-id="cloneSourceId" @close="showForm = false" @saved="onTargetSaved" />
 
     <!-- Delete confirmation modal -->
     <div v-if="showDeleteConfirm" class="modal-overlay" @click.self="showDeleteConfirm = false">
