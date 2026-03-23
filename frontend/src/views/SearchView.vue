@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, nextTick, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import TargetEditModal from '../components/TargetEditModal.vue'
 import api from '../api'
@@ -18,6 +18,7 @@ const success = ref('')
 
 // Filters
 const searchText = ref('')
+const searchInput = ref(null)
 const filterProject = ref('')
 const filterLocation = ref('')
 
@@ -325,10 +326,12 @@ async function onTargetSaved() {
   success.value = 'Target updated'
 }
 
-onMounted(() => {
+onMounted(async () => {
   loadCategories()
   loadData()
   loadSavedSearches()
+  await nextTick()
+  searchInput.value?.focus()
 })
 </script>
 
@@ -345,11 +348,11 @@ onMounted(() => {
     <div class="search-bar">
       <div class="search-input-wrap">
         <input
+          ref="searchInput"
           v-model="searchText"
           type="text"
           class="search-input"
           placeholder="Search by name, host, or IP..."
-          autofocus
         />
       </div>
       <div class="search-filters">

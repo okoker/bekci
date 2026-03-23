@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, nextTick, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
@@ -25,7 +25,8 @@ async function handleLogin() {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
+  await nextTick()
   usernameInput.value?.focus()
 })
 </script>
