@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 func (s *Server) handleListAuditLogs(w http.ResponseWriter, r *http.Request) {
@@ -15,8 +16,9 @@ func (s *Server) handleListAuditLogs(w http.ResponseWriter, r *http.Request) {
 		limit = 50
 	}
 	offset := (page - 1) * limit
+	search := strings.TrimSpace(r.URL.Query().Get("q"))
 
-	entries, total, err := s.store.ListAuditEntries(limit, offset)
+	entries, total, err := s.store.ListAuditEntries(limit, offset, search)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to load audit log")
 		return

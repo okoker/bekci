@@ -1,6 +1,9 @@
 package store
 
-import "time"
+import (
+	"database/sql"
+	"time"
+)
 
 type AuditEntry struct {
 	ID           int       `json:"id"`
@@ -33,15 +36,32 @@ func (s *Store) PurgeOldAuditEntries(days int) (int64, error) {
 	return res.RowsAffected()
 }
 
-func (s *Store) ListAuditEntries(limit, offset int) ([]AuditEntry, int, error) {
+func (s *Store) ListAuditEntries(limit, offset int, search string) ([]AuditEntry, int, error) {
 	var total int
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM audit_logs`).Scan(&total); err != nil {
-		return nil, 0, err
-	}
+	var rows *sql.Rows
+	var err error
 
-	rows, err := s.db.Query(`
-		SELECT id, user_id, username, action, resource_type, resource_id, detail, ip_address, status, created_at
-		FROM audit_logs ORDER BY created_at DESC LIMIT ? OFFSET ?`, limit, offset)
+	if search != "" {
+		like := "%" + search + "%"
+		if err := s.db.QueryRow(`SELECT COUNT(*) FROM audit_logs
+			WHERE username LIKE ? OR action LIKE ? OR detail LIKE ? OR ip_address LIKE ? OR resource_type LIKE ?`,
+			like, like, like, like, like).Scan(&total); err != nil {
+			return nil, 0, err
+		}
+		rows, err = s.db.Query(`
+			SELECT id, user_id, username, action, resource_type, resource_id, detail, ip_address, status, created_at
+			FROM audit_logs
+			WHERE username LIKE ? OR action LIKE ? OR detail LIKE ? OR ip_address LIKE ? OR resource_type LIKE ?
+			ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+			like, like, like, like, like, limit, offset)
+	} else {
+		if err := s.db.QueryRow(`SELECT COUNT(*) FROM audit_logs`).Scan(&total); err != nil {
+			return nil, 0, err
+		}
+		rows, err = s.db.Query(`
+			SELECT id, user_id, username, action, resource_type, resource_id, detail, ip_address, status, created_at
+			FROM audit_logs ORDER BY created_at DESC LIMIT ? OFFSET ?`, limit, offset)
+	}
 	if err != nil {
 		return nil, 0, err
 	}

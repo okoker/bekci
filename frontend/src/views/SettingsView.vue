@@ -272,6 +272,8 @@ const auditPage = ref(1)
 const auditLimit = 50
 const auditLoading = ref(false)
 const auditError = ref('')
+const auditSearch = ref('')
+let auditSearchTimer = null
 
 const auditTotalPages = computed(() => Math.ceil(auditTotal.value / auditLimit) || 1)
 
@@ -279,7 +281,9 @@ async function loadAuditLog() {
   auditLoading.value = true
   auditError.value = ''
   try {
-    const { data } = await api.get('/audit-log', { params: { page: auditPage.value, limit: auditLimit } })
+    const params = { page: auditPage.value, limit: auditLimit }
+    if (auditSearch.value.trim()) params.q = auditSearch.value.trim()
+    const { data } = await api.get('/audit-log', { params })
     auditEntries.value = data.entries
     auditTotal.value = data.total
   } catch (e) {
@@ -287,6 +291,14 @@ async function loadAuditLog() {
   } finally {
     auditLoading.value = false
   }
+}
+
+function onAuditSearch() {
+  clearTimeout(auditSearchTimer)
+  auditSearchTimer = setTimeout(() => {
+    auditPage.value = 1
+    loadAuditLog()
+  }, 300)
 }
 
 function auditPrevPage() {
@@ -1236,6 +1248,13 @@ onUnmounted(() => {
     <div v-if="activeTab === 'audit' && auth.isOperator">
       <div class="audit-header">
         <span class="text-muted">{{ auditTotal }} entries</span>
+        <input
+          v-model="auditSearch"
+          @input="onAuditSearch"
+          type="text"
+          class="audit-search"
+          placeholder="Search audit log..."
+        />
       </div>
 
       <div v-if="auditError" class="error-msg">{{ auditError }}</div>
@@ -2559,7 +2578,21 @@ table.sla-info-table td:not(:first-child) {
 
 /* ── Audit Log tab ── */
 .audit-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: 0.75rem;
+}
+.audit-search {
+  padding: 0.35rem 0.65rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  width: 250px;
+}
+.audit-search:focus {
+  outline: none;
+  border-color: #ea580c;
 }
 .nowrap { white-space: nowrap; }
 .detail-cell { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

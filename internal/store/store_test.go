@@ -561,7 +561,7 @@ func TestAuditEntries(t *testing.T) {
 		}
 	}
 
-	entries, total, err := s.ListAuditEntries(2, 0)
+	entries, total, err := s.ListAuditEntries(2, 0, "")
 	if err != nil {
 		t.Fatalf("ListAuditEntries: %v", err)
 	}
