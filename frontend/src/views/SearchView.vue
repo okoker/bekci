@@ -317,7 +317,38 @@ function formatDate(d) {
 
 function openEdit(id) {
   editTargetId.value = id
+  cloneSourceId.value = null
   showEditModal.value = true
+}
+
+const cloneSourceId = ref(null)
+
+function cloneTarget(id) {
+  editTargetId.value = null
+  cloneSourceId.value = id
+  showEditModal.value = true
+}
+
+async function runAllChecks(targetId) {
+  error.value = ''
+  success.value = ''
+  try {
+    const { data: checks } = await api.get(`/targets/${targetId}/checks`)
+    if (!checks || checks.length === 0) {
+      error.value = 'No checks configured for this target'
+      return
+    }
+    let queued = 0
+    for (const c of checks) {
+      try {
+        await api.post(`/checks/${c.id}/run`)
+        queued++
+      } catch { /* skip */ }
+    }
+    success.value = `Queued ${queued} check(s) for immediate execution`
+  } catch (e) {
+    error.value = e.response?.data?.error || 'Failed to run checks'
+  }
 }
 
 async function onTargetSaved() {
@@ -433,7 +464,9 @@ onMounted(async () => {
                   <template v-if="auth.isOperator">
                     <button v-if="isTargetPaused(t)" class="btn btn-sm btn-unpause" @click="unpauseTarget(t.id)">Unpause</button>
                     <button v-else class="btn btn-sm btn-pause" @click="pauseTarget(t.id)">Pause</button>
+                    <button class="btn btn-sm" @click="runAllChecks(t.id)">Run Now</button>
                     <button class="btn btn-sm" @click="openEdit(t.id)">Edit</button>
+                    <button class="btn btn-sm" @click="cloneTarget(t.id)">Clone</button>
                     <button class="btn btn-sm btn-danger" @click="deleteTarget(t.id)">Delete</button>
                   </template>
                 </td>
@@ -528,7 +561,7 @@ onMounted(async () => {
     </div>
 
     <!-- Target edit modal -->
-    <TargetEditModal :show="showEditModal" :target-id="editTargetId" @close="showEditModal = false" @saved="onTargetSaved" />
+    <TargetEditModal :show="showEditModal" :target-id="editTargetId" :clone-source-id="cloneSourceId" @close="showEditModal = false" @saved="onTargetSaved" />
 
     <!-- Delete confirmation modal -->
     <div v-if="showDeleteConfirm" class="modal-overlay" @click.self="showDeleteConfirm = false">
