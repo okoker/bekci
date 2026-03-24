@@ -607,7 +607,7 @@ async function saveWebhookSettings() {
       webhook_basic_username: alertForm.value.webhook_basic_username,
       webhook_basic_password: alertForm.value.webhook_basic_password,
       webhook_skip_tls: alertForm.value.webhook_skip_tls,
-      webhook_timeout_s: alertForm.value.webhook_timeout_s,
+      webhook_timeout_s: String(alertForm.value.webhook_timeout_s),
     })
     alertSuccess.value = 'Webhook settings saved'
     await loadSettings()
