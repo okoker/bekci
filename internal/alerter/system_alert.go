@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html"
 	"log/slog"
+	"strconv"
 	"strings"
 
 	"github.com/bekci/internal/store"
@@ -145,7 +146,12 @@ func SendSystemAlert(st *store.Store, subject, message string) {
 				Target:  "Bekci",
 				Message: fmt.Sprintf("%s — %s", subject, message),
 			}
-			err := SendWebhook(webhookURL, auth, skipTLS == "true", payload)
+			timeoutStr, _ := st.GetSetting("webhook_timeout_s")
+			timeoutS := 10
+			if n, err := strconv.Atoi(timeoutStr); err == nil && n > 0 {
+				timeoutS = n
+			}
+			err := SendWebhook(webhookURL, auth, skipTLS == "true", timeoutS, payload)
 			if err != nil {
 				slog.Error("System alert: webhook send failed", "error", err)
 			} else {

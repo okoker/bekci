@@ -460,6 +460,7 @@ const alertForm = ref({
   webhook_basic_username: '',
   webhook_basic_password: '',
   webhook_skip_tls: 'false',
+  webhook_timeout_s: '10',
   system_alert_admins: 'true',
   system_alert_users: '',
 })
@@ -509,6 +510,7 @@ function loadAlertSettings() {
     webhook_basic_username: s.webhook_basic_username || '',
     webhook_basic_password: s.webhook_basic_password || '',
     webhook_skip_tls: s.webhook_skip_tls || 'false',
+    webhook_timeout_s: s.webhook_timeout_s || '10',
     system_alert_admins: s.system_alert_admins || 'true',
     system_alert_users: s.system_alert_users || '',
   }
@@ -605,6 +607,7 @@ async function saveWebhookSettings() {
       webhook_basic_username: alertForm.value.webhook_basic_username,
       webhook_basic_password: alertForm.value.webhook_basic_password,
       webhook_skip_tls: alertForm.value.webhook_skip_tls,
+      webhook_timeout_s: alertForm.value.webhook_timeout_s,
     })
     alertSuccess.value = 'Webhook settings saved'
     await loadSettings()
@@ -1891,6 +1894,12 @@ onUnmounted(() => {
               Skip TLS Verification
             </label>
             <span class="text-muted input-hint">Allow self-signed certificates</span>
+          </div>
+
+          <div class="form-group">
+            <label>Timeout (seconds)</label>
+            <input type="number" v-model="alertForm.webhook_timeout_s" min="1" max="120" style="width: 100px;" />
+            <span class="text-muted input-hint">How long to wait for webhook response (default 10)</span>
           </div>
 
           <div class="form-actions">

@@ -881,7 +881,7 @@ func TestSendWebhookSuccess(t *testing.T) {
 	}
 
 	auth := WebhookAuth{Type: "bearer", BearerToken: "my-token"}
-	err := SendWebhook(srv.URL, auth, false, payload)
+	err := SendWebhook(srv.URL, auth, false, 10, payload)
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -918,7 +918,7 @@ func TestSendWebhookNoToken(t *testing.T) {
 	defer srv.Close()
 
 	payload := WebhookPayload{Event: "firing", Target: "t", Timestamp: "now"}
-	err := SendWebhook(srv.URL, WebhookAuth{}, false, payload)
+	err := SendWebhook(srv.URL, WebhookAuth{}, false, 10, payload)
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -935,7 +935,7 @@ func TestSendWebhookFailure(t *testing.T) {
 	defer srv.Close()
 
 	payload := WebhookPayload{Event: "firing", Target: "t", Timestamp: "now"}
-	err := SendWebhook(srv.URL, WebhookAuth{Type: "bearer", BearerToken: "token"}, false, payload)
+	err := SendWebhook(srv.URL, WebhookAuth{Type: "bearer", BearerToken: "token"}, false, 10, payload)
 	if err == nil {
 		t.Fatal("expected error for 500 response")
 	}
@@ -946,7 +946,7 @@ func TestSendWebhookFailure(t *testing.T) {
 
 func TestSendWebhookConnectionRefused(t *testing.T) {
 	payload := WebhookPayload{Event: "firing", Target: "t", Timestamp: "now"}
-	err := SendWebhook("http://127.0.0.1:1", WebhookAuth{}, false, payload)
+	err := SendWebhook("http://127.0.0.1:1", WebhookAuth{}, false, 10, payload)
 	if err == nil {
 		t.Fatal("expected error for connection refused")
 	}
@@ -964,7 +964,7 @@ func TestSendWebhookBasicAuth(t *testing.T) {
 
 	payload := WebhookPayload{Event: "firing", Target: "t", Timestamp: "now"}
 	auth := WebhookAuth{Type: "basic", BasicUsername: "xsoar", BasicPassword: "s3cret"}
-	err := SendWebhook(srv.URL, auth, false, payload)
+	err := SendWebhook(srv.URL, auth, false, 10, payload)
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}

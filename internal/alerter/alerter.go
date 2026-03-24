@@ -172,6 +172,7 @@ func (a *AlertService) Dispatch(ruleID, oldState, newState string) {
 			auth := a.getWebhookAuth()
 			skipTLSStr, _ := a.store.GetSetting("webhook_skip_tls")
 			skipTLS := skipTLSStr == "true"
+			timeoutS := a.getWebhookTimeout()
 
 			failingChecks := a.getFailingChecks(targetID, newState)
 			payload := WebhookPayload{
@@ -192,7 +193,7 @@ func (a *AlertService) Dispatch(ruleID, oldState, newState string) {
 				payload.Duration = &dur
 			}
 
-			if err := SendWebhook(webhookURL, auth, skipTLS, payload); err != nil {
+			if err := SendWebhook(webhookURL, auth, skipTLS, timeoutS, payload); err != nil {
 				slog.Error("Alerter: webhook failed", "target", target.Name, "error", err)
 				a.store.SetSettings(map[string]string{
 					"webhook_last_error": now.UTC().Format(time.RFC3339) + " — " + err.Error(),
@@ -342,6 +343,7 @@ func (a *AlertService) CheckRealerts() {
 				auth := a.getWebhookAuth()
 				skipTLSStr, _ := a.store.GetSetting("webhook_skip_tls")
 				skipTLS := skipTLSStr == "true"
+				timeoutS := a.getWebhookTimeout()
 
 				failingChecks := a.getFailingChecks(fr.TargetID, "unhealthy")
 				payload := WebhookPayload{
@@ -354,7 +356,7 @@ func (a *AlertService) CheckRealerts() {
 					Timestamp:     now.UTC().Format(time.RFC3339),
 				}
 
-				if err := SendWebhook(webhookURL, auth, skipTLS, payload); err != nil {
+				if err := SendWebhook(webhookURL, auth, skipTLS, timeoutS, payload); err != nil {
 					slog.Error("Alerter: webhook re-alert failed", "target", target.Name, "error", err)
 					a.store.SetSettings(map[string]string{
 						"webhook_last_error": now.UTC().Format(time.RFC3339) + " — " + err.Error(),
@@ -402,6 +404,14 @@ func (a *AlertService) getWebhookAuth() WebhookAuth {
 		auth.BasicPassword, _ = a.store.GetSetting("webhook_basic_password")
 	}
 	return auth
+}
+
+func (a *AlertService) getWebhookTimeout() int {
+	s, _ := a.store.GetSetting("webhook_timeout_s")
+	if n, err := strconv.Atoi(s); err == nil && n > 0 {
+		return n
+	}
+	return 10
 }
 
 // getFailingChecks returns failing check details for a target.
@@ -508,6 +518,7 @@ func (a *AlertService) SendTestWebhook() error {
 	auth := a.getWebhookAuth()
 	skipTLSStr, _ := a.store.GetSetting("webhook_skip_tls")
 	skipTLS := skipTLSStr == "true"
+	timeoutS := a.getWebhookTimeout()
 
 	payload := WebhookPayload{
 		Event:         "test",
@@ -519,7 +530,7 @@ func (a *AlertService) SendTestWebhook() error {
 		Timestamp:     time.Now().UTC().Format(time.RFC3339),
 	}
 
-	if err := SendWebhook(url, auth, skipTLS, payload); err != nil {
+	if err := SendWebhook(url, auth, skipTLS, timeoutS, payload); err != nil {
 		a.auditWebhook("webhook_dispatch", "Bekci Test", "test — error: "+err.Error(), "failure")
 		return err
 	}

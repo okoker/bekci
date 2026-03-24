@@ -39,7 +39,7 @@ type WebhookAuth struct {
 }
 
 // SendWebhook POSTs a JSON payload to the given URL with optional auth and TLS skip.
-func SendWebhook(url string, auth WebhookAuth, skipTLS bool, payload WebhookPayload) error {
+func SendWebhook(url string, auth WebhookAuth, skipTLS bool, timeoutS int, payload WebhookPayload) error {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("marshal webhook payload: %w", err)
@@ -67,7 +67,10 @@ func SendWebhook(url string, auth WebhookAuth, skipTLS bool, payload WebhookPayl
 		slog.Warn("webhook TLS verification disabled — connection is not secure", "url", url)
 		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	}
-	client := &http.Client{Timeout: 10 * time.Second, Transport: transport}
+	if timeoutS <= 0 {
+		timeoutS = 10
+	}
+	client := &http.Client{Timeout: time.Duration(timeoutS) * time.Second, Transport: transport}
 
 	resp, err := client.Do(req)
 	if err != nil {

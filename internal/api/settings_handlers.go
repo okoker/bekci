@@ -41,6 +41,7 @@ var knownSettings = map[string]bool{
 	"webhook_basic_username": true,
 	"webhook_basic_password": true,
 	"webhook_skip_tls":       true,
+	"webhook_timeout_s":      true,
 	"webhook_last_error":     true,
 	"webhook_last_success":   true,
 	// SNMP settings
