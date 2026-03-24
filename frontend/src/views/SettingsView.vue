@@ -84,6 +84,39 @@ async function saveSettings() {
   }
 }
 
+// ── Auto Backup state ──
+const autoBackupForm = ref({ schedule: 'off', time: '03:00' })
+const autoBackupSaving = ref(false)
+const autoBackupSuccess = ref('')
+const autoBackupError = ref('')
+
+function loadAutoBackupSettings() {
+  const s = settings.value
+  autoBackupForm.value = {
+    schedule: s.auto_backup_schedule || 'off',
+    time: s.auto_backup_time || '03:00',
+  }
+}
+
+async function saveAutoBackupSettings() {
+  autoBackupError.value = ''
+  autoBackupSuccess.value = ''
+  autoBackupSaving.value = true
+  try {
+    await api.put('/settings', {
+      auto_backup_schedule: autoBackupForm.value.schedule,
+      auto_backup_time: autoBackupForm.value.time,
+    })
+    autoBackupSuccess.value = 'Auto backup settings saved'
+    await loadSettings()
+    loadAutoBackupSettings()
+  } catch (e) {
+    autoBackupError.value = e.response?.data?.error || 'Failed to save'
+  } finally {
+    autoBackupSaving.value = false
+  }
+}
+
 // ── Backup & Restore state ──
 const restoreFile = ref(null)
 const restoring = ref(false)
@@ -1008,6 +1041,7 @@ onMounted(async () => {
   await loadSLAKeys()
   await loadSettings()
   loadSnmpSettings()
+  loadAutoBackupSettings()
   // Trigger initial data load for routed tabs
   if (activeTab.value === 'users') loadUsers()
   if (activeTab.value === 'audit') { auditPage.value = 1; loadAuditLog(); nextTick(() => auditSearchInput.value?.focus()) }
@@ -1512,6 +1546,33 @@ onUnmounted(() => {
     <!-- ── Backup & Restore Tab ── -->
     <div v-if="activeTab === 'backup' && auth.isAdmin">
       <div v-if="error" class="error-msg">{{ error }}</div>
+
+      <div class="card backup-card" style="margin-bottom: 1rem;">
+        <h3>Automated Backups</h3>
+        <p class="text-muted" style="margin: 0 0 1rem;">Schedule unencrypted full backups. Respects the max backup copies setting. Backup files are stored with owner-only permissions (0600).</p>
+        <div v-if="autoBackupError" class="error-msg">{{ autoBackupError }}</div>
+        <div v-if="autoBackupSuccess" class="success-msg" @click="autoBackupSuccess = ''">{{ autoBackupSuccess }}</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Schedule</label>
+            <select v-model="autoBackupForm.schedule">
+              <option value="off">Off</option>
+              <option value="weekly">Weekly</option>
+              <option value="10days">Every 10 days</option>
+              <option value="monthly">Monthly</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Time (24h)</label>
+            <input type="text" v-model="autoBackupForm.time" placeholder="03:00" style="width: 80px;" />
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-primary" :disabled="autoBackupSaving" @click="saveAutoBackupSettings">
+            {{ autoBackupSaving ? 'Saving...' : 'Save' }}
+          </button>
+        </div>
+      </div>
 
       <div class="card backup-card" style="margin-bottom: 1rem;">
         <h3>Config Backup</h3>

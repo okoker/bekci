@@ -264,6 +264,20 @@ func main() {
 		}
 	}()
 
+	// Scheduled backup check (runs alongside hourly cleanup)
+	go func() {
+		ticker := time.NewTicker(1 * time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				apiServer.RunScheduledBackup()
+			}
+		}
+	}()
+
 	// Daily cleanup: audit log rotation (also runs once at startup)
 	go func() {
 		ticker := time.NewTicker(24 * time.Hour)

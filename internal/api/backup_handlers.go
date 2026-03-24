@@ -530,3 +530,91 @@ func (s *Server) handleDeleteSavedBackup(w http.ResponseWriter, r *http.Request)
 	s.audit(r, "delete_saved_backup", "backup", "", filename, "success")
 	writeJSON(w, http.StatusOK, map[string]string{"message": "deleted"})
 }
+
+// RunScheduledBackup creates an unencrypted full backup if the schedule is due.
+// Called from the hourly maintenance goroutine in main.go.
+func (s *Server) RunScheduledBackup() {
+	schedule, _ := s.store.GetSetting("auto_backup_schedule")
+	if schedule == "" || schedule == "off" {
+		return
+	}
+
+	timeStr, _ := s.store.GetSetting("auto_backup_time")
+	if timeStr == "" {
+		timeStr = "03:00"
+	}
+
+	// Parse target hour:minute
+	var targetHour, targetMin int
+	fmt.Sscanf(timeStr, "%d:%d", &targetHour, &targetMin)
+
+	now := time.Now()
+
+	// Only proceed if current hour matches target hour (checked hourly)
+	if now.Hour() != targetHour {
+		return
+	}
+
+	// Check if a backup was already made today
+	entries := loadBackupIndex(s.backupDir)
+	if len(entries) > 0 {
+		lastEntry := entries[len(entries)-1]
+		if lastTime, err := time.Parse(time.RFC3339, lastEntry.CreatedAt); err == nil {
+			daysSince := int(now.Sub(lastTime).Hours() / 24)
+			switch schedule {
+			case "weekly":
+				if daysSince < 7 {
+					return
+				}
+			case "10days":
+				if daysSince < 10 {
+					return
+				}
+			case "monthly":
+				if daysSince < 30 {
+					return
+				}
+			}
+		}
+	}
+
+	// Audit: starting
+	s.store.CreateAuditEntry(&store.AuditEntry{
+		UserID:       "system",
+		Username:     "system",
+		Action:       "auto_backup",
+		ResourceType: "backup",
+		Detail:       "Starting scheduled backup",
+		Status:       "success",
+	})
+
+	// Build backup (unencrypted)
+	archiveData, filename, err := s.buildFullBackupArchive(false, "")
+	if err != nil {
+		slog.Error("Scheduled backup failed", "error", err)
+		s.store.CreateAuditEntry(&store.AuditEntry{
+			UserID:       "system",
+			Username:     "system",
+			Action:       "auto_backup",
+			ResourceType: "backup",
+			Detail:       "Backup failed: " + err.Error(),
+			Status:       "failure",
+		})
+		return
+	}
+
+	// Save using existing auto-save logic (respects max_copies)
+	s.autoSaveBackupCopy(archiveData, filename, false)
+
+	// Audit: completed
+	s.store.CreateAuditEntry(&store.AuditEntry{
+		UserID:       "system",
+		Username:     "system",
+		Action:       "auto_backup",
+		ResourceType: "backup",
+		Detail:       fmt.Sprintf("Backup completed: %s (%d bytes)", filename, len(archiveData)),
+		Status:       "success",
+	})
+
+	slog.Info("Scheduled backup completed", "filename", filename, "size", len(archiveData))
+}

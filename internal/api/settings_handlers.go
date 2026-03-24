@@ -16,6 +16,8 @@ var knownSettings = map[string]bool{
 	"audit_retention_days":   true,
 	"soc_public":             true,
 	"backup_max_copies":      true,
+	"auto_backup_schedule":   true,
+	"auto_backup_time":       true,
 	// Alerting settings
 	"alert_method":     true,
 	"email_provider":   true,
@@ -97,6 +99,9 @@ var stringSettings = map[string]bool{
 	"snmp_v3_privacy_passphrase": true,
 	// System alert settings
 	"system_alert_users": true,
+	// Auto backup settings
+	"auto_backup_schedule": true,
+	"auto_backup_time":     true,
 }
 
 // Zero-allowed integer settings (allow 0 as a valid value, e.g. to disable re-alerting).
@@ -238,6 +243,11 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		} else if key == "snmp_v3_privacy_protocol" {
 			if val != "" && val != "DES" && val != "AES" {
 				writeError(w, http.StatusBadRequest, "snmp_v3_privacy_protocol must be 'DES' or 'AES'")
+				return
+			}
+		} else if key == "auto_backup_schedule" {
+			if val != "" && val != "off" && val != "weekly" && val != "10days" && val != "monthly" {
+				writeError(w, http.StatusBadRequest, "auto_backup_schedule must be 'off', 'weekly', '10days', or 'monthly'")
 				return
 			}
 		} else if key == "smtp_port" {
