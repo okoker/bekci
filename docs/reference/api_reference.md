@@ -1223,6 +1223,7 @@ Update one or more settings. Only known keys are accepted. Sending masked values
 |-------|---------|-------------|
 | `page` | 1 | >= 1 |
 | `limit` | 50 | 1-100 |
+| `q` | (empty) | Search across username, action, detail, ip_address, resource_type. Max 100 chars. |
 
 **Response (200):**
 ```json

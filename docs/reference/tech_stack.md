@@ -185,6 +185,13 @@ SearchView and SlaView are lazy-loaded (code-split). SlaView lazy-load saves ~25
 - **Crash detection**: `.shutdown_clean` marker file written on graceful SIGTERM, consumed on startup. Missing marker = unclean restart → 4 red audit log entries + system alert to configured recipients.
 - **System alerts**: `system_alert_admins` (bool) + `system_alert_users` (CSV user IDs). Sent directly from main.go startup (bypasses scheduler). Uses configured alert channels (email/signal/webhook).
 
+### Automated Backups
+- Hourly goroutine checks `auto_backup_schedule` (off/weekly/10days/monthly) + `auto_backup_time` (24h format)
+- Compares last backup timestamp from index.json against schedule interval
+- Calls `buildFullBackupArchive` (unencrypted) + `autoSaveBackupCopy` (respects `backup_max_copies`)
+- Audit log entries: "Starting scheduled backup" + "Backup completed: {filename}" or "Backup failed: {error}"
+- Backup files stored at 0600 (owner-only permissions)
+
 ### Data Architecture (A-011)
 
 The single `check_results` table was split into a 3-table architecture to eliminate full-table scans on the dashboard poll. At 90-day steady state with 1,500 checks, `check_results` held ~194M rows (~30-45 GB). Now:
