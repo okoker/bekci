@@ -1552,8 +1552,8 @@ onUnmounted(() => {
         <p class="text-muted" style="margin: 0 0 1rem;">Schedule unencrypted full backups. Respects the max backup copies setting. Backup files are stored with owner-only permissions (0600).</p>
         <div v-if="autoBackupError" class="error-msg">{{ autoBackupError }}</div>
         <div v-if="autoBackupSuccess" class="success-msg" @click="autoBackupSuccess = ''">{{ autoBackupSuccess }}</div>
-        <div class="form-row">
-          <div class="form-group">
+        <div style="display: flex; gap: 1rem; align-items: flex-end;">
+          <div class="form-group" style="width: 180px;">
             <label>Schedule</label>
             <select v-model="autoBackupForm.schedule">
               <option value="off">Off</option>
@@ -1562,9 +1562,9 @@ onUnmounted(() => {
               <option value="monthly">Monthly</option>
             </select>
           </div>
-          <div class="form-group">
+          <div class="form-group" style="width: 80px;">
             <label>Time (24h)</label>
-            <input type="text" v-model="autoBackupForm.time" placeholder="03:00" style="width: 80px;" />
+            <input type="text" v-model="autoBackupForm.time" placeholder="03:00" />
           </div>
         </div>
         <div class="form-actions">
