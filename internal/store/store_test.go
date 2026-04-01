@@ -933,7 +933,7 @@ func TestGetFiringRulesIgnoresPausedDisabled(t *testing.T) {
 	}
 
 	// Active + enabled target should appear
-	rules, err := s.GetFiringRules(0)
+	rules, err := s.GetFiringRules()
 	if err != nil {
 		t.Fatalf("GetFiringRules (active): %v", err)
 	}
@@ -948,7 +948,7 @@ func TestGetFiringRulesIgnoresPausedDisabled(t *testing.T) {
 	if err := s.PauseTarget(tgt.ID); err != nil {
 		t.Fatalf("PauseTarget: %v", err)
 	}
-	rules, err = s.GetFiringRules(0)
+	rules, err = s.GetFiringRules()
 	if err != nil {
 		t.Fatalf("GetFiringRules (paused): %v", err)
 	}
@@ -960,7 +960,7 @@ func TestGetFiringRulesIgnoresPausedDisabled(t *testing.T) {
 	if err := s.UnpauseTarget(tgt.ID); err != nil {
 		t.Fatalf("UnpauseTarget: %v", err)
 	}
-	rules, err = s.GetFiringRules(0)
+	rules, err = s.GetFiringRules()
 	if err != nil {
 		t.Fatalf("GetFiringRules (unpaused): %v", err)
 	}
@@ -972,7 +972,7 @@ func TestGetFiringRulesIgnoresPausedDisabled(t *testing.T) {
 	if _, err := s.db.Exec(`UPDATE targets SET enabled = 0 WHERE id = ?`, tgt.ID); err != nil {
 		t.Fatalf("disable target: %v", err)
 	}
-	rules, err = s.GetFiringRules(0)
+	rules, err = s.GetFiringRules()
 	if err != nil {
 		t.Fatalf("GetFiringRules (disabled): %v", err)
 	}

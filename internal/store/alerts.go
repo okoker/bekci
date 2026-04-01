@@ -215,9 +215,9 @@ func (s *Store) ListAlertHistory(limit, offset int) ([]AlertHistoryItem, int, er
 	return items, total, rows.Err()
 }
 
-// GetFiringRules returns rule IDs that are currently in "unhealthy" state, for re-alerting.
-// graceSeconds excludes rules that transitioned recently, preventing races with Dispatch.
-func (s *Store) GetFiringRules(graceSeconds int) ([]struct {
+// GetFiringRules returns rules currently in "unhealthy" state with enabled, unpaused targets.
+// Used by CheckRealerts to find candidates for re-alerting.
+func (s *Store) GetFiringRules() ([]struct {
 	RuleID   string
 	TargetID string
 }, error) {
@@ -226,8 +226,7 @@ func (s *Store) GetFiringRules(graceSeconds int) ([]struct {
 		FROM rule_states rs
 		JOIN targets t ON t.rule_id = rs.rule_id
 		WHERE rs.current_state = 'unhealthy' AND t.enabled = 1 AND t.paused_at IS NULL
-		  AND datetime(rs.last_change) < datetime('now', '-' || ? || ' seconds')
-	`, graceSeconds)
+	`)
 	if err != nil {
 		return nil, err
 	}
