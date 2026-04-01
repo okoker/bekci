@@ -821,6 +821,114 @@ func TestCheckRealertsEmailSuccess(t *testing.T) {
 	}
 }
 
+func TestCheckRealertsRespectsReAlertTime(t *testing.T) {
+	s := newTestStore(t)
+	target := createAlertTarget(t, s, "realert-respect")
+	recipient := createAlertUser(t, s, "realert-respect-user", "", "+449999")
+	svc := New(s)
+
+	var hitCount int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hitCount++
+		w.WriteHeader(200)
+		w.Write([]byte(`{"ok":true}`))
+	}))
+	defer srv.Close()
+
+	configureSignalAlerting(t, s, srv.URL)
+	if err := s.SetSettings(map[string]string{"alert_realert_s": "2"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetTargetRecipients(target.ID, []string{recipient.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpdateRuleState(*target.RuleID, "unhealthy"); err != nil {
+		t.Fatal(err)
+	}
+	// Log original firing alert
+	if err := s.LogAlert(target.ID, *target.RuleID, recipient.ID, "firing", "initial"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait past realert window so first re-alert fires
+	time.Sleep(3 * time.Second)
+	svc.CheckRealerts()
+	if hitCount != 1 {
+		t.Fatalf("expected first re-alert to fire, got %d", hitCount)
+	}
+
+	// Call again immediately — the re-alert just logged should prevent another
+	svc.CheckRealerts()
+	if hitCount != 1 {
+		t.Fatalf("expected recent re-alert to suppress next re-alert, got %d (want 1)", hitCount)
+	}
+}
+
+func TestRecoveryNotSuppressedByReAlert(t *testing.T) {
+	s := newTestStore(t)
+	target := createAlertTarget(t, s, "recovery-realert")
+	recipient := createAlertUser(t, s, "recovery-realert-user", "", "+440000")
+	svc := New(s)
+
+	var hitCount int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hitCount++
+		w.WriteHeader(200)
+		w.Write([]byte(`{"ok":true}`))
+	}))
+	defer srv.Close()
+
+	configureSignalAlerting(t, s, srv.URL)
+	// cooldown=2s, realert=1s
+	if err := s.SetSettings(map[string]string{
+		"alert_cooldown_s": "2",
+		"alert_realert_s":  "1",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetTargetRecipients(target.ID, []string{recipient.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpdateRuleState(*target.RuleID, "unhealthy"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Log original firing alert
+	if err := s.LogAlert(target.ID, *target.RuleID, recipient.ID, "firing", "initial"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait past realert window, trigger re-alert
+	time.Sleep(1500 * time.Millisecond)
+	svc.CheckRealerts()
+	if hitCount != 1 {
+		t.Fatalf("expected re-alert to fire, got %d", hitCount)
+	}
+
+	// Wait so firing (transition) is past cooldown, but re-alert is still recent
+	// firing is now ~2.5s old (> 2s cooldown), re-alert is ~1s old (< 2s cooldown)
+	time.Sleep(1 * time.Second)
+
+	// Recovery should succeed: cooldown checks last transition (firing=2.5s ago > 2s)
+	// Old code would check GetLastAlertTimeAny (re-alert=1s ago < 2s) → BLOCKED
+	svc.Dispatch(*target.RuleID, "unhealthy", "healthy")
+
+	if hitCount != 2 {
+		t.Fatalf("expected recovery to send (re-alert should not block it), got %d requests (want 2)", hitCount)
+	}
+
+	entries, _ := listAlertHistory(t, s)
+	var foundRecovery bool
+	for _, e := range entries {
+		if e.AlertType == "recovery" {
+			foundRecovery = true
+		}
+	}
+	if !foundRecovery {
+		t.Fatal("expected recovery alert to be logged")
+	}
+}
+
 func TestSendTestSignalSuccess(t *testing.T) {
 	s := newTestStore(t)
 	svc := New(s)
