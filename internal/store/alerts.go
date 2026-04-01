@@ -143,6 +143,24 @@ func (s *Store) GetLastProblemAlertTime(ruleID string) (time.Time, error) {
 	return t, nil
 }
 
+// GetLastTransitionAlertTime returns the most recent firing or recovery sent_at for a rule.
+// Used by Dispatch cooldown to prevent flapping without counting re-alerts.
+func (s *Store) GetLastTransitionAlertTime(ruleID string) (time.Time, error) {
+	var t time.Time
+	err := s.db.QueryRow(`
+		SELECT sent_at FROM alert_history
+		WHERE rule_id = ? AND alert_type IN ('firing', 'recovery')
+		ORDER BY sent_at DESC LIMIT 1
+	`, ruleID).Scan(&t)
+	if err == sql.ErrNoRows {
+		return time.Time{}, nil
+	}
+	if err != nil {
+		return time.Time{}, err
+	}
+	return t, nil
+}
+
 // AlertHistoryItem is an enriched alert entry for the history list view.
 type AlertHistoryItem struct {
 	ID            int64     `json:"id"`

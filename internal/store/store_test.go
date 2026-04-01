@@ -761,6 +761,58 @@ func TestGetLastProblemAlertTime(t *testing.T) {
 	}
 }
 
+func TestGetLastTransitionAlertTime(t *testing.T) {
+	s := newTestStore(t)
+	tgt, conds := makeTarget("trans-tgt")
+	if err := s.CreateTargetWithConditions(tgt, conds[:1], ""); err != nil {
+		t.Fatal(err)
+	}
+	ruleID := ""
+	if tgt.RuleID != nil {
+		ruleID = *tgt.RuleID
+	}
+	u := makeUser("trans-user", "admin")
+	if err := s.CreateUser(u); err != nil {
+		t.Fatal(err)
+	}
+
+	// No alerts — zero
+	got, _ := s.GetLastTransitionAlertTime(ruleID)
+	if !got.IsZero() {
+		t.Fatal("expected zero")
+	}
+
+	// Log firing
+	if err := s.LogAlert(tgt.ID, ruleID, u.ID, "firing", "down"); err != nil {
+		t.Fatal(err)
+	}
+	firingTime, _ := s.GetLastTransitionAlertTime(ruleID)
+	if firingTime.IsZero() {
+		t.Fatal("expected non-zero after firing")
+	}
+
+	// Log re-alert — should NOT change transition time
+	time.Sleep(50 * time.Millisecond)
+	if err := s.LogAlert(tgt.ID, ruleID, u.ID, "re-alert", "still down"); err != nil {
+		t.Fatal(err)
+	}
+	afterRealert, _ := s.GetLastTransitionAlertTime(ruleID)
+	if !afterRealert.Equal(firingTime) {
+		t.Fatalf("re-alert should not affect transition time: got %v, want %v", afterRealert, firingTime)
+	}
+
+	// Log recovery — SHOULD update transition time
+	// SQLite CURRENT_TIMESTAMP has second precision; sleep >1s for distinct timestamp
+	time.Sleep(1100 * time.Millisecond)
+	if err := s.LogAlert(tgt.ID, ruleID, u.ID, "recovery", "up"); err != nil {
+		t.Fatal(err)
+	}
+	afterRecovery, _ := s.GetLastTransitionAlertTime(ruleID)
+	if !afterRecovery.After(firingTime) {
+		t.Fatalf("recovery should update transition time: got %v, firing was %v", afterRecovery, firingTime)
+	}
+}
+
 func TestBackupExportRestore(t *testing.T) {
 	s1 := newTestStore(t)
 
