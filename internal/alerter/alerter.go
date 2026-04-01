@@ -47,7 +47,7 @@ func (a *AlertService) Dispatch(ruleID, oldState, newState string) {
 		cooldown = 1800
 	}
 
-	lastAlert, _ := a.store.GetLastAlertTimeAny(ruleID)
+	lastAlert, _ := a.store.GetLastTransitionAlertTime(ruleID)
 	if !lastAlert.IsZero() && time.Since(lastAlert) < time.Duration(cooldown)*time.Second {
 		slog.Debug("Alerter: skipping alert, within cooldown", "rule_id", ruleID, "type", newState)
 		return
@@ -232,13 +232,13 @@ func (a *AlertService) CheckRealerts() {
 		return
 	}
 
-	firingRules, err := a.store.GetFiringRules(realertS)
+	firingRules, err := a.store.GetFiringRules()
 	if err != nil {
 		slog.Error("Alerter: failed to get firing rules", "error", err)
 		return
 	}
 	for _, fr := range firingRules {
-		lastAlert, _ := a.store.GetLastAlertTime(fr.RuleID)
+		lastAlert, _ := a.store.GetLastProblemAlertTime(fr.RuleID)
 		if lastAlert.IsZero() || time.Since(lastAlert) < time.Duration(realertS)*time.Second {
 			continue
 		}
