@@ -706,6 +706,61 @@ func TestCooldownIgnoresRecoveryAlerts(t *testing.T) {
 	}
 }
 
+func TestGetLastProblemAlertTime(t *testing.T) {
+	s := newTestStore(t)
+	tgt, conds := makeTarget("problem-tgt")
+	if err := s.CreateTargetWithConditions(tgt, conds[:1], ""); err != nil {
+		t.Fatal(err)
+	}
+	ruleID := ""
+	if tgt.RuleID != nil {
+		ruleID = *tgt.RuleID
+	}
+	u := makeUser("problem-user", "admin")
+	if err := s.CreateUser(u); err != nil {
+		t.Fatal(err)
+	}
+
+	// No alerts — should return zero
+	got, err := s.GetLastProblemAlertTime(ruleID)
+	if err != nil {
+		t.Fatalf("empty: %v", err)
+	}
+	if !got.IsZero() {
+		t.Fatal("expected zero time with no alerts")
+	}
+
+	// Log firing
+	if err := s.LogAlert(tgt.ID, ruleID, u.ID, "firing", "down"); err != nil {
+		t.Fatal(err)
+	}
+	firingTime, _ := s.GetLastProblemAlertTime(ruleID)
+	if firingTime.IsZero() {
+		t.Fatal("expected non-zero after firing")
+	}
+
+	// Log recovery — should NOT change problem alert time
+	time.Sleep(50 * time.Millisecond)
+	if err := s.LogAlert(tgt.ID, ruleID, u.ID, "recovery", "up"); err != nil {
+		t.Fatal(err)
+	}
+	afterRecovery, _ := s.GetLastProblemAlertTime(ruleID)
+	if !afterRecovery.Equal(firingTime) {
+		t.Fatalf("recovery should not affect problem time: got %v, want %v", afterRecovery, firingTime)
+	}
+
+	// Log re-alert — SHOULD update problem alert time
+	// SQLite CURRENT_TIMESTAMP has second precision; sleep >1s for distinct timestamp
+	time.Sleep(1100 * time.Millisecond)
+	if err := s.LogAlert(tgt.ID, ruleID, u.ID, "re-alert", "still down"); err != nil {
+		t.Fatal(err)
+	}
+	afterRealert, _ := s.GetLastProblemAlertTime(ruleID)
+	if !afterRealert.After(firingTime) {
+		t.Fatalf("re-alert should update problem time: got %v, firing was %v", afterRealert, firingTime)
+	}
+}
+
 func TestBackupExportRestore(t *testing.T) {
 	s1 := newTestStore(t)
 
