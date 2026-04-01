@@ -110,21 +110,6 @@ func (s *Store) GetLastAlertTime(ruleID string) (time.Time, error) {
 	return t, nil
 }
 
-// GetLastAlertTimeAny returns the most recent alert sent_at for a given rule (any type).
-func (s *Store) GetLastAlertTimeAny(ruleID string) (time.Time, error) {
-	var t time.Time
-	err := s.db.QueryRow(`
-		SELECT sent_at FROM alert_history WHERE rule_id = ? ORDER BY sent_at DESC LIMIT 1
-	`, ruleID).Scan(&t)
-	if err == sql.ErrNoRows {
-		return time.Time{}, nil
-	}
-	if err != nil {
-		return time.Time{}, err
-	}
-	return t, nil
-}
-
 // GetLastProblemAlertTime returns the most recent firing or re-alert sent_at for a rule.
 // Used by CheckRealerts to throttle re-alert frequency.
 func (s *Store) GetLastProblemAlertTime(ruleID string) (time.Time, error) {
