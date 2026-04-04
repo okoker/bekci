@@ -4,14 +4,14 @@
   <img src="frontend/public/bekci-icon.png" alt="Bekci" width="120" />
 </p>
 
-Web-managed monitoring platform written in Go + Vue 3. Multi-check monitoring with composite rules engine, alerting, SLA tracking, RBAC, and Docker-first deployment.
+Web-managed tactical network based host monitoring platform written in Go + Vue 3. Multi-check monitoring with extensive composite rules engine, alerting, SLA tracking, RBAC, and easy Docker-first deployment.
 
 ## Features
 
 - **8 Check Types** — Ping (ICMP), HTTP/HTTPS, TCP, DNS, Page Hash, TLS Certificate, SNMP v2c, SNMP v3
 - **Unified Targets** — Create a target with conditions (check + alert criteria) in one step. Optional metadata: notes, contacts, project, location tags.
-- **Rules Engine** — Condition groups with AND/OR logic, configurable fail count and fail window thresholds
-- **Alerting** — Email (Resend API), Signal messaging, and generic webhook (JSON POST to any HTTP endpoint, Bearer or Basic auth), with cooldown, re-alert, and recovery notifications (with downtime duration)
+- **Rules Engine** — Condition groups with multiple AND/OR logic, configurable fail count and fail window thresholds
+- **Alerting** — Email (Resend, MS365), Signal messaging, and generic webhook (JSON POST to any HTTP/S endpoint, Bearer or Basic auth), with configurable cooldown, re-alert, and recovery notifications (with downtime duration)
 - **Dashboard** — 90-day + 4-hour uptime bars, per-target health state, problems sorted to top, 30s auto-refresh
 - **Search** — Full-text search across targets by name, host, or IP. Project/location filters. Saved searches with localStorage.
 - **SLA Compliance** — Per-category SLA thresholds, dedicated SLA page with Chart.js daily uptime charts
@@ -23,7 +23,7 @@ Web-managed monitoring platform written in Go + Vue 3. Multi-check monitoring wi
 - **Fail2Ban** — Integration for login brute-force protection, clickable ban detail tables with source IP, timestamps, and expiry
 - **Settings** — Runtime-configurable session timeout, history retention, alerting, SLA thresholds, SNMP credentials, backup copies
 - **Single Binary** — Vue 3 frontend embedded in Go binary via `go:embed`
-- **Docker Ready** — Multi-stage Dockerfile, single container, single port
+- **Docker Ready** — Multi-stage Dockerfile, single container, single port. Extremely easy to get it going.
 
 ## Quick Start — Docker
 
