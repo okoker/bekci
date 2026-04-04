@@ -192,7 +192,7 @@ docker-compose.yml         Single-service deployment
 | Backend | Go 1.25, net/http (stdlib router), SQLite WAL |
 | Frontend | Vue 3, Vite, Vue Router, Pinia, Chart.js |
 | Auth | JWT HS256 in HttpOnly cookie, bcrypt |
-| Alerting | Resend API (email), Signal REST API (messaging), Generic webhook (JSON POST, Bearer/Basic auth) |
+| Alerting | Resend API, MS365 API, Signal REST API, Generic webhook |
 | Encryption | AES-256-GCM, Argon2id KDF |
 | Deploy | Docker multi-stage (node + go + alpine) or bare-metal |
 
