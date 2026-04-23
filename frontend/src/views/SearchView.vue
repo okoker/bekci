@@ -2,6 +2,7 @@
 import { ref, computed, nextTick, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import TargetEditModal from '../components/TargetEditModal.vue'
+import TagChipInput from '../components/TagChipInput.vue'
 import api from '../api'
 
 const auth = useAuthStore()
@@ -10,6 +11,7 @@ const auth = useAuthStore()
 const targets = ref([])
 const projectOptions = ref([])
 const locationOptions = ref([])
+const tagOptions = ref([])
 const allUsers = ref([])
 const categoryNames = ref([])
 const loading = ref(false)
@@ -21,6 +23,7 @@ const searchText = ref('')
 const searchInput = ref(null)
 const filterProject = ref('')
 const filterLocation = ref('')
+const filterTags = ref([])
 
 // Expand
 const expandedTargetId = ref(null)
@@ -55,7 +58,8 @@ function saveCurrentSearch() {
     name,
     text: searchText.value.trim(),
     project: filterProject.value,
-    location: filterLocation.value
+    location: filterLocation.value,
+    tags: [...filterTags.value]
   }
   savedSearches.value.push(entry)
   localStorage.setItem(STORAGE_KEY, JSON.stringify(savedSearches.value))
@@ -67,6 +71,7 @@ function applySavedSearch(s) {
   searchText.value = s.text || ''
   filterProject.value = s.project || ''
   filterLocation.value = s.location || ''
+  filterTags.value = Array.isArray(s.tags) ? [...s.tags] : []
 }
 
 function deleteSavedSearch(id) {
@@ -79,6 +84,7 @@ function buildChipTooltip(s) {
   if (s.text) parts.push(`Text: "${s.text}"`)
   if (s.project) parts.push(`Project: ${s.project}`)
   if (s.location) parts.push(`Location: ${s.location}`)
+  if (Array.isArray(s.tags) && s.tags.length > 0) parts.push(`Tags: ${s.tags.join(', ')}`)
   return parts.join(', ')
 }
 
@@ -90,7 +96,7 @@ const showUnpauseConfirm = ref(false)
 const pendingPauseId = ref(null)
 
 const hasActiveFilter = computed(() => {
-  return searchText.value.trim() !== '' || filterProject.value !== '' || filterLocation.value !== ''
+  return searchText.value.trim() !== '' || filterProject.value !== '' || filterLocation.value !== '' || filterTags.value.length > 0
 })
 
 const filteredTargets = computed(() => {
@@ -107,6 +113,12 @@ const filteredTargets = computed(() => {
   }
   if (filterLocation.value) {
     list = list.filter(t => t.location === filterLocation.value)
+  }
+  if (filterTags.value.length > 0) {
+    list = list.filter(t => {
+      const tt = t.tags || []
+      return filterTags.value.every(tag => tt.includes(tag))
+    })
   }
   return list
 })
@@ -134,15 +146,17 @@ async function loadCategories() {
 async function loadData() {
   loading.value = true
   try {
-    const [tRes, pRes, lRes, uRes] = await Promise.all([
+    const [tRes, pRes, lRes, gRes, uRes] = await Promise.all([
       api.get('/targets'),
       api.get('/tags?group=project'),
       api.get('/tags?group=location'),
+      api.get('/tags?group=tag'),
       api.get('/users').catch(() => ({ data: [] }))
     ])
     targets.value = tRes.data
     projectOptions.value = pRes.data
     locationOptions.value = lRes.data
+    tagOptions.value = gRes.data
     allUsers.value = uRes.data || []
   } catch (e) {
     error.value = 'Failed to load data'
@@ -395,6 +409,7 @@ onMounted(async () => {
           <option value="">All Locations</option>
           <option v-for="l in locationOptions" :key="l.id" :value="l.value">{{ l.value }}</option>
         </select>
+        <TagChipInput v-model="filterTags" :options="tagOptions" placeholder="Tags…" />
       </div>
       <div v-if="hasActiveFilter" class="save-btn-wrap">
         <button class="btn btn-sm btn-save-search" @click="showSaveName = !showSaveName" title="Save your searches for future reuse.">

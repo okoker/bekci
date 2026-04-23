@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import api from '../api'
+import TagChipInput from '../components/TagChipInput.vue'
 
 const dashboardData = ref([])
 const historyData = ref({})
@@ -9,6 +10,8 @@ const error = ref('')
 const lastUpdated = ref(null)
 const activeCategory = ref('All')
 const categoriesRaw = ref([])
+const tagOptions = ref([])
+const activeTags = ref([])
 const categories = computed(() => {
   const sorted = [...categoriesRaw.value].sort((a, b) => {
     if (a === 'Other') return 1
@@ -138,8 +141,12 @@ watch(currentPage, () => {
 
 async function loadCategories() {
   try {
-    const { data } = await api.get('/tags?group=category')
-    categoriesRaw.value = data.map(c => c.value)
+    const [c, t] = await Promise.all([
+      api.get('/tags?group=category'),
+      api.get('/tags?group=tag'),
+    ])
+    categoriesRaw.value = c.data.map(x => x.value)
+    tagOptions.value = t.data
   } catch { /* ignore */ }
 }
 
@@ -180,6 +187,8 @@ async function loadHistory90d(checkId) {
 watch(show90d, (val) => {
   if (val) loadHistoryForVisiblePage()
 })
+
+watch(activeTags, () => { currentPage.value = 1 })
 
 function getPreferredCheck(target) {
   return target.checks?.find(c => c.type === target.preferred_check_type) || target.checks?.[0]
@@ -286,6 +295,12 @@ const filteredAndSortedTargets = computed(() => {
   if (activeCategory.value !== 'All') {
     list = list.filter(t => t.category === activeCategory.value)
   }
+  if (activeTags.value.length > 0) {
+    list = list.filter(t => {
+      const tt = t.tags || []
+      return activeTags.value.every(tag => tt.includes(tag))
+    })
+  }
   return [...list].sort((a, b) => {
     const aPaused = isTargetPaused(a)
     const bPaused = isTargetPaused(b)
@@ -363,6 +378,9 @@ onUnmounted(() => {
           @click="activeCategory = cat; currentPage = 1">
           {{ cat }} <span class="soc-filter-count">({{ categoryStats[cat].count }})</span>
         </button>
+      </div>
+      <div v-if="!loading && dashboardData.length > 0" class="soc-tag-filter">
+        <TagChipInput v-model="activeTags" :options="tagOptions" placeholder="Filter by tag…" />
       </div>
       <div class="soc-toggle-pill">
         <input type="checkbox" checked disabled class="soc-cb soc-cb-locked" />
