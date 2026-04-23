@@ -156,7 +156,7 @@ Request
 
 | Endpoint | Method | Auth | Admin | Operator | Viewer | Notes |
 |----------|--------|------|-------|----------|--------|-------|
-| `/api/tags` | GET | anyAuth | Y | Y | Y | List tag options. Required param: `?group=project\|location\|category`; missing/invalid returns 400 |
+| `/api/tags` | GET | socAuth | Y | Y | Y | List tag options. Required param: `?group=project\|location\|category`; missing/invalid returns 400. Public when `soc_public=true` (needed by public SocView filter dropdowns) |
 | `/api/tags` | POST | adminAuth | Y | N | N | Create tag option |
 | `/api/tags/{id}` | PUT | adminAuth | Y | N | N | Rename tag option (category: cascades to targets + SLA key) |
 | `/api/tags/{id}` | DELETE | adminAuth | Y | N | N | Delete tag option (category: blocked if in use) |

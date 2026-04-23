@@ -505,7 +505,7 @@ Unpauses the target and immediately triggers RunNow on all its checks.
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/api/tags?group=project\|location\|category` | any | List tag values for a group |
+| GET | `/api/tags?group=project\|location\|category` | socAuth | List tag values for a group (public when `soc_public=true`) |
 | POST | `/api/tags` | admin | Create a tag value |
 | PUT | `/api/tags/{id}` | admin | Rename a tag value (category: cascades to targets + SLA key) |
 | DELETE | `/api/tags/{id}` | admin | Delete a tag value (project/location: cascade-clears; category: blocked if in use) |
