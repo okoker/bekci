@@ -500,7 +500,7 @@ const alertForm = ref({
 
 // Track which alerting sections are expanded (first open by default)
 const alertSections = ref({ general: true, email: false, signal: false, webhook: false, system: false })
-const tagSections = ref({ project: true, location: false, category: false })
+const tagSections = ref({ project: true, location: false, category: false, tag: false })
 
 // SNMP credentials (separate from alerting)
 const snmpForm = ref({
@@ -801,20 +801,24 @@ const newProjectTag = ref('')
 const newLocationTag = ref('')
 const categoryTags = ref([])
 const newCategoryTag = ref('')
+const freeTags = ref([])
+const newFreeTag = ref('')
 const editingCategoryId = ref(null)
 const editingCategoryValue = ref('')
 const categoryDeleteError = ref(null)
 
 async function loadTags() {
   try {
-    const [p, l, c] = await Promise.all([
+    const [p, l, c, t] = await Promise.all([
       api.get('/tags?group=project'),
       api.get('/tags?group=location'),
-      api.get('/tags?group=category')
+      api.get('/tags?group=category'),
+      api.get('/tags?group=tag')
     ])
     projectTags.value = p.data
     locationTags.value = l.data
     categoryTags.value = c.data
+    freeTags.value = t.data
   } catch (e) {
     error.value = 'Failed to load tags'
   }
@@ -823,12 +827,14 @@ async function loadTags() {
 async function addTag(group) {
   const value = group === 'project' ? newProjectTag.value.trim()
     : group === 'location' ? newLocationTag.value.trim()
+    : group === 'tag' ? newFreeTag.value.trim()
     : newCategoryTag.value.trim()
   if (!value) return
   try {
     await api.post('/tags', { group, value })
     if (group === 'project') newProjectTag.value = ''
     else if (group === 'location') newLocationTag.value = ''
+    else if (group === 'tag') newFreeTag.value = ''
     else newCategoryTag.value = ''
     await loadTags()
     success.value = 'Tag added'
@@ -2214,6 +2220,32 @@ onUnmounted(() => {
             <div class="tag-add-row">
               <input v-model="newCategoryTag" placeholder="New category name" @keyup.enter="addTag('category')" />
               <button class="btn btn-sm btn-primary" @click="addTag('category')">Add</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card collapsible-card" :class="{ expanded: tagSections.tag }" style="margin-bottom: 1rem;">
+        <div class="collapsible-header" @click="tagSections.tag = !tagSections.tag">
+          <div class="collapsible-title-row">
+            <span class="collapse-arrow" :class="{ open: tagSections.tag }">&#9654;</span>
+            <h3 style="margin: 0;">Free Tags</h3>
+          </div>
+          <span class="collapsible-hint">{{ tagSections.tag ? 'collapse' : 'expand' }}</span>
+        </div>
+        <div class="collapsible-body" :class="{ open: tagSections.tag }">
+          <div class="collapsible-inner">
+            <p class="text-muted" style="margin-bottom: 0.75rem;">Free-form labels you can attach to many targets (e.g. P1, P2, IT, DEVOPS). Stored uppercase; case-insensitive on entry.</p>
+            <div class="tag-list">
+              <div v-for="t in freeTags" :key="t.id" class="tag-item">
+                <span>{{ t.value }}</span>
+                <button class="btn btn-sm btn-danger" @click="deleteTag(t.id)">Delete</button>
+              </div>
+              <div v-if="freeTags.length === 0" class="text-muted">No free tags defined yet.</div>
+            </div>
+            <div class="tag-add-row">
+              <input v-model="newFreeTag" placeholder="New tag (e.g. P1)" @keyup.enter="addTag('tag')" />
+              <button class="btn btn-sm btn-primary" @click="addTag('tag')">Add</button>
             </div>
           </div>
         </div>
