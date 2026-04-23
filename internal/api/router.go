@@ -97,6 +97,12 @@ func (s *Server) Handler() http.Handler {
 		return s.requireAuth(requireRole("admin")(http.HandlerFunc(h)))
 	}
 
+	// API token management (admin only). Plaintext is returned only on
+	// create — list/revoke never expose it.
+	mux.Handle("GET /api/api-tokens", adminAuth(s.handleListAPITokens))
+	mux.Handle("POST /api/api-tokens", adminAuth(s.handleCreateAPIToken))
+	mux.Handle("DELETE /api/api-tokens/{id}", adminAuth(s.handleRevokeAPIToken))
+
 	// Settings — admin only (H-1 fix: was exposing secrets to viewers/operators)
 	mux.Handle("GET /api/settings", adminAuth(s.handleGetSettings))
 	mux.Handle("PUT /api/settings", adminAuth(s.handleUpdateSettings))
