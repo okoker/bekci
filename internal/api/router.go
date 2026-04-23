@@ -180,6 +180,10 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/soc/status", s.socAuth(http.HandlerFunc(s.handleSocStatus)))
 	mux.Handle("GET /api/soc/history/{checkId}", s.socAuth(http.HandlerFunc(s.handleCheckHistory)))
 
+	// Machine API v1 — bearer-token auth, intended for remote consumers.
+	// Designed to be extensible: add more v1 endpoints here, all behind requireAPIToken.
+	mux.Handle("GET /api/v1/hosts", s.requireAPIToken(http.HandlerFunc(s.handleV1Hosts)))
+
 	// SPA handler — serve frontend for all non-API routes
 	mux.Handle("/", s.spaHandler())
 
