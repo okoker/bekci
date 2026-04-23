@@ -157,7 +157,7 @@ Request
 
 | Endpoint | Method | Auth | Admin | Operator | Viewer | Notes |
 |----------|--------|------|-------|----------|--------|-------|
-| `/api/tags` | GET | socAuth | Y | Y | Y | List tag options. Required param: `?group=project\|location\|category`; missing/invalid returns 400. Public when `soc_public=true` (needed by public SocView filter dropdowns) |
+| `/api/tags` | GET | socAuth | Y | Y | Y | List tag options. Required param: `?group=project\|location\|category\|tag`; missing/invalid returns 400. Public when `soc_public=true` (needed by public SocView filter dropdowns) |
 | `/api/tags` | POST | adminAuth | Y | N | N | Create tag option |
 | `/api/tags/{id}` | PUT | adminAuth | Y | N | N | Rename tag option (category: cascades to targets + SLA key) |
 | `/api/tags/{id}` | DELETE | adminAuth | Y | N | N | Delete tag option (category: blocked if in use) |
@@ -166,7 +166,7 @@ Request
 
 | Endpoint | Method | Auth | Admin | Operator | Viewer | Notes |
 |----------|--------|------|-------|----------|--------|-------|
-| `/api/settings` | GET | anyAuth | Y | Y | Y | View all settings |
+| `/api/settings` | GET | adminAuth | Y | N | N | View all settings (secrets masked) |
 | `/api/settings` | PUT | adminAuth | Y | N | N | Update settings |
 | `/api/settings/test-email` | POST | adminAuth | Y | N | N | Send test email |
 | `/api/settings/test-signal` | POST | adminAuth | Y | N | N | Send test Signal message |
