@@ -43,8 +43,8 @@ func (s *Store) Close() error {
 
 const schemaVersion = 22
 
-// baselineSchema is the complete DDL for a fresh install at schema version 24.
-// It is equivalent to running migration001 through migration023 on an empty database.
+// baselineSchema is the complete DDL for a fresh install at schema version 25.
+// It is equivalent to running migration001 through migration025 on an empty database.
 const baselineSchema = `
 CREATE TABLE users (
 	id            TEXT PRIMARY KEY,
@@ -227,13 +227,20 @@ CREATE INDEX idx_pause_history_target ON target_pause_history(target_id);
 
 CREATE TABLE tag_options (
 	id    INTEGER PRIMARY KEY AUTOINCREMENT,
-	grp   TEXT NOT NULL CHECK(grp IN ('project', 'location', 'category')),
+	grp   TEXT NOT NULL CHECK(grp IN ('project', 'location', 'category', 'tag')),
 	value TEXT NOT NULL,
 	UNIQUE(grp, value)
 );
 
+CREATE TABLE target_tags (
+	target_id TEXT NOT NULL REFERENCES targets(id) ON DELETE CASCADE,
+	tag_id    INTEGER NOT NULL REFERENCES tag_options(id) ON DELETE CASCADE,
+	PRIMARY KEY (target_id, tag_id)
+);
+CREATE INDEX idx_target_tags_tag ON target_tags(tag_id);
+
 CREATE TABLE schema_version (version INTEGER NOT NULL);
-INSERT INTO schema_version (version) VALUES (24);
+INSERT INTO schema_version (version) VALUES (25);
 
 INSERT INTO tag_options (grp, value) VALUES ('category', 'Key Services');
 INSERT INTO tag_options (grp, value) VALUES ('category', 'Network');
@@ -313,6 +320,7 @@ func (s *Store) migrate() error {
 	migrations := []func() error{
 		s.migration023,
 		s.migration024,
+		s.migration025,
 	}
 
 	for i := current - schemaVersion; i < len(migrations); i++ {
@@ -358,6 +366,35 @@ func (s *Store) migration023() error {
 func (s *Store) migration024() error {
 	_, err := s.db.Exec(`INSERT OR IGNORE INTO settings (key, value) VALUES ('signal_skip_tls', 'false')`)
 	return err
+}
+
+// migration025 adds a fourth 'tag' group to tag_options and introduces a
+// target_tags join table for many-to-many free-form labels per target.
+// SQLite does not support ALTER TABLE CHECK, so the tag_options table is
+// recreated with the relaxed constraint.
+func (s *Store) migration025() error {
+	_, err := s.db.Exec(`
+		CREATE TABLE tag_options_new (
+			id    INTEGER PRIMARY KEY AUTOINCREMENT,
+			grp   TEXT NOT NULL CHECK(grp IN ('project', 'location', 'category', 'tag')),
+			value TEXT NOT NULL,
+			UNIQUE(grp, value)
+		);
+		INSERT INTO tag_options_new (id, grp, value) SELECT id, grp, value FROM tag_options;
+		DROP TABLE tag_options;
+		ALTER TABLE tag_options_new RENAME TO tag_options;
+
+		CREATE TABLE target_tags (
+			target_id TEXT NOT NULL REFERENCES targets(id) ON DELETE CASCADE,
+			tag_id    INTEGER NOT NULL REFERENCES tag_options(id) ON DELETE CASCADE,
+			PRIMARY KEY (target_id, tag_id)
+		);
+		CREATE INDEX idx_target_tags_tag ON target_tags(tag_id);
+	`)
+	if err != nil {
+		return fmt.Errorf("migration025: %w", err)
+	}
+	return nil
 }
 
 // SchemaVersion returns the current database schema version.

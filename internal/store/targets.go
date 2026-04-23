@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -23,6 +24,7 @@ type Target struct {
 	Contacts           *string    `json:"contacts"`
 	Project            *string    `json:"project"`
 	Location           *string    `json:"location"`
+	Tags               []string   `json:"tags"`
 	CreatedAt          time.Time  `json:"created_at"`
 	UpdatedAt          time.Time  `json:"updated_at"`
 }
@@ -182,6 +184,10 @@ func (s *Store) CreateTargetWithConditions(t *Target, conds []TargetCondition, c
 		}
 	}
 
+	if err := replaceTargetTagsTx(tx, t.ID, t.Tags); err != nil {
+		return err
+	}
+
 	if len(conds) == 0 {
 		return tx.Commit()
 	}
@@ -262,7 +268,9 @@ func (s *Store) CreateTargetWithConditions(t *Target, conds []TargetCondition, c
 }
 
 // UpdateTargetWithConditions updates a target and smart-diffs its checks/conditions.
-func (s *Store) UpdateTargetWithConditions(id, name, host, description string, enabled bool, operator, category, preferredCheck string, notes, contacts, project, location *string, conds []TargetCondition) error {
+// `tags` is the full desired set of free-form tag values; the join table is fully
+// replaced to match this list.
+func (s *Store) UpdateTargetWithConditions(id, name, host, description string, enabled bool, operator, category, preferredCheck string, notes, contacts, project, location *string, tags []string, conds []TargetCondition) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -311,6 +319,10 @@ func (s *Store) UpdateTargetWithConditions(id, name, host, description string, e
 		WHERE id = ?
 	`, name, host, description, en, preferredType, operator, category, notes, contacts, project, location, now, id)
 	if err != nil {
+		return err
+	}
+
+	if err := replaceTargetTagsTx(tx, id, tags); err != nil {
 		return err
 	}
 
@@ -446,6 +458,92 @@ func (s *Store) UpdateTargetWithConditions(id, name, host, description string, e
 	return tx.Commit()
 }
 
+// replaceTargetTagsTx clears all tag links for a target and re-inserts the
+// provided set. Tag values are uppercased + trimmed to match the canonical
+// form stored in tag_options. Unknown tag values (not in the catalog) are
+// silently skipped — the API layer is responsible for validating/rejecting.
+func replaceTargetTagsTx(tx *sql.Tx, targetID string, tags []string) error {
+	if _, err := tx.Exec(`DELETE FROM target_tags WHERE target_id = ?`, targetID); err != nil {
+		return err
+	}
+	seen := map[string]bool{}
+	for _, raw := range tags {
+		v := strings.ToUpper(strings.TrimSpace(raw))
+		if v == "" || seen[v] {
+			continue
+		}
+		seen[v] = true
+		if _, err := tx.Exec(
+			`INSERT OR IGNORE INTO target_tags (target_id, tag_id)
+			 SELECT ?, id FROM tag_options WHERE grp = 'tag' AND value = ?`,
+			targetID, v); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// AttachTagsBulk populates the Tags field on each target in one query,
+// avoiding N+1 round-trips.
+func (s *Store) AttachTagsBulk(targets []*Target) error {
+	if len(targets) == 0 {
+		return nil
+	}
+	idx := make(map[string]*Target, len(targets))
+	placeholders := make([]string, 0, len(targets))
+	args := make([]any, 0, len(targets))
+	for _, t := range targets {
+		t.Tags = []string{}
+		idx[t.ID] = t
+		placeholders = append(placeholders, "?")
+		args = append(args, t.ID)
+	}
+	q := `SELECT tt.target_id, o.value
+	      FROM target_tags tt
+	      JOIN tag_options o ON o.id = tt.tag_id
+	      WHERE o.grp = 'tag' AND tt.target_id IN (` + strings.Join(placeholders, ",") + `)
+	      ORDER BY o.value ASC`
+	rows, err := s.db.Query(q, args...)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var tid, val string
+		if err := rows.Scan(&tid, &val); err != nil {
+			return err
+		}
+		if t, ok := idx[tid]; ok {
+			t.Tags = append(t.Tags, val)
+		}
+	}
+	return rows.Err()
+}
+
+// ListTagsByTarget returns the free-form tag values attached to one target,
+// alphabetically sorted.
+func (s *Store) ListTagsByTarget(targetID string) ([]string, error) {
+	rows, err := s.db.Query(`
+		SELECT o.value FROM target_tags tt
+		JOIN tag_options o ON o.id = tt.tag_id
+		WHERE o.grp = 'tag' AND tt.target_id = ?
+		ORDER BY o.value ASC
+	`, targetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []string{}
+	for rows.Next() {
+		var v string
+		if err := rows.Scan(&v); err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
 func listCheckIDsByTargetTx(tx *sql.Tx, targetID string) ([]string, error) {
 	rows, err := tx.Query(`SELECT id FROM checks WHERE target_id = ?`, targetID)
 	if err != nil {
@@ -526,6 +624,9 @@ func (s *Store) GetTargetDetail(id string) (*TargetDetail, error) {
 	// Load alert recipient IDs
 	td.RecipientIDs, _ = s.ListTargetRecipientIDs(id)
 
+	// Load free-form tags
+	td.Tags, _ = s.ListTagsByTarget(id)
+
 	return td, nil
 }
 
@@ -544,15 +645,16 @@ func (s *Store) ListTargetSummaries() ([]TargetListItem, error) {
 	}
 
 	var result []TargetListItem
-	for _, t := range targets {
-		item := TargetListItem{Target: t}
+	tagPtrs := make([]*Target, 0, len(targets))
+	for i := range targets {
+		item := TargetListItem{Target: targets[i]}
 
 		// Count checks for this target
-		s.db.QueryRow(`SELECT COUNT(*) FROM checks WHERE target_id = ?`, t.ID).Scan(&item.ConditionCount)
+		s.db.QueryRow(`SELECT COUNT(*) FROM checks WHERE target_id = ?`, targets[i].ID).Scan(&item.ConditionCount)
 
 		// Load state if rule exists
-		if t.RuleID != nil {
-			item.State, _ = s.GetRuleState(*t.RuleID)
+		if targets[i].RuleID != nil {
+			item.State, _ = s.GetRuleState(*targets[i].RuleID)
 		}
 
 		result = append(result, item)
@@ -560,6 +662,11 @@ func (s *Store) ListTargetSummaries() ([]TargetListItem, error) {
 	if result == nil {
 		result = []TargetListItem{}
 	}
+	// Bulk-load tags for all list items
+	for i := range result {
+		tagPtrs = append(tagPtrs, &result[i].Target)
+	}
+	_ = s.AttachTagsBulk(tagPtrs)
 	return result, nil
 }
 

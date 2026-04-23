@@ -48,8 +48,13 @@ func (s *Store) ListTagOptions(group string) ([]TagOption, error) {
 	return tags, rows.Err()
 }
 
-// CreateTagOption adds a new tag value to a group.
+// CreateTagOption adds a new tag value to a group. Values for the free-form
+// 'tag' group are uppercased before insert so "P1", "p1", and " P1 " all
+// collapse to the same canonical entry.
 func (s *Store) CreateTagOption(group, value string) (*TagOption, error) {
+	if group == "tag" {
+		value = strings.ToUpper(strings.TrimSpace(value))
+	}
 	res, err := s.db.Exec(`INSERT INTO tag_options (grp, value) VALUES (?, ?)`, group, value)
 	if err != nil {
 		return nil, err
@@ -93,17 +98,14 @@ func (s *Store) DeleteTagOption(id int) error {
 		if _, err := s.db.Exec(`DELETE FROM settings WHERE key = ?`, slaKey); err != nil {
 			return fmt.Errorf("cleanup sla setting: %w", err)
 		}
-	} else {
-		col := grp
-		switch col {
-		case "project", "location":
-			// valid column name
-		default:
-			return fmt.Errorf("invalid tag group: %s", col)
-		}
-		if _, err := s.db.Exec(`UPDATE targets SET `+col+` = NULL WHERE `+col+` = ?`, value); err != nil {
+	} else if grp == "project" || grp == "location" {
+		if _, err := s.db.Exec(`UPDATE targets SET `+grp+` = NULL WHERE `+grp+` = ?`, value); err != nil {
 			return err
 		}
+	} else if grp == "tag" {
+		// target_tags rows are cleaned by ON DELETE CASCADE on the tag_options FK.
+	} else {
+		return fmt.Errorf("invalid tag group: %s", grp)
 	}
 
 	_, err = s.db.Exec(`DELETE FROM tag_options WHERE id = ?`, id)
@@ -121,6 +123,10 @@ func (s *Store) RenameTagOption(id int, newValue string) error {
 
 	if grp == "category" && oldValue == "Other" {
 		return fmt.Errorf("cannot rename the 'Other' category")
+	}
+
+	if grp == "tag" {
+		newValue = strings.ToUpper(strings.TrimSpace(newValue))
 	}
 
 	if _, err := s.db.Exec(`UPDATE tag_options SET value = ? WHERE id = ?`, newValue, id); err != nil {

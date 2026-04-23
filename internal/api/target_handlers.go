@@ -30,6 +30,37 @@ func normalizeFailWindow(failCount, failWindow, intervalS int) int {
 	return failWindow
 }
 
+// normalizeAndValidateTags uppercases + trims each incoming value, dedups,
+// and ensures every remaining value exists in the tag catalog (grp='tag').
+// Returns the cleaned list or the first unknown value.
+func (s *Server) normalizeAndValidateTags(raw []string) (cleaned []string, unknown string, err error) {
+	if len(raw) == 0 {
+		return []string{}, "", nil
+	}
+	catalog, err := s.store.ListTagOptions("tag")
+	if err != nil {
+		return nil, "", err
+	}
+	valid := make(map[string]bool, len(catalog))
+	for _, c := range catalog {
+		valid[c.Value] = true
+	}
+	seen := make(map[string]bool, len(raw))
+	cleaned = make([]string, 0, len(raw))
+	for _, v := range raw {
+		norm := strings.ToUpper(strings.TrimSpace(v))
+		if norm == "" || seen[norm] {
+			continue
+		}
+		seen[norm] = true
+		if !valid[norm] {
+			return nil, norm, nil
+		}
+		cleaned = append(cleaned, norm)
+	}
+	return cleaned, "", nil
+}
+
 var validOperators = map[string]bool{"AND": true, "OR": true}
 var validCheckTypes = map[string]bool{
 	"http": true, "tcp": true, "ping": true,
@@ -49,6 +80,7 @@ type targetRequest struct {
 	Contacts           *string                  `json:"contacts"`
 	Project            *string                  `json:"project"`
 	Location           *string                  `json:"location"`
+	Tags               []string                 `json:"tags"`
 	Conditions         []targetConditionRequest `json:"conditions"`
 }
 
@@ -215,6 +247,16 @@ func (s *Server) handleCreateTarget(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	cleanedTags, unknownTag, err := s.normalizeAndValidateTags(req.Tags)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load tag catalog")
+		return
+	}
+	if unknownTag != "" {
+		writeError(w, http.StatusBadRequest, "unknown tag: "+unknownTag)
+		return
+	}
+
 	t := &store.Target{
 		Name:               req.Name,
 		Host:               req.Host,
@@ -227,6 +269,7 @@ func (s *Server) handleCreateTarget(w http.ResponseWriter, r *http.Request) {
 		Contacts:           req.Contacts,
 		Project:            req.Project,
 		Location:           req.Location,
+		Tags:               cleanedTags,
 	}
 
 	creatorID := ""
@@ -414,7 +457,17 @@ func (s *Server) handleUpdateTarget(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := s.store.UpdateTargetWithConditions(id, req.Name, req.Host, req.Description, enabled, req.Operator, req.Category, req.PreferredCheckType, req.Notes, req.Contacts, req.Project, req.Location, conds); err != nil {
+	cleanedTags, unknownTag, err := s.normalizeAndValidateTags(req.Tags)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load tag catalog")
+		return
+	}
+	if unknownTag != "" {
+		writeError(w, http.StatusBadRequest, "unknown tag: "+unknownTag)
+		return
+	}
+
+	if err := s.store.UpdateTargetWithConditions(id, req.Name, req.Host, req.Description, enabled, req.Operator, req.Category, req.PreferredCheckType, req.Notes, req.Contacts, req.Project, req.Location, cleanedTags, conds); err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			s.audit(r, "update_target", "target", id, "not found", "failure")
 			writeError(w, http.StatusNotFound, "target not found")

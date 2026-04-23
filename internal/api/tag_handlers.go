@@ -10,8 +10,8 @@ import (
 
 func (s *Server) handleListTags(w http.ResponseWriter, r *http.Request) {
 	group := r.URL.Query().Get("group")
-	if group != "project" && group != "location" && group != "category" {
-		writeError(w, http.StatusBadRequest, "group must be 'project', 'location', or 'category'")
+	if group != "project" && group != "location" && group != "category" && group != "tag" {
+		writeError(w, http.StatusBadRequest, "group must be 'project', 'location', 'category', or 'tag'")
 		return
 	}
 	tags, err := s.store.ListTagOptions(group)
@@ -32,8 +32,8 @@ func (s *Server) handleCreateTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Value = maxLen(strings.TrimSpace(req.Value), 50)
-	if req.Group != "project" && req.Group != "location" && req.Group != "category" {
-		writeError(w, http.StatusBadRequest, "group must be 'project', 'location', or 'category'")
+	if req.Group != "project" && req.Group != "location" && req.Group != "category" && req.Group != "tag" {
+		writeError(w, http.StatusBadRequest, "group must be 'project', 'location', 'category', or 'tag'")
 		return
 	}
 	if req.Value == "" {

@@ -384,6 +384,78 @@ func TestCreateTargetWithConditions(t *testing.T) {
 	}
 }
 
+func TestFreeFormTags_RoundTrip(t *testing.T) {
+	s := newTestStore(t)
+
+	// Create catalog entries. "p1" lower-case should be normalized to "P1".
+	p1, err := s.CreateTagOption("tag", "p1")
+	if err != nil {
+		t.Fatalf("create p1: %v", err)
+	}
+	if p1.Value != "P1" {
+		t.Fatalf("expected uppercase canonical P1, got %q", p1.Value)
+	}
+	if _, err := s.CreateTagOption("tag", "IT"); err != nil {
+		t.Fatalf("create IT: %v", err)
+	}
+	// Duplicate (different case) must be rejected.
+	if _, err := s.CreateTagOption("tag", "P1"); err == nil {
+		t.Fatalf("expected duplicate P1 to fail")
+	}
+
+	// Create a target and attach both tags via the write path (UpdateTargetWithConditions).
+	tgt, conds := makeTarget("tagged-host")
+	tgt.Tags = []string{"p1", "IT"} // lower-case on purpose; should be normalized on write
+	if err := s.CreateTargetWithConditions(tgt, conds, ""); err != nil {
+		t.Fatalf("CreateTargetWithConditions: %v", err)
+	}
+
+	// Read via GetTargetDetail — should return Tags sorted alpha.
+	td, err := s.GetTargetDetail(tgt.ID)
+	if err != nil {
+		t.Fatalf("GetTargetDetail: %v", err)
+	}
+	if got, want := td.Tags, []string{"IT", "P1"}; !equalStrings(got, want) {
+		t.Fatalf("detail tags = %v, want %v", got, want)
+	}
+
+	// Read via ListTargetSummaries — AttachTagsBulk should hydrate.
+	items, err := s.ListTargetSummaries()
+	if err != nil {
+		t.Fatalf("ListTargetSummaries: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("summary len = %d, want 1", len(items))
+	}
+	if got, want := items[0].Tags, []string{"IT", "P1"}; !equalStrings(got, want) {
+		t.Fatalf("summary tags = %v, want %v", got, want)
+	}
+
+	// Delete a tag — FK cascade should remove the target_tags row.
+	if err := s.DeleteTagOption(p1.ID); err != nil {
+		t.Fatalf("DeleteTagOption: %v", err)
+	}
+	td2, err := s.GetTargetDetail(tgt.ID)
+	if err != nil {
+		t.Fatalf("GetTargetDetail after delete: %v", err)
+	}
+	if got, want := td2.Tags, []string{"IT"}; !equalStrings(got, want) {
+		t.Fatalf("after delete: tags = %v, want %v", got, want)
+	}
+}
+
+func equalStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func TestDeleteTarget(t *testing.T) {
 	s := newTestStore(t)
 	tgt, conds := makeTarget("del-tgt")
@@ -988,8 +1060,8 @@ func TestMigration017_CompositeIndex(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if version != 24 {
-		t.Fatalf("schema_version = %d, want 24", version)
+	if version != 25 {
+		t.Fatalf("schema_version = %d, want 25", version)
 	}
 
 	// Verify index exists
@@ -1358,8 +1430,8 @@ func TestBaselineSchemaCompleteness(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v != 24 {
-		t.Fatalf("schema version = %d, want 24", v)
+	if v != 25 {
+		t.Fatalf("schema version = %d, want 25", v)
 	}
 
 	// Verify all expected tables exist
@@ -1367,7 +1439,7 @@ func TestBaselineSchemaCompleteness(t *testing.T) {
 		"users", "sessions", "settings", "targets", "checks",
 		"check_results", "rules", "rule_conditions", "rule_states",
 		"alert_history", "audit_logs", "target_alert_recipients",
-		"target_pause_history", "tag_options", "check_state",
+		"target_pause_history", "tag_options", "target_tags", "check_state",
 		"check_daily_rollups", "schema_version",
 	}
 	for _, table := range expectedTables {
@@ -1396,7 +1468,7 @@ func TestBaselineSchemaCompleteness(t *testing.T) {
 		"idx_checks_target_id", "idx_ah_rule", "idx_audit_created",
 		"idx_pause_history_target",
 		"idx_rule_conditions_check_id", "idx_rule_conditions_rule_id",
-		"idx_targets_rule_id",
+		"idx_targets_rule_id", "idx_target_tags_tag",
 	}
 	for _, idx := range expectedIndexes {
 		var n int
