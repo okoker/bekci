@@ -393,6 +393,7 @@ async function loadAPITokens() {
 
 async function createAPIToken() {
   apiTokenError.value = ''
+  apiTokenSuccess.value = ''
   const name = apiTokenNewName.value.trim()
   if (!name) return
   try {
@@ -1646,7 +1647,9 @@ onUnmounted(() => {
         <div v-if="apiTokenError" class="error-msg">{{ apiTokenError }}</div>
         <div v-if="apiTokenSuccess" class="success-msg" @click="apiTokenSuccess = ''">{{ apiTokenSuccess }}</div>
 
-        <!-- Plaintext display for the just-created token -->
+        <!-- Plaintext display for the just-created token.
+             While this card is visible, the Create flow is hidden below so
+             the admin has one obvious next step: copy + dismiss. -->
         <div v-if="apiTokenJustCreated" class="card token-reveal">
           <h3 style="margin: 0 0 0.5rem;">New token — copy now</h3>
           <p class="text-muted" style="margin: 0 0 0.5rem;">
@@ -1657,28 +1660,31 @@ onUnmounted(() => {
             <button class="btn btn-sm btn-primary" @click="copyTokenToClipboard(apiTokenJustCreated.plaintext)">Copy</button>
           </div>
           <div style="margin-top: 0.5rem;">
-            <button class="btn btn-sm" @click="dismissJustCreatedToken">I've saved it — dismiss</button>
+            <button class="btn btn-sm btn-primary" @click="dismissJustCreatedToken">I've saved it — dismiss</button>
           </div>
         </div>
 
-        <div class="users-header">
-          <button class="btn btn-primary" @click="apiTokenShowCreate = !apiTokenShowCreate">
-            {{ apiTokenShowCreate ? 'Cancel' : 'Create Token' }}
-          </button>
-        </div>
+        <!-- Create flow hidden while a just-created token is being revealed. -->
+        <template v-if="!apiTokenJustCreated">
+          <div class="users-header">
+            <button class="btn btn-primary" @click="apiTokenShowCreate = !apiTokenShowCreate">
+              {{ apiTokenShowCreate ? 'Cancel' : 'Create Token' }}
+            </button>
+          </div>
 
-        <div v-if="apiTokenShowCreate" class="card">
-          <form @submit.prevent="createAPIToken">
-            <div class="form-group">
-              <label class="required">Token name</label>
-              <input v-model="apiTokenNewName" placeholder="e.g. grafana-prod, zabbix-dr" maxlength="80" required />
-              <p class="text-muted" style="margin-top: 0.25rem; font-size: 0.85rem;">
-                Used only to identify the token in this list — does not affect the token value itself.
-              </p>
-            </div>
-            <button type="submit" class="btn btn-primary">Create</button>
-          </form>
-        </div>
+          <div v-if="apiTokenShowCreate" class="card">
+            <form @submit.prevent="createAPIToken">
+              <div class="form-group">
+                <label class="required">Token name</label>
+                <input v-model="apiTokenNewName" placeholder="e.g. grafana-prod, zabbix-dr" maxlength="80" required />
+                <p class="text-muted" style="margin-top: 0.25rem; font-size: 0.85rem;">
+                  Used only to identify the token in this list — does not affect the token value itself.
+                </p>
+              </div>
+              <button type="submit" class="btn btn-primary">Create</button>
+            </form>
+          </div>
+        </template>
 
         <div class="card">
           <table>
