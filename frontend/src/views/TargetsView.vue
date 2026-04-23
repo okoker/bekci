@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useRoute } from 'vue-router'
 import TargetEditModal from '../components/TargetEditModal.vue'
+import TagChipInput from '../components/TagChipInput.vue'
 import api from '../api'
 
 const auth = useAuthStore()
@@ -21,6 +22,9 @@ const showGuide = ref(false)
 const categoriesRaw = ref([])
 const projectsRaw = ref([])
 const locationsRaw = ref([])
+const tagOptions = ref([])
+const activeTags = ref([])
+const pinnedTags = ref([])
 const categories = computed(() => {
   const sorted = [...categoriesRaw.value].sort((a, b) => {
     if (a === 'Other') return 1
@@ -32,14 +36,16 @@ const categories = computed(() => {
 
 async function loadTagOptions() {
   try {
-    const [c, p, l] = await Promise.all([
+    const [c, p, l, t] = await Promise.all([
       api.get('/tags?group=category'),
       api.get('/tags?group=project'),
       api.get('/tags?group=location'),
+      api.get('/tags?group=tag'),
     ])
     categoriesRaw.value = c.data.map(x => x.value)
     projectsRaw.value = p.data.map(x => x.value)
     locationsRaw.value = l.data.map(x => x.value)
+    tagOptions.value = t.data
   } catch { /* ignore */ }
 }
 
@@ -56,6 +62,22 @@ const filteredTargets = computed(() => {
   if (activeCategory.value !== 'All') list = list.filter(t => t.category === activeCategory.value)
   if (activeProject.value !== 'All') list = list.filter(t => t.project === activeProject.value)
   if (activeLocation.value !== 'All') list = list.filter(t => t.location === activeLocation.value)
+  // AND-filter across active tag chips
+  if (activeTags.value.length > 0) {
+    list = list.filter(t => {
+      const tt = t.tags || []
+      return activeTags.value.every(tag => tt.includes(tag))
+    })
+  }
+  // Stable pin-to-promote: rows matching the most pinned tags float to top,
+  // rows with zero matches keep their original order.
+  if (pinnedTags.value.length > 0) {
+    const pins = pinnedTags.value
+    list = [...list]
+      .map((t, i) => ({ t, i, score: (t.tags || []).reduce((n, v) => n + (pins.includes(v) ? 1 : 0), 0) }))
+      .sort((a, b) => b.score - a.score || a.i - b.i)
+      .map(x => x.t)
+  }
   return list
 })
 
@@ -71,7 +93,7 @@ const totalPages = computed(() => {
   return Math.max(1, Math.ceil(filteredTargets.value.length / pageSize))
 })
 
-watch([activeCategory, activeProject, activeLocation], () => { currentPage.value = 1 })
+watch([activeCategory, activeProject, activeLocation, activeTags], () => { currentPage.value = 1 })
 
 function categoryCount(cat) {
   if (cat === 'All') return targets.value.length
@@ -314,6 +336,14 @@ onMounted(async () => {
       <select v-model="activeLocation" class="filter-select">
         <option v-for="l in locationValues" :key="l" :value="l">{{ l }}</option>
       </select>
+      <label class="filter-label">Tags:</label>
+      <TagChipInput
+        v-model="activeTags"
+        v-model:pinned="pinnedTags"
+        :options="tagOptions"
+        :allow-pin="true"
+        placeholder="Filter by tag…"
+      />
     </div>
 
     <!-- Targets table -->
@@ -328,6 +358,7 @@ onMounted(async () => {
             <th>Host</th>
             <th>State</th>
             <th>Category</th>
+            <th>Project / Location</th>
             <th>Tags</th>
             <th>Conditions</th>
             <th>Enabled</th>
@@ -355,6 +386,10 @@ onMounted(async () => {
                 <span v-if="t.location" class="badge badge-tag-location">{{ t.location }}</span>
                 <span v-if="!t.project && !t.location" class="text-muted">&mdash;</span>
               </td>
+              <td>
+                <span v-for="tag in (t.tags || [])" :key="tag" class="badge badge-tag-free">{{ tag }}</span>
+                <span v-if="!t.tags || t.tags.length === 0" class="text-muted">&mdash;</span>
+              </td>
               <td>{{ t.condition_count || 0 }}</td>
               <td>
                 <span :class="['badge', t.enabled ? 'badge-active' : 'badge-suspended']">{{ t.enabled ? 'yes' : 'no' }}</span>
@@ -373,7 +408,7 @@ onMounted(async () => {
             </tr>
             <!-- Expanded: checks list -->
             <tr v-if="expandedTargetId === t.id">
-              <td colspan="8" class="checks-panel">
+              <td colspan="9" class="checks-panel">
                 <div class="checks-header">
                   <strong>Checks</strong>
                 </div>
@@ -645,6 +680,11 @@ onMounted(async () => {
 .badge-tag-location {
   background: #fef3c7;
   color: #92400e;
+}
+.badge-tag-free {
+  background: #d1fae5;
+  color: #065f46;
+  margin-right: 0.25rem;
 }
 .filter-bar-secondary {
   display: flex;
