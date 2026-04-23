@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import api from '../api'
+import TagChipInput from './TagChipInput.vue'
 
 const props = defineProps({
   show: { type: Boolean, default: false },
@@ -16,6 +17,7 @@ const formError = ref('')
 const projectOptions = ref([])
 const locationOptions = ref([])
 const categoryOptions = ref([])
+const tagOptions = ref([])
 
 const checkTypes = [
   { value: 'http', label: 'HTTP/HTTPS' },
@@ -33,6 +35,7 @@ function getEmptyForm() {
     name: '', host: '', description: '', enabled: true,
     category: '', preferred_check_type: '',
     notes: '', contacts: '', project: '', location: '',
+    tags: [],
     conditions: []
   }
 }
@@ -167,14 +170,16 @@ async function loadAllUsers() {
 
 async function loadTagOptions() {
   try {
-    const [p, l, c] = await Promise.all([
+    const [p, l, c, t] = await Promise.all([
       api.get('/tags?group=project'),
       api.get('/tags?group=location'),
-      api.get('/tags?group=category')
+      api.get('/tags?group=category'),
+      api.get('/tags?group=tag')
     ])
     projectOptions.value = p.data
     locationOptions.value = l.data
     categoryOptions.value = c.data
+    tagOptions.value = t.data
   } catch { /* ignore */ }
 }
 
@@ -206,6 +211,7 @@ async function loadTargetDetail(id) {
       contacts: data.contacts || '',
       project: data.project || '',
       location: data.location || '',
+      tags: Array.isArray(data.tags) ? [...data.tags] : [],
       conditions: (data.conditions || []).map(c => {
         let cfg = {}
         try { cfg = JSON.parse(c.config) } catch { cfg = {} }
@@ -247,6 +253,7 @@ async function saveTarget() {
       contacts: form.value.contacts || null,
       project: form.value.project || null,
       location: form.value.location || null,
+      tags: form.value.tags || [],
       conditions: form.value.conditions.map(c => ({
         check_id: c.check_id || undefined,
         check_type: c.check_type,
@@ -368,6 +375,11 @@ watch(() => props.show, async (val) => {
               <option v-for="t in locationOptions" :key="t.id" :value="t.value">{{ t.value }}</option>
             </select>
           </div>
+        </div>
+
+        <div class="form-group form-group-wide">
+          <label>Tags</label>
+          <TagChipInput v-model="form.tags" :options="tagOptions" placeholder="Type to add (e.g. P1)" />
         </div>
 
         <div class="form-group checkbox-group">
