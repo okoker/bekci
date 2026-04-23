@@ -10,7 +10,10 @@ All request/response bodies are JSON (`Content-Type: application/json`) unless n
 
 ## Authentication
 
-Auth uses HttpOnly cookies (JWT). These APIs are consumed by the embedded Vue frontend — there is no API key or token-based auth for external clients. On successful login, the server sets a `token` cookie (HttpOnly, Secure, SameSite=Strict). All authenticated endpoints read the JWT from this cookie automatically — no `Authorization` header needed.
+Two authentication modes co-exist:
+
+- **Cookie JWT (default for the embedded Vue frontend and for `/api/*`).** On `POST /api/login`, the server sets a `token` cookie (HttpOnly, Secure, SameSite=Strict). All authenticated `/api/*` endpoints read the JWT from this cookie automatically — no `Authorization` header needed.
+- **Bearer API token (for `/api/v1/*` machine endpoints).** Admin-issued bearer tokens in the `Authorization: Bearer bk_…` header. Tokens are managed in Settings → Users → API Access. Plaintext is shown once at creation, never retrievable afterward. See [Machine API (v1)](#machine-api-v1) below.
 
 **Roles** (hierarchical for RBAC checks):
 - `admin` -- full access
@@ -1573,6 +1576,139 @@ Reads historical ban records from fail2ban's SQLite database (`/var/lib/fail2ban
 |-------|------|
 | Invalid jail name | 400 |
 | fail2ban DB not available | 503 |
+
+---
+
+## API Tokens (admin)
+
+Cookie-auth admin endpoints that mint and revoke bearer tokens consumed by `/api/v1/*` callers.
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET    | `/api/api-tokens`       | admin | List all tokens (active + revoked), metadata only |
+| POST   | `/api/api-tokens`       | admin | Mint a new token — **plaintext is returned ONCE** |
+| DELETE | `/api/api-tokens/{id}`  | admin | Revoke a token (soft delete, idempotent) |
+
+### GET /api/api-tokens
+
+**Response (200):**
+```json
+[
+  {
+    "id": "uuid",
+    "name": "grafana-prod",
+    "prefix": "bk_a1b2c3d4",
+    "created_by": "admin-user-uuid",
+    "created_at": "2026-04-24T09:00:00Z",
+    "last_used_at": "2026-04-24T09:12:45Z",
+    "revoked_at": null
+  }
+]
+```
+
+`prefix` is the first 11 characters of the plaintext (`"bk_"` + 8 hex); shown in the UI for identification. Hashed token values and plaintext are never returned here.
+
+### POST /api/api-tokens
+
+**Request:**
+```json
+{ "name": "grafana-prod" }
+```
+
+Name must be unique and 1–80 chars. Used only for identification in the admin UI.
+
+**Response (201):**
+```json
+{
+  "token": { /* same shape as a list row */ },
+  "plaintext": "bk_<64 hex chars>"
+}
+```
+
+**Plaintext only appears in this response.** The stored value is sha256-hashed; there is no way to retrieve it later. If the user loses it, they must issue a new token and revoke the old one.
+
+| Error | Code |
+|-------|------|
+| Missing/empty name | 400 |
+| Duplicate name | 409 |
+
+### DELETE /api/api-tokens/{id}
+
+Soft-delete: sets `revoked_at = now`. Re-revoking is a no-op. Authentication attempts with the plaintext are rejected immediately (401 with `WWW-Authenticate: Bearer error="invalid_token"`).
+
+**Response (200):** `{ "status": "ok" }`
+
+| Error | Code |
+|-------|------|
+| Token not found | 404 |
+
+---
+
+## Machine API (v1)
+
+Machine-facing endpoints for remote consumers (monitoring dashboards, runbook scripts, SIEM integrations). Separate URL namespace, separate auth model: `Authorization: Bearer bk_<...>` — no cookie session required.
+
+**Base:** `/api/v1/`. All endpoints in this namespace require a non-revoked bearer token from `/api/api-tokens` (admin-minted). Token-authenticated calls are logged at `slog` INFO with `token_name, path, client_ip`.
+
+**Design commitments:**
+- Versioned via URL. Breaking changes → `/api/v2/`; the `v1` surface stays stable.
+- Admin-managed credentials (no end-user login). Tokens are revocable immediately.
+- Response envelopes use arrays (`{"targets":[...]}`) even for single-match lookups so callers don't need conditional decode paths.
+
+### GET /api/v1/hosts
+
+Return a point-in-time snapshot of any target(s) whose `host` field matches the query param. Two targets can legitimately share a host value; in that case, the response array carries one element per target.
+
+**Query params:**
+
+| Param | Required | Notes |
+|-------|----------|-------|
+| `host` | Yes | Case-insensitive exact match against `targets.host`. No wildcards. |
+
+**Response (200):**
+```json
+{
+  "targets": [
+    {
+      "target_id": "uuid",
+      "name": "Web Server",
+      "host": "10.0.9.20",
+      "project": "DIAS",
+      "location": "DC-1",
+      "contacts": "ops@example.com",
+      "notes": "primary prod; owner alice",
+      "tags": ["IT", "P1"],
+      "last_check": {
+        "status": "up",
+        "check_type": "http",
+        "checked_at": "2026-04-24T09:12:45Z",
+        "message": "HTTP 200 (42ms)",
+        "response_ms": 42
+      }
+    }
+  ]
+}
+```
+
+**Field notes:**
+- `project`, `location`, `contacts`, `notes` are strings. Empty string when unset (never `null`).
+- `tags` is always an array (empty `[]` when unset).
+- `last_check` reports the target's **preferred check** (its `preferred_check_type`), falling back to the first check when the preferred type isn't configured. If no check has ever run, `status: "none"` with just the `check_type` carried.
+- `last_check.status` ∈ `"up" | "down" | "none"`. `"none"` is distinct from `"down"` — it means "never observed" rather than "failed".
+
+**Empty result:** unknown host returns `200` with `{"targets": []}` — not 404. Keeps the client code path uniform.
+
+**Examples:**
+```
+curl -H "Authorization: Bearer bk_<token>" \
+  "http://bekci.internal:65000/api/v1/hosts?host=10.0.9.20"
+```
+
+| Error | Code |
+|-------|------|
+| Missing `host` param | 400 |
+| Missing or malformed `Authorization: Bearer` | 401 (+ `WWW-Authenticate: Bearer realm="bekci-api"`) |
+| Invalid or revoked token | 401 (+ `WWW-Authenticate: Bearer error="invalid_token"`) |
 
 ---
 

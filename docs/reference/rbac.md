@@ -77,6 +77,7 @@ Request
 | `opAuth` | `requireAuth` -> `requireRole("admin", "operator")` | admin, operator |
 | `adminAuth` | `requireAuth` -> `requireRole("admin")` | admin |
 | `socAuth` | Conditional: if `soc_public` setting is `"true"`, skip auth entirely; otherwise fall through to `requireAuth` | See SOC section |
+| `requireAPIToken` | `Authorization: Bearer` against `api_tokens` table | Machine consumers (no role; token-scoped read) |
 
 ## Permission Matrix
 
@@ -198,6 +199,22 @@ Request
 | Endpoint | Method | Auth | Admin | Operator | Viewer | Notes |
 |----------|--------|------|-------|----------|--------|-------|
 | `/api/audit-log` | GET | opAuth | Y | Y | N | View audit log entries |
+
+### API Tokens (cookie-auth admin lifecycle)
+
+| Endpoint | Method | Auth | Admin | Operator | Viewer | Notes |
+|----------|--------|------|-------|----------|--------|-------|
+| `/api/api-tokens` | GET | adminAuth | Y | N | N | List all tokens (metadata only) |
+| `/api/api-tokens` | POST | adminAuth | Y | N | N | Mint new token — plaintext returned once |
+| `/api/api-tokens/{id}` | DELETE | adminAuth | Y | N | N | Soft-revoke a token |
+
+### Machine API v1 (bearer-auth)
+
+All `/api/v1/*` endpoints require `Authorization: Bearer bk_…`; cookie JWT is NOT accepted here. No role concept — presence of a non-revoked token is the sole authorization.
+
+| Endpoint | Method | Auth | Notes |
+|----------|--------|------|-------|
+| `/api/v1/hosts` | GET | requireAPIToken | Query targets by `?host=` — snapshot with last-check + tags + notes/contacts |
 
 ## Rate Limiting
 

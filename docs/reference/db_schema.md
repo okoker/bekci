@@ -150,6 +150,27 @@ Admin-managed list of allowed tag values. Four groups: `project`, `location`, `c
 - For `tag`: values are uppercased + trimmed on create/rename (handler-side); deletion relies on the DDL-level FK cascade on `target_tags.tag_id` — no app-level sweep. Renames are free (no sweep) because targets reference tags by id via the join table.
 - SLA key derivation: `"sla_" + lowercase(replace(name, " ", "_"))` — e.g. "Physical Security" → `sla_physical_security`.
 
+### api_tokens
+
+*(migration026)*
+
+Bearer tokens used by remote machine consumers on `/api/v1/*`. Plaintext is never persisted — only the sha256 hex digest. A short, human-visible prefix (`bk_<8 hex>`) is kept so admins can identify a token in the UI after creation.
+
+| Column       | Type     | Constraints                                           |
+|--------------|----------|-------------------------------------------------------|
+| id           | TEXT     | **PK** (UUID)                                        |
+| name         | TEXT     | NOT NULL, UNIQUE — admin-facing label                |
+| token_hash   | TEXT     | NOT NULL, UNIQUE — sha256 hex of the plaintext       |
+| prefix       | TEXT     | NOT NULL — first 11 chars of plaintext (`bk_<8hex>`) |
+| created_by   | TEXT     | NOT NULL — admin user id that minted the token       |
+| created_at   | DATETIME | NOT NULL DEFAULT CURRENT_TIMESTAMP                   |
+| last_used_at | DATETIME | DEFAULT NULL — touched on successful auth            |
+| revoked_at   | DATETIME | DEFAULT NULL — soft delete                           |
+
+**Partial index:** `idx_api_tokens_hash ON api_tokens(token_hash) WHERE revoked_at IS NULL` — keeps the hot auth lookup O(1) even as revoked rows accumulate.
+
+**Lifecycle:** plaintext generated via `crypto/rand` (256 bits), returned once from `POST /api/api-tokens`, sha256-hashed + persisted. On every `Authorization: Bearer` arrival, the middleware hashes and looks up the row; `revoked_at IS NOT NULL` → reject 401. `last_used_at` is updated best-effort.
+
 ### target_tags
 
 *(migration025)*
@@ -392,6 +413,8 @@ Append-only audit trail. Purged by `PurgeOldAuditEntries(days)` (runs at startup
 > **migration023 (19/03/2026):** Recreates `tag_options` table with CHECK constraint expanded to include `'category'`. Seeds 5 default categories (Key Services, Network, Other, Physical Security, Security). SQLite doesn't support ALTER CHECK, so uses create-new/copy/drop/rename pattern.
 
 > **migration025 (23/04/2026):** Adds `'tag'` to the `tag_options.grp` CHECK (same create-new/copy/drop/rename pattern). Creates `target_tags` join table with PK `(target_id, tag_id)` and index on `tag_id`. Both FKs use `ON DELETE CASCADE` so the join table self-maintains when either side is removed.
+
+> **migration026 (24/04/2026):** Adds `api_tokens` table for bearer-token auth on `/api/v1/*`. Tokens stored as sha256 hashes; plaintext is returned only from `POST /api/api-tokens` and never persisted. Partial index on `token_hash` filtered by `revoked_at IS NULL` to keep the hot auth path fast.
 >
 > **migration024 (19/03/2026):** Seeds `signal_skip_tls` setting (default `'false'`). Part of C-1 fix — Signal TLS verification now configurable (was hardcoded `InsecureSkipVerify: true`).
 
@@ -424,6 +447,7 @@ The table below is retained as historical context for how the schema evolved:
 | 023 | Recreate `tag_options` with `category` added to CHECK. Seed 5 default categories. |
 | 024 | Seed `signal_skip_tls` setting. |
 | 025 | Recreate `tag_options` with `tag` added to CHECK. Create `target_tags` join table for many-to-many free-form labels. |
+| 026 | Add `api_tokens` table for bearer-token auth on `/api/v1/*`. sha256-hashed storage, partial index on active hashes. |
 
 ---
 
