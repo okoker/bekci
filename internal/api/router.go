@@ -150,8 +150,9 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/targets/{id}/recipients", opAuth(s.handleListRecipients))
 	mux.Handle("PUT /api/targets/{id}/recipients", opAuth(s.handleSetRecipients))
 
-	// Tags
-	mux.Handle("GET /api/tags", anyAuth(s.handleListTags))
+	// Tags — read uses socAuth so anonymous users can see category/project/location
+	// labels when soc_public is enabled (SocView filter dropdowns). Writes stay admin-only.
+	mux.Handle("GET /api/tags", s.socAuth(http.HandlerFunc(s.handleListTags)))
 	mux.Handle("POST /api/tags", adminAuth(s.handleCreateTag))
 	mux.Handle("DELETE /api/tags/{id}", adminAuth(s.handleDeleteTag))
 	mux.Handle("PUT /api/tags/{id}", adminAuth(s.handleRenameTag))

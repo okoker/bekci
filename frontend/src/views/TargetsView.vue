@@ -19,6 +19,8 @@ const activeProject = ref('All')
 const activeLocation = ref('All')
 const showGuide = ref(false)
 const categoriesRaw = ref([])
+const projectsRaw = ref([])
+const locationsRaw = ref([])
 const categories = computed(() => {
   const sorted = [...categoriesRaw.value].sort((a, b) => {
     if (a === 'Other') return 1
@@ -28,10 +30,16 @@ const categories = computed(() => {
   return ['All', ...sorted]
 })
 
-async function loadCategories() {
+async function loadTagOptions() {
   try {
-    const { data } = await api.get('/tags?group=category')
-    categoriesRaw.value = data.map(c => c.value)
+    const [c, p, l] = await Promise.all([
+      api.get('/tags?group=category'),
+      api.get('/tags?group=project'),
+      api.get('/tags?group=location'),
+    ])
+    categoriesRaw.value = c.data.map(x => x.value)
+    projectsRaw.value = p.data.map(x => x.value)
+    locationsRaw.value = l.data.map(x => x.value)
   } catch { /* ignore */ }
 }
 
@@ -40,14 +48,8 @@ const showForm = ref(false)
 const editingTargetId = ref(null)
 const cloneSourceId = ref(null)
 
-const projectValues = computed(() => {
-  const vals = new Set(targets.value.map(t => t.project).filter(Boolean))
-  return ['All', ...Array.from(vals).sort()]
-})
-const locationValues = computed(() => {
-  const vals = new Set(targets.value.map(t => t.location).filter(Boolean))
-  return ['All', ...Array.from(vals).sort()]
-})
+const projectValues = computed(() => ['All', ...[...projectsRaw.value].sort()])
+const locationValues = computed(() => ['All', ...[...locationsRaw.value].sort()])
 
 const filteredTargets = computed(() => {
   let list = targets.value
@@ -274,7 +276,7 @@ function categoryClass(cat) {
 }
 
 onMounted(async () => {
-  loadCategories()
+  loadTagOptions()
   await loadTargets()
   const editId = route.query.edit
   if (editId) {
