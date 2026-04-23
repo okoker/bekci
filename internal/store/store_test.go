@@ -444,6 +444,57 @@ func TestFreeFormTags_RoundTrip(t *testing.T) {
 	}
 }
 
+func TestAPIToken_RoundTrip(t *testing.T) {
+	s := newTestStore(t)
+
+	tok, plaintext, err := s.CreateAPIToken("grafana-prod", "admin")
+	if err != nil {
+		t.Fatalf("CreateAPIToken: %v", err)
+	}
+	if plaintext == "" || tok.ID == "" || tok.Prefix == "" {
+		t.Fatalf("empty fields on created token: %+v", tok)
+	}
+
+	// Authenticate with the plaintext.
+	got, err := s.AuthenticateAPIToken(plaintext)
+	if err != nil || got == nil {
+		t.Fatalf("AuthenticateAPIToken returned nil; err=%v", err)
+	}
+	if got.ID != tok.ID || got.Name != "grafana-prod" {
+		t.Fatalf("round-trip mismatch: %+v", got)
+	}
+
+	// Garbage token must not authenticate.
+	if got, _ := s.AuthenticateAPIToken("bk_deadbeef"); got != nil {
+		t.Fatalf("expected bogus token to fail auth")
+	}
+	if got, _ := s.AuthenticateAPIToken("not-a-bekci-token"); got != nil {
+		t.Fatalf("expected non-prefixed token to fail auth")
+	}
+
+	// Duplicate name rejected.
+	if _, _, err := s.CreateAPIToken("grafana-prod", "admin"); err == nil {
+		t.Fatalf("expected duplicate name to fail")
+	}
+
+	// Revoke → further auth rejected.
+	if err := s.RevokeAPIToken(tok.ID); err != nil {
+		t.Fatalf("RevokeAPIToken: %v", err)
+	}
+	if got, _ := s.AuthenticateAPIToken(plaintext); got != nil {
+		t.Fatalf("expected revoked token to fail auth")
+	}
+
+	// List contains one revoked row.
+	list, err := s.ListAPITokens()
+	if err != nil {
+		t.Fatalf("ListAPITokens: %v", err)
+	}
+	if len(list) != 1 || list[0].RevokedAt == nil {
+		t.Fatalf("expected 1 revoked token, got %+v", list)
+	}
+}
+
 func equalStrings(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
@@ -1060,8 +1111,8 @@ func TestMigration017_CompositeIndex(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if version != 25 {
-		t.Fatalf("schema_version = %d, want 25", version)
+	if version != 26 {
+		t.Fatalf("schema_version = %d, want 26", version)
 	}
 
 	// Verify index exists
@@ -1430,8 +1481,8 @@ func TestBaselineSchemaCompleteness(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v != 25 {
-		t.Fatalf("schema version = %d, want 25", v)
+	if v != 26 {
+		t.Fatalf("schema version = %d, want 26", v)
 	}
 
 	// Verify all expected tables exist
@@ -1439,8 +1490,8 @@ func TestBaselineSchemaCompleteness(t *testing.T) {
 		"users", "sessions", "settings", "targets", "checks",
 		"check_results", "rules", "rule_conditions", "rule_states",
 		"alert_history", "audit_logs", "target_alert_recipients",
-		"target_pause_history", "tag_options", "target_tags", "check_state",
-		"check_daily_rollups", "schema_version",
+		"target_pause_history", "tag_options", "target_tags", "api_tokens",
+		"check_state", "check_daily_rollups", "schema_version",
 	}
 	for _, table := range expectedTables {
 		var n int

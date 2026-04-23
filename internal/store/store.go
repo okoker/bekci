@@ -43,8 +43,8 @@ func (s *Store) Close() error {
 
 const schemaVersion = 22
 
-// baselineSchema is the complete DDL for a fresh install at schema version 25.
-// It is equivalent to running migration001 through migration025 on an empty database.
+// baselineSchema is the complete DDL for a fresh install at schema version 26.
+// It is equivalent to running migration001 through migration026 on an empty database.
 const baselineSchema = `
 CREATE TABLE users (
 	id            TEXT PRIMARY KEY,
@@ -239,8 +239,20 @@ CREATE TABLE target_tags (
 );
 CREATE INDEX idx_target_tags_tag ON target_tags(tag_id);
 
+CREATE TABLE api_tokens (
+	id           TEXT PRIMARY KEY,
+	name         TEXT UNIQUE NOT NULL,
+	token_hash   TEXT UNIQUE NOT NULL,
+	prefix       TEXT NOT NULL,
+	created_by   TEXT NOT NULL,
+	created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	last_used_at DATETIME DEFAULT NULL,
+	revoked_at   DATETIME DEFAULT NULL
+);
+CREATE INDEX idx_api_tokens_hash ON api_tokens(token_hash) WHERE revoked_at IS NULL;
+
 CREATE TABLE schema_version (version INTEGER NOT NULL);
-INSERT INTO schema_version (version) VALUES (25);
+INSERT INTO schema_version (version) VALUES (26);
 
 INSERT INTO tag_options (grp, value) VALUES ('category', 'Key Services');
 INSERT INTO tag_options (grp, value) VALUES ('category', 'Network');
@@ -321,6 +333,7 @@ func (s *Store) migrate() error {
 		s.migration023,
 		s.migration024,
 		s.migration025,
+		s.migration026,
 	}
 
 	for i := current - schemaVersion; i < len(migrations); i++ {
@@ -366,6 +379,30 @@ func (s *Store) migration023() error {
 func (s *Store) migration024() error {
 	_, err := s.db.Exec(`INSERT OR IGNORE INTO settings (key, value) VALUES ('signal_skip_tls', 'false')`)
 	return err
+}
+
+// migration026 introduces the api_tokens table used by the bearer-token
+// middleware on /api/v1/* machine endpoints. Tokens are stored as sha256
+// hashes only; a short prefix is kept plaintext so the admin UI can
+// identify a token after creation.
+func (s *Store) migration026() error {
+	_, err := s.db.Exec(`
+		CREATE TABLE api_tokens (
+			id           TEXT PRIMARY KEY,
+			name         TEXT UNIQUE NOT NULL,
+			token_hash   TEXT UNIQUE NOT NULL,
+			prefix       TEXT NOT NULL,
+			created_by   TEXT NOT NULL,
+			created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			last_used_at DATETIME DEFAULT NULL,
+			revoked_at   DATETIME DEFAULT NULL
+		);
+		CREATE INDEX idx_api_tokens_hash ON api_tokens(token_hash) WHERE revoked_at IS NULL;
+	`)
+	if err != nil {
+		return fmt.Errorf("migration026: %w", err)
+	}
+	return nil
 }
 
 // migration025 adds a fourth 'tag' group to tag_options and introduces a

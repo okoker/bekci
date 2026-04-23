@@ -14,8 +14,9 @@ import (
 type contextKey string
 
 const (
-	ctxClaims  contextKey = "claims"
-	ctxUserRef contextKey = "userRef"
+	ctxClaims       contextKey = "claims"
+	ctxUserRef      contextKey = "userRef"
+	ctxAPITokenName contextKey = "apiTokenName"
 )
 
 // userRef is a mutable holder so outer middleware (logging) can read user info
@@ -85,6 +86,29 @@ func requireRole(roles ...string) func(http.Handler) http.Handler {
 			writeError(w, http.StatusForbidden, "insufficient permissions")
 		})
 	}
+}
+
+// requireAPIToken validates an `Authorization: Bearer bk_…` header against
+// the api_tokens table and attaches the token record to the request
+// context. Used on /api/v1/* endpoints intended for machine consumers.
+func (s *Server) requireAPIToken(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := r.Header.Get("Authorization")
+		if !strings.HasPrefix(h, "Bearer ") {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="bekci-api"`)
+			writeError(w, http.StatusUnauthorized, "bearer token required")
+			return
+		}
+		plaintext := strings.TrimSpace(strings.TrimPrefix(h, "Bearer "))
+		tok, err := s.store.AuthenticateAPIToken(plaintext)
+		if err != nil || tok == nil {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="bekci-api", error="invalid_token"`)
+			writeError(w, http.StatusUnauthorized, "invalid or revoked token")
+			return
+		}
+		ctx := context.WithValue(r.Context(), ctxAPITokenName, tok.Name)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
 }
 
 // socAuth conditionally requires auth based on the soc_public setting.
