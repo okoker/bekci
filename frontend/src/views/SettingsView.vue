@@ -1588,8 +1588,8 @@ onUnmounted(() => {
             </tr>
             <tr>
               <td>View settings</td>
-              <td class="perm-yes">Yes</td>
-              <td class="perm-yes">Yes</td>
+              <td class="perm-no">No</td>
+              <td class="perm-no">No</td>
               <td class="perm-yes">Yes</td>
             </tr>
             <tr>
@@ -1630,6 +1630,12 @@ onUnmounted(() => {
             </tr>
             <tr>
               <td>Backup &amp; restore</td>
+              <td class="perm-no">No</td>
+              <td class="perm-no">No</td>
+              <td class="perm-yes">Yes</td>
+            </tr>
+            <tr>
+              <td>Manage API tokens (create/revoke)</td>
               <td class="perm-no">No</td>
               <td class="perm-no">No</td>
               <td class="perm-yes">Yes</td>
