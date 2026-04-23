@@ -369,6 +369,74 @@ const userForm = ref({ username: '', email: '', password: '', role: 'operator' }
 const resetPwForm = ref({ password: '' })
 const editUserForm = ref({ email: '', phone: '', role: '' })
 
+// ── Users > sub-tabs (humans / api-access) ──
+const usersSubTab = ref('humans')
+
+// ── API tokens state ──
+const apiTokens = ref([])
+const apiTokenError = ref('')
+const apiTokenSuccess = ref('')
+const apiTokenShowCreate = ref(false)
+const apiTokenNewName = ref('')
+// Plaintext surfaces here ONCE right after creation — cleared on dismiss.
+const apiTokenJustCreated = ref(null)
+
+async function loadAPITokens() {
+  apiTokenError.value = ''
+  try {
+    const { data } = await api.get('/api-tokens')
+    apiTokens.value = data
+  } catch (e) {
+    apiTokenError.value = e.response?.data?.error || 'Failed to load API tokens'
+  }
+}
+
+async function createAPIToken() {
+  apiTokenError.value = ''
+  const name = apiTokenNewName.value.trim()
+  if (!name) return
+  try {
+    const { data } = await api.post('/api-tokens', { name })
+    apiTokenJustCreated.value = { name, plaintext: data.plaintext, prefix: data.token?.prefix }
+    apiTokenNewName.value = ''
+    apiTokenShowCreate.value = false
+    await loadAPITokens()
+  } catch (e) {
+    apiTokenError.value = e.response?.data?.error || 'Failed to create token'
+  }
+}
+
+async function revokeAPIToken(id, name) {
+  if (!confirm(`Revoke token "${name}"? This cannot be undone and any system using it will stop working immediately.`)) return
+  try {
+    await api.delete(`/api-tokens/${id}`)
+    apiTokenSuccess.value = `Token "${name}" revoked`
+    await loadAPITokens()
+  } catch (e) {
+    apiTokenError.value = e.response?.data?.error || 'Failed to revoke token'
+  }
+}
+
+async function copyTokenToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text)
+    apiTokenSuccess.value = 'Token copied to clipboard'
+  } catch {
+    apiTokenSuccess.value = 'Copy failed — select and copy manually'
+  }
+}
+
+function dismissJustCreatedToken() {
+  apiTokenJustCreated.value = null
+}
+
+function fmtDateTime(s) {
+  if (!s) return '—'
+  const d = new Date(s)
+  if (isNaN(d.getTime())) return s
+  return d.toLocaleDateString('en-GB') + ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+}
+
 async function loadUsers() {
   try {
     const { data } = await api.get('/users')
@@ -1026,6 +1094,7 @@ watch(activeTab, (tab) => {
   }
   if (tab === 'users') {
     loadUsers()
+    if (usersSubTab.value === 'api-access') loadAPITokens()
   }
   if (tab === 'alerting') {
     loadAlertSettings()
@@ -1051,6 +1120,11 @@ onMounted(async () => {
   // Trigger initial data load for routed tabs
   if (activeTab.value === 'users') loadUsers()
   if (activeTab.value === 'audit') { auditPage.value = 1; loadAuditLog(); nextTick(() => auditSearchInput.value?.focus()) }
+})
+
+// Load token list when switching to the API Access sub-tab.
+watch(usersSubTab, (v) => {
+  if (v === 'api-access') loadAPITokens()
 })
 
 onUnmounted(() => {
@@ -1347,6 +1421,20 @@ onUnmounted(() => {
 
     <!-- ── Users Tab ── -->
     <div v-if="activeTab === 'users' && auth.isAdmin">
+      <div class="tabs users-subtabs">
+        <button
+          class="tab-btn"
+          :class="{ active: usersSubTab === 'humans' }"
+          @click="usersSubTab = 'humans'"
+        >Humans</button>
+        <button
+          class="tab-btn"
+          :class="{ active: usersSubTab === 'api-access' }"
+          @click="usersSubTab = 'api-access'"
+        >API Access</button>
+      </div>
+
+      <div v-if="usersSubTab === 'humans'">
       <div class="users-header">
         <button class="btn btn-primary" @click="userShowCreate = !userShowCreate">
           {{ userShowCreate ? 'Cancel' : 'Create User' }}
@@ -1546,6 +1634,84 @@ onUnmounted(() => {
             </tr>
           </tbody>
         </table>
+      </div>
+      </div> <!-- /humans sub-tab -->
+
+      <!-- ── API Access sub-tab ── -->
+      <div v-if="usersSubTab === 'api-access'">
+        <p class="text-muted" style="margin: 0 0 0.75rem;">
+          Bearer tokens for remote machine consumers of <code>/api/v1/*</code>. Created tokens are shown once — copy immediately, then store securely. Revocation is instant.
+        </p>
+
+        <div v-if="apiTokenError" class="error-msg">{{ apiTokenError }}</div>
+        <div v-if="apiTokenSuccess" class="success-msg" @click="apiTokenSuccess = ''">{{ apiTokenSuccess }}</div>
+
+        <!-- Plaintext display for the just-created token -->
+        <div v-if="apiTokenJustCreated" class="card token-reveal">
+          <h3 style="margin: 0 0 0.5rem;">New token — copy now</h3>
+          <p class="text-muted" style="margin: 0 0 0.5rem;">
+            This is the only time the plaintext value for <strong>{{ apiTokenJustCreated.name }}</strong> will be shown. Store it immediately in your consumer's config (Grafana, Zabbix, script, etc.).
+          </p>
+          <div class="token-plaintext-row">
+            <code class="token-plaintext">{{ apiTokenJustCreated.plaintext }}</code>
+            <button class="btn btn-sm btn-primary" @click="copyTokenToClipboard(apiTokenJustCreated.plaintext)">Copy</button>
+          </div>
+          <div style="margin-top: 0.5rem;">
+            <button class="btn btn-sm" @click="dismissJustCreatedToken">I've saved it — dismiss</button>
+          </div>
+        </div>
+
+        <div class="users-header">
+          <button class="btn btn-primary" @click="apiTokenShowCreate = !apiTokenShowCreate">
+            {{ apiTokenShowCreate ? 'Cancel' : 'Create Token' }}
+          </button>
+        </div>
+
+        <div v-if="apiTokenShowCreate" class="card">
+          <form @submit.prevent="createAPIToken">
+            <div class="form-group">
+              <label class="required">Token name</label>
+              <input v-model="apiTokenNewName" placeholder="e.g. grafana-prod, zabbix-dr" maxlength="80" required />
+              <p class="text-muted" style="margin-top: 0.25rem; font-size: 0.85rem;">
+                Used only to identify the token in this list — does not affect the token value itself.
+              </p>
+            </div>
+            <button type="submit" class="btn btn-primary">Create</button>
+          </form>
+        </div>
+
+        <div class="card">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Prefix</th>
+                <th>Created</th>
+                <th>Last used</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="t in apiTokens" :key="t.id" :class="{ 'row-disabled': t.revoked_at }">
+                <td>{{ t.name }}</td>
+                <td><code>{{ t.prefix }}…</code></td>
+                <td>{{ fmtDateTime(t.created_at) }}</td>
+                <td>{{ fmtDateTime(t.last_used_at) }}</td>
+                <td>
+                  <span v-if="t.revoked_at" class="badge badge-suspended">Revoked {{ fmtDateTime(t.revoked_at) }}</span>
+                  <span v-else class="badge badge-active">Active</span>
+                </td>
+                <td class="actions">
+                  <button v-if="!t.revoked_at" class="btn btn-sm btn-danger" @click="revokeAPIToken(t.id, t.name)">Revoke</button>
+                </td>
+              </tr>
+              <tr v-if="apiTokens.length === 0">
+                <td colspan="6" class="text-muted" style="padding: 1rem; text-align: center;">No API tokens yet. Create one to give a remote consumer read access to <code>/api/v1/*</code>.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -2712,6 +2878,30 @@ table.sla-info-table td:not(:first-child) {
 /* ── Users tab ── */
 .users-header {
   margin-bottom: 0.75rem;
+}
+.users-subtabs {
+  margin-bottom: 1rem;
+}
+.token-reveal {
+  border-left: 4px solid #4f46e5;
+  background: #eef2ff;
+}
+.token-plaintext-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.token-plaintext {
+  flex: 1;
+  background: #fff;
+  border: 1px solid #c7d2fe;
+  border-radius: 4px;
+  padding: 0.5rem 0.75rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+  word-break: break-all;
+  user-select: all;
 }
 .privileges-bar {
   display: flex;
