@@ -297,6 +297,7 @@ Returns summary list (no full conditions, includes condition count and state).
     "contacts": "ops@example.com",
     "project": "DIAS",
     "location": "DC-1",
+    "tags": ["DEVOPS", "IT", "P1"],
     "created_at": "2026-01-15T10:00:00Z",
     "updated_at": "2026-01-15T10:00:00Z",
     "condition_count": 2,  // number of checks for this target
@@ -310,7 +311,7 @@ Returns summary list (no full conditions, includes condition count and state).
 ]
 ```
 
-**Notes:** `state` is `null` for targets with no rule (no conditions). `state.last_change` and `state.last_evaluated` are `null` until the first evaluation. `notes`, `contacts`, `project`, `location` are `null` when not set.
+**Notes:** `state` is `null` for targets with no rule (no conditions). `state.last_change` and `state.last_evaluated` are `null` until the first evaluation. `notes`, `contacts`, `project`, `location` are `null` when not set. `tags` is an (often empty) array of uppercase free-form labels from `tag_options` where `grp='tag'`, hydrated via `target_tags`.
 
 ### POST /api/targets
 
@@ -330,6 +331,7 @@ Creates target, checks, rule, and rule conditions in one transaction. Creator is
   "contacts": "string (optional)",
   "project": "string (optional, must exist in tag_options)",
   "location": "string (optional, must exist in tag_options)",
+  "tags": ["string (optional, each must exist in tag_options where grp='tag'; uppercased on the server before lookup; unknown → 400)"],
   "conditions": [
     {
       "check_type": "http | tcp | ping | dns | page_hash | tls_cert | snmp_v2c | snmp_v3 (required)",
@@ -371,6 +373,7 @@ If `group_operator` is omitted, it defaults to the top-level `operator` value fo
 | Invalid group_operator | 400 |
 | Invalid project tag | 400 |
 | Invalid location tag | 400 |
+| Unknown tag (`tags[]`) | 400 |
 | Duplicate target name | 409 |
 
 ### GET /api/targets/{id}
@@ -393,6 +396,7 @@ Returns full target detail with conditions, state, and recipient IDs.
   "contacts": "ops@example.com",
   "project": "DIAS",
   "location": "DC-1",
+  "tags": ["DEVOPS", "IT", "P1"],
   "created_at": "2026-01-15T10:00:00Z",
   "updated_at": "2026-01-15T10:00:00Z",
   "conditions": [
@@ -516,7 +520,7 @@ Unpauses the target and immediately triggers RunNow on all its checks.
 
 | Param | Required | Values |
 |-------|----------|--------|
-| `group` | Yes | `project`, `location`, or `category` |
+| `group` | Yes | `project`, `location`, `category`, or `tag` |
 
 **Response (200):**
 ```json
@@ -535,7 +539,7 @@ Unpauses the target and immediately triggers RunNow on all its checks.
 **Request:**
 ```json
 {
-  "group": "project | location | category",
+  "group": "project | location | category | tag",
   "value": "string (required)"
 }
 ```
@@ -545,6 +549,10 @@ Unpauses the target and immediately triggers RunNow on all its checks.
 { "id": 3, "group": "location", "value": "DC-1" }
 ```
 
+**Notes:**
+- For `group: "tag"`, the server uppercases + trims `value` before insert (e.g. ` p1 ` → `P1`). The response shows the canonical form.
+- `(group, value)` must be unique.
+
 | Error | Code |
 |-------|------|
 | Missing/invalid group | 400 |
@@ -553,7 +561,7 @@ Unpauses the target and immediately triggers RunNow on all its checks.
 
 ### PUT /api/tags/{id}
 
-Renames a tag option. For categories: cascades to `targets.category` and renames the SLA settings key. "Other" category cannot be renamed.
+Renames a tag option. For categories: cascades to `targets.category` and renames the SLA settings key. "Other" category cannot be renamed. For `tag` group: value is uppercased before save; no cascade needed (targets reference tags by id via `target_tags`).
 
 **Request:**
 ```json
@@ -576,6 +584,7 @@ Renames a tag option. For categories: cascades to `targets.category` and renames
 
 For project/location: deletes the tag and sets the field to NULL on all targets using it.
 For category: blocked if any targets use this category. "Other" cannot be deleted.
+For `tag`: deletes the catalog row; DDL-level `ON DELETE CASCADE` on `target_tags` automatically removes the tag from every target that used it.
 
 **Response (200):**
 ```json

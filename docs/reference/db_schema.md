@@ -129,15 +129,15 @@ Key-value config store.
 
 ### tag_options
 
-*(migration019, updated migration023)*
+*(migration019, updated migration023, updated migration025)*
 
-Admin-managed list of allowed tag values for project, location, and category fields on targets.
+Admin-managed list of allowed tag values. Four groups: `project`, `location`, `category` (single-value slots on `targets`), and `tag` (many-per-target via the `target_tags` join).
 
-| Column | Type    | Constraints                                                  |
-|--------|---------|--------------------------------------------------------------|
-| id     | INTEGER | **PK** AUTOINCREMENT                                        |
-| grp    | TEXT    | NOT NULL, CHECK(grp IN ('project', 'location', 'category')) |
-| value  | TEXT    | NOT NULL                                                     |
+| Column | Type    | Constraints                                                         |
+|--------|---------|---------------------------------------------------------------------|
+| id     | INTEGER | **PK** AUTOINCREMENT                                               |
+| grp    | TEXT    | NOT NULL, CHECK(grp IN ('project', 'location', 'category', 'tag')) |
+| value  | TEXT    | NOT NULL                                                            |
 
 **Unique:** (grp, value) composite
 
@@ -147,7 +147,26 @@ Admin-managed list of allowed tag values for project, location, and category fie
 - Column named `grp` (not `group`) to avoid SQL reserved word.
 - For project/location: deleting a tag option cascade-clears the corresponding field on all targets (app-level, not DDL cascade).
 - For category: delete is blocked if any targets use that category (returns 409 with target names). Rename cascades to `targets.category` and renames the corresponding `sla_*` settings key. "Other" cannot be renamed or deleted.
+- For `tag`: values are uppercased + trimmed on create/rename (handler-side); deletion relies on the DDL-level FK cascade on `target_tags.tag_id` — no app-level sweep. Renames are free (no sweep) because targets reference tags by id via the join table.
 - SLA key derivation: `"sla_" + lowercase(replace(name, " ", "_"))` — e.g. "Physical Security" → `sla_physical_security`.
+
+### target_tags
+
+*(migration025)*
+
+Join table for many-to-many free-form tags per target. Each row links one target to one `tag_options` row where `grp='tag'`.
+
+| Column    | Type    | Constraints                                                    |
+|-----------|---------|----------------------------------------------------------------|
+| target_id | TEXT    | NOT NULL, FK → targets(id) **ON DELETE CASCADE**              |
+| tag_id    | INTEGER | NOT NULL, FK → tag_options(id) **ON DELETE CASCADE**          |
+
+**Primary key:** (target_id, tag_id) — prevents duplicate links.
+**Index:** `idx_target_tags_tag` on (tag_id) — supports "list all hosts with tag X" queries.
+
+**Notes:**
+- DDL-level `ON DELETE CASCADE` on both FKs means target deletion and catalog-tag deletion both auto-clean this table.
+- Tags are fetched via bulk join in one query (`AttachTagsBulk` in `internal/store/targets.go`) for list views, avoiding N+1.
 
 ### checks
 
@@ -371,6 +390,8 @@ Append-only audit trail. Purged by `PurgeOldAuditEntries(days)` (runs at startup
 > **A-042 (18/03/2026):** All 22 migration functions were collapsed into a single `baselineSchema` constant in `store.go`. Fresh installs run the baseline SQL and stamp schema version 24. Existing installs at v22 run migration023+024. The individual migration functions no longer exist in code — git history preserves them. Databases below v22 cannot auto-upgrade (the old migration code is removed).
 >
 > **migration023 (19/03/2026):** Recreates `tag_options` table with CHECK constraint expanded to include `'category'`. Seeds 5 default categories (Key Services, Network, Other, Physical Security, Security). SQLite doesn't support ALTER CHECK, so uses create-new/copy/drop/rename pattern.
+
+> **migration025 (23/04/2026):** Adds `'tag'` to the `tag_options.grp` CHECK (same create-new/copy/drop/rename pattern). Creates `target_tags` join table with PK `(target_id, tag_id)` and index on `tag_id`. Both FKs use `ON DELETE CASCADE` so the join table self-maintains when either side is removed.
 >
 > **migration024 (19/03/2026):** Seeds `signal_skip_tls` setting (default `'false'`). Part of C-1 fix — Signal TLS verification now configurable (was hardcoded `InsecureSkipVerify: true`).
 
@@ -400,6 +421,9 @@ The table below is retained as historical context for how the schema evolved:
 | 020 | Create `check_state` and `check_daily_rollups` tables. Backfill from existing `check_results`. Purge raw results older than 3 days. |
 | 021 | Add 3 performance indexes: `idx_rule_conditions_check_id`, `idx_rule_conditions_rule_id`, `idx_targets_rule_id`. |
 | 022 | Update `history_days` seed from 90 to 3 for raw result retention (aligns with A-011 3-day default). |
+| 023 | Recreate `tag_options` with `category` added to CHECK. Seed 5 default categories. |
+| 024 | Seed `signal_skip_tls` setting. |
+| 025 | Recreate `tag_options` with `tag` added to CHECK. Create `target_tags` join table for many-to-many free-form labels. |
 
 ---
 
@@ -433,7 +457,9 @@ rules
   |--< rule_states        (rule_id FK, CASCADE, 1:1)
   |--< alert_history     (rule_id, logical ref, no FK)
 
-tag_options                (standalone, app-level ref from targets.project/location)
+tag_options                (app-level ref from targets.project/location/category)
+  |
+  |--< target_tags         (tag_id FK, ON DELETE CASCADE — many-to-many 'tag' group)
 settings                  (standalone key-value)
 schema_version            (standalone, single row)
 audit_logs                (standalone, no FKs)
