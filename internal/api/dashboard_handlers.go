@@ -30,6 +30,7 @@ type dashboardTarget struct {
 	Paused             bool             `json:"paused"`
 	PausedAt           *string          `json:"paused_at,omitempty"`
 	Category           string           `json:"category"`
+	Tags               []string         `json:"tags"`
 	SLAStatus          string           `json:"sla_status"`
 	SLATarget          float64          `json:"sla_target"`
 	Checks             []dashboardCheck `json:"checks"`
@@ -73,6 +74,13 @@ func (s *Server) buildDashboardTargets() ([]dashboardTarget, error) {
 		return nil, fmt.Errorf("failed to load check summaries: %w", err)
 	}
 
+	// Bulk-load free-form tags for all targets in one query.
+	tagPtrs := make([]*store.Target, len(targets))
+	for i := range targets {
+		tagPtrs[i] = &targets[i]
+	}
+	_ = s.store.AttachTagsBulk(tagPtrs)
+
 	var result []dashboardTarget
 	for _, t := range targets {
 		// Hide disabled targets from dashboard/SOC
@@ -86,6 +94,10 @@ func (s *Server) buildDashboardTargets() ([]dashboardTarget, error) {
 			Host:               t.Host,
 			PreferredCheckType: t.PreferredCheckType,
 			Category:           t.Category,
+			Tags:               t.Tags,
+		}
+		if dt.Tags == nil {
+			dt.Tags = []string{}
 		}
 
 		// Paused targets show as "paused" state
