@@ -17,6 +17,7 @@ type WebhookPayload struct {
 	Target        string         `json:"target"`
 	TargetAddress string         `json:"target_address"`
 	Category      string         `json:"category"`
+	Tags          []string       `json:"tags"`
 	Message       string         `json:"message"`
 	FailingChecks []FailingCheck `json:"failing_checks"`
 	Timestamp     string         `json:"timestamp"`

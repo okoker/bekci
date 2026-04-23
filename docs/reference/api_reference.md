@@ -1097,6 +1097,33 @@ Returns the last webhook delivery error and success timestamps.
 
 Both fields are empty strings when no webhook has been sent yet.
 
+### Outbound Webhook Payload
+
+Bekci POSTs the following JSON to `webhook_url` on `firing`, `recovery`, `re-alert`, and `test` events. `Content-Type: application/json`. Auth is the configured Bearer/Basic header, TLS verification is on unless `webhook_skip_tls=true`, timeout is `webhook_timeout_s` (default 10s).
+
+```json
+{
+  "event": "firing | recovery | re-alert | test",
+  "target": "Web Server",
+  "target_address": "192.168.1.10",
+  "category": "Network",
+  "tags": ["DEVOPS", "IT", "P1"],
+  "message": "Target Web Server is unhealthy",
+  "failing_checks": [
+    { "type": "http", "detail": "status 500" }
+  ],
+  "timestamp": "2026-04-24T09:13:00Z",
+  "down_since": "2026-04-24T09:00:00Z",
+  "duration": "13m"
+}
+```
+
+**Notes:**
+- `tags` is an array of uppercase free-form labels attached to the target (from `tag_options` where `grp='tag'`). Always present; `[]` when the target has no tags. The `test` event sends `["TEST"]` as a sentinel.
+- `failing_checks` is `[]` for `recovery` and `test`; populated for `firing` and `re-alert` with every check whose last result isn't `up`.
+- `down_since` + `duration` are only included on `recovery`.
+- Non-2xx response is treated as failure (recorded in `webhook_last_error`, audit-logged); no retries.
+
 ---
 
 ## Settings

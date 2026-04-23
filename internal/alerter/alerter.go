@@ -59,6 +59,8 @@ func (a *AlertService) Dispatch(ruleID, oldState, newState string) {
 		slog.Error("Alerter: failed to get target", "target_id", targetID, "error", err)
 		return
 	}
+	// Hydrate free-form tags for the webhook payload (other channels ignore Tags).
+	target.Tags, _ = a.store.ListTagsByTarget(targetID)
 
 	// Get recipients
 	recipients, err := a.store.ListTargetRecipients(targetID)
@@ -180,6 +182,7 @@ func (a *AlertService) Dispatch(ruleID, oldState, newState string) {
 				Target:        target.Name,
 				TargetAddress: target.Host,
 				Category:      target.Category,
+				Tags:          nonNilTags(target.Tags),
 				Message:       fmt.Sprintf("Target %s is %s", target.Name, newState),
 				FailingChecks: failingChecks,
 				Timestamp:     now.UTC().Format(time.RFC3339),
@@ -247,6 +250,7 @@ func (a *AlertService) CheckRealerts() {
 		if err != nil || target == nil {
 			continue
 		}
+		target.Tags, _ = a.store.ListTagsByTarget(fr.TargetID)
 
 		recipients, err := a.store.ListTargetRecipients(fr.TargetID)
 		if err != nil || len(recipients) == 0 {
@@ -351,6 +355,7 @@ func (a *AlertService) CheckRealerts() {
 					Target:        target.Name,
 					TargetAddress: target.Host,
 					Category:      target.Category,
+					Tags:          nonNilTags(target.Tags),
 					Message:       fmt.Sprintf("Target %s is still unhealthy", target.Name),
 					FailingChecks: failingChecks,
 					Timestamp:     now.UTC().Format(time.RFC3339),
@@ -412,6 +417,16 @@ func (a *AlertService) getWebhookTimeout() int {
 		return n
 	}
 	return 10
+}
+
+// nonNilTags ensures the webhook payload's Tags field serializes as an empty
+// JSON array rather than null when a target has no free-form tags assigned —
+// downstream consumers can always iterate without a null check.
+func nonNilTags(tags []string) []string {
+	if tags == nil {
+		return []string{}
+	}
+	return tags
 }
 
 // getFailingChecks returns failing check details for a target.
@@ -525,6 +540,7 @@ func (a *AlertService) SendTestWebhook() error {
 		Target:        "Bekci Test",
 		TargetAddress: "127.0.0.1",
 		Category:      "Test",
+		Tags:          []string{"TEST"},
 		Message:       "This is a test webhook from Bekci.",
 		FailingChecks: []FailingCheck{},
 		Timestamp:     time.Now().UTC().Format(time.RFC3339),
