@@ -5,6 +5,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -91,6 +92,9 @@ func requireRole(roles ...string) func(http.Handler) http.Handler {
 // requireAPIToken validates an `Authorization: Bearer bk_…` header against
 // the api_tokens table and attaches the token record to the request
 // context. Used on /api/v1/* endpoints intended for machine consumers.
+// Enforces the admin-configurable per-token rate limit after auth —
+// rejects with 429 + Retry-After once a token exceeds the cap within a
+// 60-second window.
 func (s *Server) requireAPIToken(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := r.Header.Get("Authorization")
@@ -106,6 +110,30 @@ func (s *Server) requireAPIToken(next http.Handler) http.Handler {
 			writeError(w, http.StatusUnauthorized, "invalid or revoked token")
 			return
 		}
+
+		// Rate limit check — flat N req/min per token, admin-tunable.
+		if s.v1RateLimiter != nil {
+			limit := s.cachedAPIRateLimit()
+			ok, retryAfter := s.v1RateLimiter.Allow(tok.ID, limit)
+			if !ok {
+				slog.Warn("v1 rate limit exceeded",
+					"token", tok.Name,
+					"ip", clientIP(r),
+					"path", r.URL.Path,
+					"limit_per_min", limit,
+				)
+				s.auditAPIToken(r, tok.ID, tok.Name, "api_rate_limit_exceeded",
+					"path="+r.URL.Path+" limit_per_min="+strconv.Itoa(limit), "failure")
+				w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
+				writeJSON(w, http.StatusTooManyRequests, map[string]any{
+					"error":         "rate limit exceeded",
+					"retry_after_s": retryAfter,
+					"limit_per_min": limit,
+				})
+				return
+			}
+		}
+
 		ctx := context.WithValue(r.Context(), ctxAPITokenName, tok.Name)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

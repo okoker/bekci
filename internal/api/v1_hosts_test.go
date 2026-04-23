@@ -52,6 +52,65 @@ func seedHostTarget(t *testing.T, st *store.Store, name, host string, tags []str
 	return tgt.ID
 }
 
+func TestV1Hosts_RateLimit(t *testing.T) {
+	ts, st := setupTestServer(t)
+
+	// Tighten the limit to 3 so the test finishes fast.
+	if err := st.SetSettings(map[string]string{"api_rate_limit_per_min": "3"}); err != nil {
+		t.Fatalf("set rate limit: %v", err)
+	}
+
+	seedHostTarget(t, st, "ratelimit-host", "rl.example.com", nil, "", "", "", "")
+	_, plaintext, err := st.CreateAPIToken("rl-token", "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fire := func() int {
+		req, _ := http.NewRequest("GET", ts.URL+"/api/v1/hosts?host=rl.example.com", nil)
+		req.Header.Set("Authorization", "Bearer "+plaintext)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+
+	// First 3 within the window succeed.
+	for i := 0; i < 3; i++ {
+		if code := fire(); code != 200 {
+			t.Fatalf("request %d: expected 200, got %d", i+1, code)
+		}
+	}
+	// 4th must be rejected with 429 + Retry-After.
+	req, _ := http.NewRequest("GET", ts.URL+"/api/v1/hosts?host=rl.example.com", nil)
+	req.Header.Set("Authorization", "Bearer "+plaintext)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 429 {
+		t.Fatalf("expected 429, got %d", resp.StatusCode)
+	}
+	if resp.Header.Get("Retry-After") == "" {
+		t.Fatalf("expected Retry-After header")
+	}
+	body, _ := io.ReadAll(resp.Body)
+	var payload struct {
+		Error        string `json:"error"`
+		RetryAfterS  int    `json:"retry_after_s"`
+		LimitPerMin  int    `json:"limit_per_min"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if payload.Error == "" || payload.LimitPerMin != 3 {
+		t.Fatalf("unexpected body: %+v", payload)
+	}
+}
+
 func TestV1Hosts_BearerRequired(t *testing.T) {
 	ts, _ := setupTestServer(t)
 	resp, err := http.Get(ts.URL + "/api/v1/hosts?host=anything")

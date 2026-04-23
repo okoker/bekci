@@ -61,6 +61,26 @@ func (s *Server) audit(r *http.Request, action, resourceType, resourceID, detail
 	}
 }
 
+// auditAPIToken logs events triggered by bearer-token callers on /api/v1/*.
+// There is no JWT (and therefore no getClaims) in that path, so we can't
+// use the standard audit() helper; the token's human-readable name is used
+// as the actor, prefixed so it's distinguishable from real usernames.
+func (s *Server) auditAPIToken(r *http.Request, tokenID, tokenName, action, detail, status string) {
+	entry := &store.AuditEntry{
+		UserID:       "",
+		Username:     "api-token:" + tokenName,
+		Action:       action,
+		ResourceType: "api_token",
+		ResourceID:   tokenID,
+		Detail:       detail,
+		IPAddress:    clientIP(r),
+		Status:       status,
+	}
+	if err := s.store.CreateAuditEntry(entry); err != nil {
+		slog.Error("Failed to create api-token audit entry", "action", action, "error", err)
+	}
+}
+
 // auditLogin logs login-related events where JWT claims are not yet available.
 func (s *Server) auditLogin(r *http.Request, userID, username, action, detail, status string) {
 	ip := clientIP(r)

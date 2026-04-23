@@ -57,6 +57,8 @@ var knownSettings = map[string]bool{
 	// System alert settings
 	"system_alert_admins": true,
 	"system_alert_users":  true,
+	// Machine API (v1) rate limit — requests per minute per token
+	"api_rate_limit_per_min": true,
 }
 
 // Boolean settings that accept "true"/"false" instead of positive integers.
@@ -117,6 +119,7 @@ var maxSettings = map[string]int{
 	"audit_retention_days":   3650,  // 10 years
 	"alert_cooldown_s":       86400, // 1 day
 	"alert_realert_s":        86400, // 1 day
+	"api_rate_limit_per_min": 10000, // sane ceiling to prevent misconfig
 }
 
 // Float settings validated as 0–100 range (SLA thresholds).
@@ -319,6 +322,9 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if _, ok := req["soc_public"]; ok {
 		s.invalidateSocPublicCache()
+	}
+	if _, ok := req["api_rate_limit_per_min"]; ok {
+		s.invalidateAPIRateLimitCache()
 	}
 	s.audit(r, "update_settings", "settings", "", "", "success")
 	writeJSON(w, http.StatusOK, map[string]string{"message": "settings updated"})

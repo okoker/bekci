@@ -25,6 +25,7 @@ const labels = {
   audit_retention_days: 'Audit Log Retention (days)',
   backup_max_copies: 'Backup Copies to Keep',
   soc_public: 'SOC View Public Access',
+  api_rate_limit_per_min: 'API Rate Limit (req/min per token)',
 }
 
 const slaKeys = ref([])
@@ -1197,7 +1198,7 @@ onUnmounted(() => {
                 v-model="settings[key]"
                 type="number"
                 min="1"
-                :max="key === 'backup_max_copies' ? 50 : undefined"
+                :max="key === 'backup_max_copies' ? 50 : key === 'api_rate_limit_per_min' ? 10000 : undefined"
                 :disabled="!auth.isAdmin"
               />
             </div>

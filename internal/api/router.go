@@ -32,6 +32,8 @@ type Server struct {
 	loginLimiter      *loginLimiter
 	usernameLimiter   *loginLimiter
 	socPublicCache    cachedSetting
+	apiRateLimitCache cachedSetting
+	v1RateLimiter     *v1RateLimiter
 }
 
 // New creates a new API server.
@@ -49,6 +51,7 @@ func New(st *store.Store, authSvc *auth.Service, sched *scheduler.Scheduler, ale
 		backupDir:    backupDir,
 		loginLimiter:    newLoginLimiter(),
 		usernameLimiter: newLoginLimiter(),
+		v1RateLimiter:   newV1RateLimiter(),
 	}
 }
 
@@ -56,6 +59,9 @@ func New(st *store.Store, authSvc *auth.Service, sched *scheduler.Scheduler, ale
 func (s *Server) Close() {
 	s.loginLimiter.Stop()
 	s.usernameLimiter.Stop()
+	if s.v1RateLimiter != nil {
+		s.v1RateLimiter.Stop()
+	}
 }
 
 // cachedSocPublic returns the soc_public setting value, using a 30s cache.

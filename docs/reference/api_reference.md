@@ -1198,6 +1198,7 @@ Update one or more settings. Only known keys are accepted. Sending masked values
 | `history_days` | positive integer | >= 1 (raw result retention; code defaults to 3 days, this setting overrides if higher) |
 | `audit_retention_days` | positive integer | >= 1 |
 | `soc_public` | boolean string | `"true"` or `"false"` |
+| `api_rate_limit_per_min` | positive integer | 1 – 10000. Per-token flat rate limit on `/api/v1/*`. Change takes effect within 30s (invalidation is immediate on save — 30s is the worst case between existing and updated windows). |
 | `alert_method` | string | `""`, `"email"`, `"signal"`, or `"email+signal"` |
 | `email_provider` | string | `""`, `"resend"`, or `"ms365"` |
 | `resend_api_key` | string | any string (empty to clear; masked in GET: first 7 chars + `****`) |
@@ -1655,6 +1656,8 @@ Machine-facing endpoints for remote consumers (monitoring dashboards, runbook sc
 - Admin-managed credentials (no end-user login). Tokens are revocable immediately.
 - Response envelopes use arrays (`{"targets":[...]}`) even for single-match lookups so callers don't need conditional decode paths.
 
+**Rate limiting:** Flat per-token fixed-window, admin-tunable in Settings > General → **API Rate Limit**. Default `60` requests per minute per token. When the cap is hit, the server returns `429 Too Many Requests` with a `Retry-After` header and a JSON body carrying `retry_after_s` and the current `limit_per_min`. Each 429 is logged at WARN (`token_name, ip, path, limit_per_min`) and recorded as an `api_rate_limit_exceeded` entry in the audit log (actor `api-token:<name>`). No IP-based limit is applied.
+
 ### GET /api/v1/hosts
 
 Return a point-in-time snapshot of any target(s) whose `host` field matches the query param. Two targets can legitimately share a host value; in that case, the response array carries one element per target.
@@ -1709,6 +1712,7 @@ curl -H "Authorization: Bearer bk_<token>" \
 | Missing `host` param | 400 |
 | Missing or malformed `Authorization: Bearer` | 401 (+ `WWW-Authenticate: Bearer realm="bekci-api"`) |
 | Invalid or revoked token | 401 (+ `WWW-Authenticate: Bearer error="invalid_token"`) |
+| Per-token rate limit exceeded | 429 (+ `Retry-After: <seconds>`) — body: `{"error":"rate limit exceeded","retry_after_s":N,"limit_per_min":M}` |
 
 ---
 

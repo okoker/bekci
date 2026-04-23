@@ -43,8 +43,8 @@ func (s *Store) Close() error {
 
 const schemaVersion = 22
 
-// baselineSchema is the complete DDL for a fresh install at schema version 26.
-// It is equivalent to running migration001 through migration026 on an empty database.
+// baselineSchema is the complete DDL for a fresh install at schema version 27.
+// It is equivalent to running migration001 through migration027 on an empty database.
 const baselineSchema = `
 CREATE TABLE users (
 	id            TEXT PRIMARY KEY,
@@ -252,7 +252,7 @@ CREATE TABLE api_tokens (
 CREATE INDEX idx_api_tokens_hash ON api_tokens(token_hash) WHERE revoked_at IS NULL;
 
 CREATE TABLE schema_version (version INTEGER NOT NULL);
-INSERT INTO schema_version (version) VALUES (26);
+INSERT INTO schema_version (version) VALUES (27);
 
 INSERT INTO tag_options (grp, value) VALUES ('category', 'Key Services');
 INSERT INTO tag_options (grp, value) VALUES ('category', 'Network');
@@ -286,6 +286,7 @@ INSERT INTO settings (key, value) VALUES ('snmp_v3_auth_protocol', 'SHA');
 INSERT INTO settings (key, value) VALUES ('snmp_v3_auth_passphrase', '');
 INSERT INTO settings (key, value) VALUES ('snmp_v3_privacy_protocol', 'AES');
 INSERT INTO settings (key, value) VALUES ('snmp_v3_privacy_passphrase', '');
+INSERT INTO settings (key, value) VALUES ('api_rate_limit_per_min', '60');
 `
 
 func (s *Store) migrate() error {
@@ -334,6 +335,7 @@ func (s *Store) migrate() error {
 		s.migration024,
 		s.migration025,
 		s.migration026,
+		s.migration027,
 	}
 
 	for i := current - schemaVersion; i < len(migrations); i++ {
@@ -378,6 +380,14 @@ func (s *Store) migration023() error {
 
 func (s *Store) migration024() error {
 	_, err := s.db.Exec(`INSERT OR IGNORE INTO settings (key, value) VALUES ('signal_skip_tls', 'false')`)
+	return err
+}
+
+// migration027 seeds the default rate limit (60 req/min) for /api/v1/*
+// machine endpoints on existing installs. Admin-editable afterwards via
+// Settings > General > API Rate Limit.
+func (s *Store) migration027() error {
+	_, err := s.db.Exec(`INSERT OR IGNORE INTO settings (key, value) VALUES ('api_rate_limit_per_min', '60')`)
 	return err
 }
 
