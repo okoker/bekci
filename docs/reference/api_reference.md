@@ -1022,6 +1022,8 @@ Response formats are identical to their Dashboard counterparts.
 }
 ```
 
+`recipient_name` is the username for per-user channels (email, Signal). For webhook entries — which have no per-user recipient — `recipient_id` is empty and `recipient_name` is derived from the message prefix: `Webhook`, `Signal` (global), or `(channel)` as a fallback.
+
 `alert_type` values: `"firing"`, `"recovery"`, `"re-alert"`. Cooldown (`alert_cooldown_s`) applies to all alert types including recovery — prevents unlimited recovery alerts from flapping targets. Recovery alerts include downtime duration (down since, recovered at, total duration).
 
 ### POST /api/settings/test-email

@@ -170,7 +170,12 @@ func (s *Store) ListAlertHistory(limit, offset int) ([]AlertHistoryItem, int, er
 		SELECT ah.id, ah.rule_id, ah.target_id,
 		       COALESCE(t.name, '(deleted target)') as target_name,
 		       ah.recipient_id,
-		       COALESCE(u.username, '(deleted user)') as recipient_name,
+		       CASE
+		         WHEN ah.recipient_id = '' AND ah.message LIKE '[Webhook%' THEN 'Webhook'
+		         WHEN ah.recipient_id = '' AND ah.message LIKE '[Signal%' THEN 'Signal'
+		         WHEN ah.recipient_id = '' THEN '(channel)'
+		         ELSE COALESCE(u.username, '(deleted user)')
+		       END as recipient_name,
 		       ah.alert_type, COALESCE(ah.message, ''), ah.sent_at
 		FROM alert_history ah
 		LEFT JOIN targets t ON t.id = ah.target_id
