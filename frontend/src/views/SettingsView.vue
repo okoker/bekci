@@ -1136,7 +1136,23 @@ onUnmounted(() => {
 
 <template>
   <div class="page">
-    <h2>{{ activeTab === 'users' ? 'Users' : activeTab === 'audit' ? 'Audit Log' : 'Settings' }}</h2>
+    <div class="page-header">
+      <h2>{{ activeTab === 'users' ? 'Users' : activeTab === 'audit' ? 'Audit Log' : 'Settings' }}</h2>
+      <button
+        v-if="activeTab === 'users' && auth.isAdmin && usersSubTab === 'humans'"
+        class="btn btn-primary"
+        @click="userShowCreate = !userShowCreate"
+      >
+        {{ userShowCreate ? 'Cancel' : 'Create User' }}
+      </button>
+      <button
+        v-else-if="activeTab === 'users' && auth.isAdmin && usersSubTab === 'api-access' && !apiTokenJustCreated"
+        class="btn btn-primary"
+        @click="apiTokenShowCreate = !apiTokenShowCreate"
+      >
+        {{ apiTokenShowCreate ? 'Cancel' : 'Create Token' }}
+      </button>
+    </div>
 
     <div v-if="activeTab !== 'users' && activeTab !== 'audit'" class="tabs">
       <button
@@ -1437,11 +1453,6 @@ onUnmounted(() => {
       </div>
 
       <div v-if="usersSubTab === 'humans'">
-      <div class="users-header">
-        <button class="btn btn-primary" @click="userShowCreate = !userShowCreate">
-          {{ userShowCreate ? 'Cancel' : 'Create User' }}
-        </button>
-      </div>
 
       <div v-if="userError" class="error-msg">{{ userError }}</div>
       <div v-if="userSuccess" class="success-msg" @click="userSuccess = ''">{{ userSuccess }}</div>
@@ -1673,12 +1684,6 @@ onUnmounted(() => {
 
         <!-- Create flow hidden while a just-created token is being revealed. -->
         <template v-if="!apiTokenJustCreated">
-          <div class="users-header">
-            <button class="btn btn-primary" @click="apiTokenShowCreate = !apiTokenShowCreate">
-              {{ apiTokenShowCreate ? 'Cancel' : 'Create Token' }}
-            </button>
-          </div>
-
           <div v-if="apiTokenShowCreate" class="card">
             <form @submit.prevent="createAPIToken">
               <div class="form-group">
