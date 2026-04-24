@@ -218,7 +218,11 @@ All `/api/v1/*` endpoints require `Authorization: Bearer bk_…`; cookie JWT is 
 
 ## Rate Limiting
 
-Login endpoint only. Dual tracking: per-IP **and** per-username (two independent limiters with identical parameters). Request is blocked if **either** limiter triggers.
+Two independent rate limits exist: login brute-force protection, and Machine API v1 per-token throttling.
+
+### Login (cookie auth)
+
+Dual tracking: per-IP **and** per-username (two independent limiters with identical parameters). Request is blocked if **either** limiter triggers.
 
 | Parameter | Value |
 |-----------|-------|
@@ -233,6 +237,12 @@ Login endpoint only. Dual tracking: per-IP **and** per-username (two independent
 - Successful login: counters reset immediately for both IP and username
 - Window expiry: counter reset
 - Background goroutine prunes stale records every 10 minutes (entries where both window and lockout have expired)
+
+### Machine API v1 (bearer auth)
+
+All `/api/v1/*` endpoints are subject to a flat per-token limit, admin-tunable via the `api_rate_limit_per_min` setting (Settings > General > API Rate Limit). Default **60 requests per minute per token**; no burst allowance, fixed 60-second rolling window.
+
+On overflow the server returns `429 Too Many Requests` with a `Retry-After` header and JSON body `{"error":"rate limit exceeded","retry_after_s":N,"limit_per_min":M}`. Each 429 is logged at WARN and written to `audit_logs` with actor `api-token:<name>`. No IP-based limit is applied.
 
 ## Special Cases
 

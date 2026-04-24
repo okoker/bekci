@@ -1,6 +1,6 @@
 # Database Schema Reference
 
-**Current schema version:** 24
+**Current schema version:** 27
 **Engine:** SQLite 3 with WAL journal mode
 **Driver:** `github.com/mattn/go-sqlite3` (CGO required)
 
@@ -21,7 +21,7 @@
 
 ### schema_version
 
-Tracks current schema version. Single row. Stamped to 24 by the baseline schema on fresh install.
+Tracks current schema version. Single row. Stamped to 27 by the baseline schema on fresh install.
 
 | Column  | Type    | Constraints |
 |---------|---------|-------------|
@@ -34,7 +34,7 @@ Tracks current schema version. Single row. Stamped to 24 by the baseline schema 
 | id            | TEXT     | **PK**                                                 |
 | username      | TEXT     | UNIQUE NOT NULL                                        |
 | email         | TEXT     | NOT NULL DEFAULT ''                                    |
-| phone         | TEXT     | NOT NULL DEFAULT '' *(added migration011)*             |
+| phone         | TEXT     | NOT NULL DEFAULT ''             |
 | password_hash | TEXT     | NOT NULL                                               |
 | role          | TEXT     | NOT NULL, CHECK(role IN ('admin','operator','viewer')) |
 | status        | TEXT     | NOT NULL DEFAULT 'active', CHECK(status IN ('active','suspended')) |
@@ -66,34 +66,35 @@ Key-value config store.
 
 **Seeded keys:**
 
-| Key                    | Default | Added in    |
-|------------------------|---------|-------------|
-| session_timeout_hours  | 24      | migration001 |
-| history_days           | 3       | migration001 (re-seeded migration022) |
-| audit_retention_days   | 91      | migration001 (re-seeded migration009) |
-| soc_public             | false   | migration003 |
-| alert_method           | email   | migration011 |
-| resend_api_key         |         | migration011 |
-| alert_from_email       |         | migration011 |
-| alert_cooldown_s       | 1800    | migration011 |
-| alert_realert_s        | 3600    | migration011 |
-| sla_network            | 99.9    | migration013 |
-| sla_security           | 99.9    | migration013 |
-| sla_physical_security  | 99.9    | migration013 |
-| sla_key_services       | 99.9    | migration013 |
-| sla_other              | 99.9    | migration013 |
-| signal_api_url         |         | migration016 |
-| signal_number          |         | migration016 |
-| signal_username        |         | migration016 |
-| signal_password        |         | migration016 |
-| signal_skip_tls        | false   | migration024 |
-| snmp_v2c_community     | public  | migration018 |
-| snmp_v3_username       |         | migration018 |
-| snmp_v3_security_level | authPriv | migration018 |
-| snmp_v3_auth_protocol  | SHA     | migration018 |
-| snmp_v3_auth_passphrase|         | migration018 |
-| snmp_v3_privacy_protocol| AES    | migration018 |
-| snmp_v3_privacy_passphrase|      | migration018 |
+| Key                    | Default |
+|------------------------|---------|
+| session_timeout_hours  | 24      |
+| history_days           | 3       |
+| audit_retention_days   | 91      |
+| soc_public             | false   |
+| alert_method           | email   |
+| resend_api_key         |         |
+| alert_from_email       |         |
+| alert_cooldown_s       | 1800    |
+| alert_realert_s        | 3600    |
+| sla_network            | 99.9    |
+| sla_security           | 99.9    |
+| sla_physical_security  | 99.9    |
+| sla_key_services       | 99.9    |
+| sla_other              | 99.9    |
+| signal_api_url         |         |
+| signal_number          |         |
+| signal_username        |         |
+| signal_password        |         |
+| signal_skip_tls        | false   |
+| snmp_v2c_community     | public  |
+| snmp_v3_username       |         |
+| snmp_v3_security_level | authPriv |
+| snmp_v3_auth_protocol  | SHA     |
+| snmp_v3_auth_passphrase|         |
+| snmp_v3_privacy_protocol| AES    |
+| snmp_v3_privacy_passphrase|      |
+| api_rate_limit_per_min | 60      |
 
 ### targets
 
@@ -105,14 +106,14 @@ Key-value config store.
 | description          | TEXT     | NOT NULL DEFAULT ''                 |
 | enabled              | INTEGER  | NOT NULL DEFAULT 1                  |
 | preferred_check_type | TEXT     | NOT NULL DEFAULT 'ping'             |
-| operator             | TEXT     | NOT NULL DEFAULT 'AND' *(migration006)* |
-| category             | TEXT     | NOT NULL DEFAULT 'critical' *(migration006, renamed from severity in migration007)* |
-| rule_id              | TEXT     | DEFAULT NULL *(migration006)*       |
-| paused_at            | DATETIME | DEFAULT NULL *(migration015)*       |
-| notes                | TEXT     | DEFAULT NULL *(migration019)*       |
-| contacts             | TEXT     | DEFAULT NULL *(migration019)*       |
-| project              | TEXT     | DEFAULT NULL *(migration019)*       |
-| location             | TEXT     | DEFAULT NULL *(migration019)*       |
+| operator             | TEXT     | NOT NULL DEFAULT 'AND' |
+| category             | TEXT     | NOT NULL DEFAULT 'critical' |
+| rule_id              | TEXT     | DEFAULT NULL       |
+| paused_at            | DATETIME | DEFAULT NULL       |
+| notes                | TEXT     | DEFAULT NULL       |
+| contacts             | TEXT     | DEFAULT NULL       |
+| project              | TEXT     | DEFAULT NULL       |
+| location             | TEXT     | DEFAULT NULL       |
 | created_at           | DATETIME | DEFAULT CURRENT_TIMESTAMP           |
 | updated_at           | DATETIME | DEFAULT CURRENT_TIMESTAMP           |
 
@@ -122,14 +123,12 @@ Key-value config store.
 - `rule_id` is a logical FK to `rules(id)` but not enforced at DDL level (nullable, set by app code).
 - `category` was originally `severity` (renamed in migration007). Values remapped in migration010. DDL default is `'critical'` but app code defaults to `'Other'` when empty.
 - `idx_targets_project_id` index from migration002 was dropped along with the old table during migration004's table rebuild (CREATE new → DROP old → RENAME).
-- `idx_targets_rule_id` ON targets(rule_id) *(migration021)* — accelerates rule-to-target lookups.
+- `idx_targets_rule_id` ON targets(rule_id) — accelerates rule-to-target lookups.
 - `paused_at` — when NOT NULL, target is paused: scheduler skips checks, dashboard shows "PAUSED" badge.
 - `notes`, `contacts` — free-text optional fields.
 - `project`, `location` — optional tag values from `tag_options` table. Validated on create/update. Cascade-cleared when tag option is deleted.
 
 ### tag_options
-
-*(migration019, updated migration023, updated migration025)*
 
 Admin-managed list of allowed tag values. Four groups: `project`, `location`, `category` (single-value slots on `targets`), and `tag` (many-per-target via the `target_tags` join).
 
@@ -141,7 +140,7 @@ Admin-managed list of allowed tag values. Four groups: `project`, `location`, `c
 
 **Unique:** (grp, value) composite
 
-**Seeded categories** (migration023): Key Services, Network, Other, Physical Security, Security.
+**Seeded categories**: Key Services, Network, Other, Physical Security, Security.
 
 **Notes:**
 - Column named `grp` (not `group`) to avoid SQL reserved word.
@@ -151,8 +150,6 @@ Admin-managed list of allowed tag values. Four groups: `project`, `location`, `c
 - SLA key derivation: `"sla_" + lowercase(replace(name, " ", "_"))` — e.g. "Physical Security" → `sla_physical_security`.
 
 ### api_tokens
-
-*(migration026)*
 
 Bearer tokens used by remote machine consumers on `/api/v1/*`. Plaintext is never persisted — only the sha256 hex digest. A short, human-visible prefix (`bk_<8 hex>`) is kept so admins can identify a token in the UI after creation.
 
@@ -172,8 +169,6 @@ Bearer tokens used by remote machine consumers on `/api/v1/*`. Plaintext is neve
 **Lifecycle:** plaintext generated via `crypto/rand` (256 bits), returned once from `POST /api/api-tokens`, sha256-hashed + persisted. On every `Authorization: Bearer` arrival, the middleware hashes and looks up the row; `revoked_at IS NOT NULL` → reject 401. `last_used_at` is updated best-effort.
 
 ### target_tags
-
-*(migration025)*
 
 Join table for many-to-many free-form tags per target. Each row links one target to one `tag_options` row where `grp='tag'`.
 
@@ -208,8 +203,6 @@ Join table for many-to-many free-form tags per target. Each row links one target
 
 ### check_state
 
-*(migration020)*
-
 Current status cache — 1 row per check, upserted on every `SaveResult`. Replaces expensive `MAX(checked_at)` subqueries.
 
 | Column      | Type     | Constraints                                  |
@@ -228,8 +221,6 @@ Current status cache — 1 row per check, upserted on every `SaveResult`. Replac
 **Retention:** Unbounded — always reflects current state. Rows only removed when parent check is deleted (CASCADE).
 
 ### check_daily_rollups
-
-*(migration020)*
 
 Pre-aggregated daily uptime — 1 row per check per day, upserted on every `SaveResult`. Eliminates expensive `GROUP BY date(checked_at)` aggregation queries.
 
@@ -268,7 +259,7 @@ Tactical time-series window. Schema unchanged from pre-A-011, but retention redu
 **Indexes:**
 - `idx_check_results_check_id` ON check_results(check_id)
 - `idx_check_results_checked_at` ON check_results(checked_at)
-- `idx_check_results_check_id_checked_at` ON check_results(check_id, checked_at DESC) *(migration017)*
+- `idx_check_results_check_id_checked_at` ON check_results(check_id, checked_at DESC)
 
 **Read consumers:** `GetRecentResultsSlim` (4h bar chart on dashboard), `GetRecentResultsByWindow` (fail_window condition evaluation in engine), forensic debugging.
 
@@ -304,10 +295,10 @@ Each condition links a rule to a check with evaluation criteria. Conditions are 
 | fail_count      | INTEGER | NOT NULL DEFAULT 1                            |
 | fail_window     | INTEGER | NOT NULL DEFAULT 0                            |
 | sort_order      | INTEGER | NOT NULL DEFAULT 0                            |
-| condition_group | INTEGER | NOT NULL DEFAULT 0 *(migration014)*           |
-| group_operator  | TEXT    | NOT NULL DEFAULT 'AND' *(migration014)*       |
+| condition_group | INTEGER | NOT NULL DEFAULT 0           |
+| group_operator  | TEXT    | NOT NULL DEFAULT 'AND'       |
 
-**Indexes:** *(migration021)*
+**Indexes:**
 - `idx_rule_conditions_check_id` ON rule_conditions(check_id)
 - `idx_rule_conditions_rule_id` ON rule_conditions(rule_id, condition_group, sort_order)
 
@@ -339,8 +330,8 @@ Append-only log of sent alerts. Purged daily by `PurgeOldAlertHistory(days)` usi
 | acknowledged    | INTEGER  | NOT NULL DEFAULT 0                 |
 | acknowledged_by | TEXT     | FK -> users(id), nullable          |
 | acknowledged_at | DATETIME | nullable                           |
-| target_id       | TEXT     | NOT NULL DEFAULT '' *(migration011)* |
-| recipient_id    | TEXT     | NOT NULL DEFAULT '' *(migration011)* |
+| target_id       | TEXT     | NOT NULL DEFAULT '' |
+| recipient_id    | TEXT     | NOT NULL DEFAULT '' |
 
 **Indexes:**
 - `idx_ah_rule` ON alert_history(rule_id, sent_at)
@@ -350,8 +341,6 @@ Append-only log of sent alerts. Purged daily by `PurgeOldAlertHistory(days)` usi
 - `alert_type` values: `firing`, `recovery`, `re-alert`
 
 ### target_pause_history
-
-*(migration015)*
 
 | Column    | Type     | Constraints                                   |
 |-----------|----------|-----------------------------------------------|
@@ -448,6 +437,7 @@ The table below is retained as historical context for how the schema evolved:
 | 024 | Seed `signal_skip_tls` setting. |
 | 025 | Recreate `tag_options` with `tag` added to CHECK. Create `target_tags` join table for many-to-many free-form labels. |
 | 026 | Add `api_tokens` table for bearer-token auth on `/api/v1/*`. sha256-hashed storage, partial index on active hashes. |
+| 027 | Seed `api_rate_limit_per_min` setting (default 60) for the machine-API per-token rate limiter. |
 
 ---
 

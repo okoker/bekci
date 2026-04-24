@@ -140,7 +140,9 @@ func (s *Server) requireAPIToken(next http.Handler) http.Handler {
 }
 
 // socAuth conditionally requires auth based on the soc_public setting.
-// If soc_public is "true", allow anonymous access; otherwise require Bearer token.
+// If soc_public is "true", allow anonymous access; otherwise fall through to
+// requireAuth (JWT cookie). Not to be confused with requireAPIToken which
+// handles the separate bearer-auth plane on /api/v1/*.
 func (s *Server) socAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.cachedSocPublic() == "true" {

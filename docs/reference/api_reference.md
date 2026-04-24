@@ -1236,6 +1236,11 @@ Update one or more settings. Only known keys are accepted. Sending masked values
 | `sla_key_services` | float string | 0–100 (0 = disabled) |
 | `sla_other` | float string | 0–100 (0 = disabled) |
 | `backup_max_copies` | positive integer | >= 1 (max saved backups on server) |
+| `webhook_timeout_s` | positive integer string | HTTP timeout for outbound webhook POST. Default 10s; UI accepts 1–120. Values <= 0 fall back to 10. |
+| `auto_backup_schedule` | string | `""`, `"off"`, `"weekly"`, `"10days"`, or `"monthly"`. Controls the hourly goroutine's scheduled backup cadence. |
+| `auto_backup_time` | string | HH:MM (24-hour, UTC) — the hour/minute on which the scheduled backup fires. |
+| `system_alert_admins` | boolean string | `"true"` or `"false"`. When true, every active admin receives system-level alerts (scheduler stale, unclean restart). Defaults to true on first boot. |
+| `system_alert_users` | string | Comma-separated list of user IDs (UUIDs) that additionally receive system-level alerts, independent of role. Empty string = no extra recipients. |
 
 **Response (200):**
 ```json
@@ -1288,7 +1293,7 @@ Update one or more settings. Only known keys are accepted. Sending masked values
 }
 ```
 
-**Audit actions:** `login`, `login_failed`, `logout`, `create_user`, `update_user`, `suspend_user`, `activate_user`, `reset_password`, `change_password`, `change_password_failed`, `update_profile`, `create_target`, `update_target`, `delete_target`, `pause_target`, `unpause_target`, `set_alert_recipients`, `create_tag`, `delete_tag`, `update_settings`, `restore_backup`, `export_backup`, `export_full_backup`, `save_full_backup`, `download_saved_backup`, `delete_saved_backup`, `run_check`, `test_email`, `test_signal`, `test_webhook`, `webhook_dispatch`.
+**Audit actions:** `login`, `login_failed`, `logout`, `create_user`, `update_user`, `suspend_user`, `activate_user`, `reset_password`, `change_password`, `change_password_failed`, `update_profile`, `create_target`, `update_target`, `delete_target`, `pause_target`, `unpause_target`, `set_alert_recipients`, `create_tag`, `delete_tag`, `rename_tag`, `update_settings`, `restore_backup`, `export_backup`, `export_full_backup`, `save_full_backup`, `download_saved_backup`, `delete_saved_backup`, `run_check`, `test_email`, `test_signal`, `test_webhook`, `webhook_dispatch`, `api_token_create`, `api_token_revoke`, `api_rate_limit_exceeded`, `auto_backup`.
 
 **`webhook_dispatch`** is logged by the system (user=system) for all webhook events. Detail contains the event type: `test`, `firing`, `recovery`, `re-alert`, or `{type} — error: {message}` on failure.
 
