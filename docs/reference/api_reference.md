@@ -145,7 +145,7 @@ Invalidates all other sessions on success.
 
 ### GET /api/users
 
-**Response (200):** Array of User objects.
+**Response (200):** Array of User objects, sorted alphabetically by username (case-insensitive).
 ```json
 [
   {

@@ -53,7 +53,7 @@ func (s *Store) GetUserByUsername(username string) (*User, error) {
 func (s *Store) ListUsers() ([]User, error) {
 	rows, err := s.db.Query(`
 		SELECT id, username, email, phone, role, status, created_at, updated_at
-		FROM users ORDER BY created_at ASC
+		FROM users ORDER BY username COLLATE NOCASE ASC
 	`)
 	if err != nil {
 		return nil, err
