@@ -133,22 +133,25 @@ No npm on server — `cmd/bekci/frontend_dist/` is committed to git. Go binary e
 | google/uuid | 1.6.0 | UUID generation (target IDs, check IDs, etc.) |
 | mattn/go-sqlite3 | 1.14.37 | SQLite driver (requires CGO) |
 | prometheus-community/pro-bing | 0.8.0 | ICMP ping |
-| gosnmp/gosnmp | latest | SNMP v2c/v3 queries |
-| golang.org/x/crypto | 0.49.0 | Bcrypt password hashing, Argon2id KDF (backup encryption) |
+| gosnmp/gosnmp | 1.43.2 | SNMP v2c/v3 queries |
+| golang.org/x/crypto | 0.50.0 | Bcrypt password hashing, Argon2id KDF (backup encryption) |
+| golang.org/x/net | 0.53.0 | HTTP/2 + IDNA support used by stdlib http |
 | gopkg.in/yaml.v3 | 3.0.1 | Config file parsing |
 
 ### Frontend (package.json)
 | Package | Version | Purpose |
 |---------|---------|---------|
 | vue | ^3.5.25 | UI framework (Composition API, `<script setup>`) |
-| vite | ^7.3.1 | Build tool + dev server |
+| vite | ^7.3.3 | Build tool + dev server |
 | @vitejs/plugin-vue | ^6.0.2 | Vue 3 SFC support for Vite |
 | vue-router | ^4.6.4 | Client-side routing (11 routes, SearchView + SlaView lazy-loaded) |
 | pinia | ^3.0.4 | State management |
-| axios | ^1.13.5 | HTTP client (withCredentials for cookie auth) |
+| axios | ^1.16.0 | HTTP client (withCredentials for cookie auth) |
 | chart.js | ^4.5.1 | Charts (SLA page) |
 | vue-chartjs | ^5.3.3 | Vue Chart.js wrapper |
 | chartjs-plugin-annotation | ^3.1.0 | Chart annotation overlays |
+| chartjs-plugin-zoom | ^2.2.0 | Chart pan/zoom interaction |
+| hammerjs | ^2.0.8 | Touch gestures (used by chartjs-plugin-zoom) |
 
 ### Frontend Build Output
 | Asset | Size (raw) | Size (gzipped) |
