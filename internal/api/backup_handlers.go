@@ -31,7 +31,7 @@ func (s *Server) handleBackup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.audit(r, "export_backup", "backup", "", "", "success")
-	filename := fmt.Sprintf("bekci-backup-%s.json", time.Now().Format("20060102-150405"))
+	filename := fmt.Sprintf("bekci-config-%s.json", time.Now().Format("20060102-150405"))
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
 	json.NewEncoder(w).Encode(data)

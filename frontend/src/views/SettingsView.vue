@@ -255,7 +255,7 @@ async function downloadBackup() {
     const resp = await api.get('/backup', { responseType: 'blob' })
     const disposition = resp.headers['content-disposition'] || ''
     const match = disposition.match(/filename="(.+)"/)
-    const filename = match ? match[1] : 'bekci-backup.json'
+    const filename = match ? match[1] : 'bekci-config.json'
     const url = URL.createObjectURL(resp.data)
     const a = document.createElement('a')
     a.href = url

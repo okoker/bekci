@@ -1325,7 +1325,7 @@ Returns a JSON file download containing all config data (users with hashed passw
 **Response headers:**
 ```
 Content-Type: application/json
-Content-Disposition: attachment; filename="bekci-backup-20260115-100000.json"
+Content-Disposition: attachment; filename="bekci-config-20260115-100000.json"
 ```
 
 **Response body:** BackupData JSON structure:
