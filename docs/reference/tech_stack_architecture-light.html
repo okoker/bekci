@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bekci Architecture (Light)</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'JetBrains Mono', monospace;
+      background: #ffffff;
+      min-height: 100vh;
+      padding: 2rem;
+      color: #0f172a;
+    }
+    .container { max-width: 1520px; margin: 0 auto; }
+    .header { margin-bottom: 2rem; }
+    .header-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem; }
+    .pulse-dot { width: 12px; height: 12px; background: #0e7490; border-radius: 50%; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    h1 { font-size: 1.625rem; font-weight: 700; letter-spacing: -0.025em; color: #0f172a; }
+    .subtitle { color: #475569; font-size: 0.9375rem; margin-left: 1.75rem; }
+    .meta-line {
+      color: #64748b; font-size: 0.8125rem; margin-left: 1.75rem; margin-top: 0.25rem;
+      letter-spacing: 0.02em;
+    }
+    .diagram-container {
+      background: #ffffff;
+      border-radius: 1rem; border: 1px solid #e2e5ea;
+      padding: 1.5rem; overflow-x: auto;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    }
+    svg { width: 100%; min-width: 1200px; display: block; }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1rem; margin-top: 2rem;
+    }
+    @media (max-width: 900px) { .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 600px) { .cards { grid-template-columns: 1fr; } }
+    .card {
+      background: #ffffff;
+      border-radius: 0.75rem; border: 1px solid #e2e5ea;
+      padding: 1.25rem;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+    }
+    .card-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
+    .card-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .card-dot.cyan { background: #0e7490; }
+    .card-dot.emerald { background: #047857; }
+    .card-dot.violet { background: #6d28d9; }
+    .card-dot.amber { background: #b45309; }
+    .card-dot.rose { background: #be123c; }
+    .card-dot.slate { background: #475569; }
+    .card h3 { font-size: 0.9375rem; font-weight: 600; color: #0f172a; }
+    .card ul { list-style: none; color: #475569; font-size: 0.8125rem; }
+    .card li { margin-bottom: 0.375rem; }
+    .card li b { color: #1a202c; font-weight: 600; }
+    .footer {
+      text-align: center; margin-top: 1.5rem;
+      color: #64748b; font-size: 0.8125rem;
+    }
+    @media print {
+      body { padding: 0.5rem; }
+      .diagram-container { box-shadow: none; border: 1px solid #cbd5e1; }
+      .card { box-shadow: none; border: 1px solid #cbd5e1; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="header-row">
+        <div class="pulse-dot"></div>
+        <h1>Bekci Architecture</h1>
+      </div>
+      <p class="subtitle">Network monitoring + uptime tracking · SOC dashboards · rule-based multi-channel alerting</p>
+      <p class="meta-line">Generated 13/05/2026 · rev 1 · light theme · Go 1.25 + SQLite WAL · embedded Vue 3 frontend</p>
+    </div>
+
+    <div class="diagram-container">
+      <svg viewBox="0 0 1280 920">
+        <defs>
+          <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#475569" />
+          </marker>
+          <marker id="arrowhead-amber" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#b45309" />
+          </marker>
+          <marker id="arrowhead-rose" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#be123c" />
+          </marker>
+          <marker id="arrowhead-violet" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#6d28d9" />
+          </marker>
+          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#e5e7eb" stroke-width="0.5"/>
+          </pattern>
+        </defs>
+
+        <rect width="100%" height="100%" fill="url(#grid)" />
+
+        <!-- EDGE LAYER -->
+        <rect x="40" y="80" width="120" height="60" rx="6" fill="rgba(148, 163, 184, 0.18)" stroke="#475569" stroke-width="1.5"/>
+        <text x="100" y="105" fill="#0f172a" font-size="12" font-weight="600" text-anchor="middle">End Users</text>
+        <text x="100" y="122" fill="#475569" font-size="10" text-anchor="middle">Operators · Admins</text>
+
+        <rect x="200" y="80" width="140" height="60" rx="6" fill="rgba(251, 191, 36, 0.14)" stroke="#b45309" stroke-width="1.5"/>
+        <text x="270" y="103" fill="#0f172a" font-size="12" font-weight="600" text-anchor="middle">Nginx 1.18</text>
+        <text x="270" y="120" fill="#475569" font-size="10" text-anchor="middle">SSL · gzip · sec hdrs</text>
+        <text x="270" y="133" fill="#b45309" font-size="9" text-anchor="middle">TLS 1.2/1.3 · :443</text>
+
+        <line x1="161" y1="110" x2="198" y2="110" stroke="#475569" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <text x="180" y="103" fill="#475569" font-size="9" text-anchor="middle">HTTPS</text>
+
+        <!-- PRODUCTION SERVER REGION -->
+        <rect x="380" y="60" width="700" height="750" rx="12" fill="rgba(251, 191, 36, 0.06)" stroke="#b45309" stroke-width="1" stroke-dasharray="8,4"/>
+        <text x="395" y="80" fill="#b45309" font-size="11" font-weight="600">Production server · Ubuntu 22.04 · systemd · bekci:bekci · CAP_NET_RAW</text>
+
+        <line x1="341" y1="125" x2="660" y2="125" stroke="#b45309" stroke-width="1.5" marker-end="url(#arrowhead-amber)"/>
+        <text x="500" y="118" fill="#b45309" font-size="9" text-anchor="middle">proxy :65000 (127.0.0.1)</text>
+
+        <!-- VUE 3 FRONTEND -->
+        <rect x="410" y="180" width="240" height="170" rx="8" fill="rgba(34, 211, 238, 0.12)" stroke="#0e7490" stroke-width="1.5"/>
+        <text x="530" y="204" fill="#0f172a" font-size="13" font-weight="600" text-anchor="middle">Vue 3 SPA</text>
+        <text x="530" y="224" fill="#475569" font-size="10" text-anchor="middle">Vite 7 build → frontend_dist/</text>
+        <text x="530" y="240" fill="#475569" font-size="10" text-anchor="middle">embedded in Go binary via</text>
+        <text x="530" y="254" fill="#475569" font-size="10" text-anchor="middle">//go:embed all:frontend_dist</text>
+        <text x="530" y="272" fill="#475569" font-size="10" text-anchor="middle">vue-router 4 · pinia 3 · axios</text>
+        <text x="530" y="287" fill="#475569" font-size="10" text-anchor="middle">chart.js 4 (SLA, lazy-loaded)</text>
+        <text x="530" y="307" fill="#0e7490" font-size="9" text-anchor="middle">11 routes · SearchView + SlaView</text>
+        <text x="530" y="320" fill="#0e7490" font-size="9" text-anchor="middle">lazy-loaded code-split</text>
+        <text x="530" y="338" fill="#0e7490" font-size="9" text-anchor="middle">SOC: 30s poll · 48 hosts/page</text>
+
+        <!-- GO BINARY -->
+        <rect x="670" y="160" width="400" height="430" rx="8" fill="rgba(52, 211, 153, 0.10)" stroke="#047857" stroke-width="1.5"/>
+        <text x="870" y="182" fill="#0f172a" font-size="13" font-weight="600" text-anchor="middle">Go 1.25 binary · net/http stdlib :65000</text>
+        <text x="870" y="200" fill="#475569" font-size="10" text-anchor="middle">single static binary · CGO_ENABLED=1 · WatchdogSec 120</text>
+
+        <rect x="690" y="215" width="170" height="62" rx="6" fill="rgba(52, 211, 153, 0.18)" stroke="#047857" stroke-width="1.5"/>
+        <text x="775" y="236" fill="#0f172a" font-size="12" font-weight="600" text-anchor="middle">HTTP Router</text>
+        <text x="775" y="252" fill="#475569" font-size="10" text-anchor="middle">stdlib (Go 1.22 method)</text>
+        <text x="775" y="266" fill="#047857" font-size="9" text-anchor="middle">15s read · 30s write · 60s idle</text>
+
+        <rect x="870" y="215" width="180" height="62" rx="6" fill="rgba(52, 211, 153, 0.18)" stroke="#047857" stroke-width="1.5"/>
+        <text x="960" y="236" fill="#0f172a" font-size="12" font-weight="600" text-anchor="middle">API Handlers</text>
+        <text x="960" y="252" fill="#475569" font-size="10" text-anchor="middle">internal/api/* packages</text>
+        <text x="960" y="266" fill="#047857" font-size="9" text-anchor="middle">checks · rules · users · …</text>
+
+        <rect x="690" y="289" width="170" height="62" rx="6" fill="rgba(52, 211, 153, 0.18)" stroke="#047857" stroke-width="1.5"/>
+        <text x="775" y="310" fill="#0f172a" font-size="12" font-weight="600" text-anchor="middle">Scheduler</text>
+        <text x="775" y="326" fill="#475569" font-size="10" text-anchor="middle">time.AfterFunc per check</text>
+        <text x="775" y="340" fill="#047857" font-size="9" text-anchor="middle">sem 200 · per-check Mutex</text>
+
+        <rect x="870" y="289" width="180" height="62" rx="6" fill="rgba(52, 211, 153, 0.18)" stroke="#047857" stroke-width="1.5"/>
+        <text x="960" y="310" fill="#0f172a" font-size="12" font-weight="600" text-anchor="middle">Rule Engine</text>
+        <text x="960" y="326" fill="#475569" font-size="10" text-anchor="middle">per-result async eval</text>
+        <text x="960" y="340" fill="#047857" font-size="9" text-anchor="middle">CAS state transition · sem 10</text>
+
+        <rect x="690" y="363" width="360" height="42" rx="6" fill="rgba(251, 113, 133, 0.14)" stroke="#be123c" stroke-width="1" stroke-dasharray="4,4"/>
+        <text x="870" y="379" fill="#0f172a" font-size="11" font-weight="600" text-anchor="middle">Auth + Security middleware</text>
+        <text x="870" y="395" fill="#be123c" font-size="10" text-anchor="middle">JWT HS256 cookie · bcrypt cost 12 · CSP/HSTS via nginx</text>
+
+        <rect x="690" y="413" width="360" height="38" rx="6" fill="rgba(148, 163, 184, 0.18)" stroke="#475569" stroke-width="1.5"/>
+        <text x="870" y="430" fill="#0f172a" font-size="11" font-weight="600" text-anchor="middle">Self-health · dead-man's switch · crash detect</text>
+        <text x="870" y="443" fill="#475569" font-size="9" text-anchor="middle">scheduler heartbeat · .shutdown_clean marker · systemd WATCHDOG</text>
+
+        <rect x="690" y="459" width="170" height="62" rx="6" fill="rgba(52, 211, 153, 0.18)" stroke="#047857" stroke-width="1.5"/>
+        <text x="775" y="480" fill="#0f172a" font-size="12" font-weight="600" text-anchor="middle">HTTP Checker</text>
+        <text x="775" y="496" fill="#475569" font-size="10" text-anchor="middle">pool 100 max · 5/host</text>
+        <text x="775" y="510" fill="#047857" font-size="9" text-anchor="middle">TLS LRU 128 · 90s idle</text>
+
+        <rect x="870" y="459" width="180" height="62" rx="6" fill="rgba(52, 211, 153, 0.18)" stroke="#047857" stroke-width="1.5"/>
+        <text x="960" y="480" fill="#0f172a" font-size="12" font-weight="600" text-anchor="middle">Net Checkers</text>
+        <text x="960" y="496" fill="#475569" font-size="10" text-anchor="middle">pro-bing · gosnmp · tcp · …</text>
+        <text x="960" y="510" fill="#047857" font-size="9" text-anchor="middle">ICMP needs CAP_NET_RAW</text>
+
+        <rect x="690" y="533" width="360" height="48" rx="6" fill="rgba(52, 211, 153, 0.18)" stroke="#047857" stroke-width="1.5"/>
+        <text x="870" y="551" fill="#0f172a" font-size="12" font-weight="600" text-anchor="middle">Alerter · dispatch channels</text>
+        <text x="870" y="568" fill="#475569" font-size="10" text-anchor="middle">email · signal · webhook</text>
+
+        <!-- SQLITE -->
+        <rect x="410" y="610" width="640" height="170" rx="8" fill="rgba(167, 139, 250, 0.14)" stroke="#6d28d9" stroke-width="1.5"/>
+        <text x="730" y="634" fill="#0f172a" font-size="13" font-weight="600" text-anchor="middle">SQLite 3 · WAL mode · CGO go-sqlite3 v1.14.37</text>
+        <text x="730" y="653" fill="#475569" font-size="10" text-anchor="middle">SetMaxOpenConns(1) · schema v24 baseline · incremental migrations · single file</text>
+
+        <text x="730" y="676" fill="#6d28d9" font-size="9" font-weight="600" text-anchor="middle">— 3-table results architecture (A-011) —</text>
+
+        <rect x="430" y="684" width="190" height="40" rx="4" fill="rgba(167, 139, 250, 0.20)" stroke="#6d28d9" stroke-width="0.8"/>
+        <text x="525" y="700" fill="#0f172a" font-size="10" font-weight="600" text-anchor="middle">check_state</text>
+        <text x="525" y="714" fill="#6d28d9" font-size="9" text-anchor="middle">~1.5K rows · current status</text>
+
+        <rect x="635" y="684" width="190" height="40" rx="4" fill="rgba(167, 139, 250, 0.20)" stroke="#6d28d9" stroke-width="0.8"/>
+        <text x="730" y="700" fill="#0f172a" font-size="10" font-weight="600" text-anchor="middle">check_daily_rollups</text>
+        <text x="730" y="714" fill="#6d28d9" font-size="9" text-anchor="middle">~135K (90d) · uptime % SLA</text>
+
+        <rect x="840" y="684" width="190" height="40" rx="4" fill="rgba(167, 139, 250, 0.20)" stroke="#6d28d9" stroke-width="0.8"/>
+        <text x="935" y="700" fill="#0f172a" font-size="10" font-weight="600" text-anchor="middle">check_results</text>
+        <text x="935" y="714" fill="#6d28d9" font-size="9" text-anchor="middle">~6.5M (3d) · raw rows · 4h chart</text>
+
+        <text x="730" y="745" fill="#6d28d9" font-size="9" text-anchor="middle">check_definitions · alert_rules · users · audit_log · settings · fail2ban_history · …</text>
+        <text x="730" y="763" fill="#6d28d9" font-size="9" text-anchor="middle">hourly purge: raw 3d · rollups 90d · backups hourly to /var/backups/bekci</text>
+
+        <line x1="870" y1="592" x2="870" y2="608" stroke="#6d28d9" stroke-width="1.5" marker-end="url(#arrowhead-violet)"/>
+        <text x="884" y="603" fill="#6d28d9" font-size="9">SQL</text>
+
+        <!-- HARDENING -->
+        <rect x="410" y="365" width="240" height="220" rx="8" fill="rgba(251, 113, 133, 0.14)" stroke="#be123c" stroke-width="1.5"/>
+        <text x="530" y="388" fill="#0f172a" font-size="13" font-weight="600" text-anchor="middle">Hardening / OS</text>
+        <text x="530" y="410" fill="#475569" font-size="10" text-anchor="middle">runs as user bekci (uid 999)</text>
+        <text x="530" y="426" fill="#475569" font-size="10" text-anchor="middle">systemd · Restart=on-failure</text>
+        <text x="530" y="442" fill="#475569" font-size="10" text-anchor="middle">WatchdogSec=120 · process</text>
+        <text x="530" y="455" fill="#475569" font-size="10" text-anchor="middle">sends WATCHDOG=1 every 30s</text>
+        <text x="530" y="473" fill="#475569" font-size="10" text-anchor="middle">AmbientCapabilities CAP_NET_RAW</text>
+        <text x="530" y="488" fill="#475569" font-size="10" text-anchor="middle">SQLite WAL · 0600 perms</text>
+        <text x="530" y="510" fill="#be123c" font-size="9" text-anchor="middle">Fail2Ban integration (read-only)</text>
+        <text x="530" y="525" fill="#be123c" font-size="9" text-anchor="middle">/var/lib/fail2ban/fail2ban.sqlite3</text>
+        <text x="530" y="543" fill="#be123c" font-size="9" text-anchor="middle">backup files 0600 (owner only)</text>
+        <text x="530" y="558" fill="#be123c" font-size="9" text-anchor="middle">Argon2id KDF for backup encryption</text>
+        <text x="530" y="575" fill="#be123c" font-size="9" text-anchor="middle">CSP · HSTS · X-Frame · X-CTO</text>
+
+        <!-- EXTERNAL -->
+        <rect x="1100" y="60" width="170" height="750" rx="12" fill="rgba(148, 163, 184, 0.10)" stroke="#475569" stroke-width="1" stroke-dasharray="6,4"/>
+        <text x="1185" y="80" fill="#475569" font-size="11" font-weight="600" text-anchor="middle">External</text>
+
+        <text x="1185" y="102" fill="#b45309" font-size="10" font-weight="600" text-anchor="middle">— ALERT CHANNELS —</text>
+
+        <rect x="1115" y="112" width="140" height="44" rx="4" fill="rgba(251, 191, 36, 0.14)" stroke="#b45309" stroke-width="1.2"/>
+        <text x="1185" y="129" fill="#0f172a" font-size="11" font-weight="600" text-anchor="middle">Resend API</text>
+        <text x="1185" y="145" fill="#475569" font-size="9" text-anchor="middle">api.resend.com · email</text>
+
+        <rect x="1115" y="160" width="140" height="44" rx="4" fill="rgba(251, 191, 36, 0.14)" stroke="#b45309" stroke-width="1.2"/>
+        <text x="1185" y="177" fill="#0f172a" font-size="11" font-weight="600" text-anchor="middle">Signal CLI</text>
+        <text x="1185" y="193" fill="#475569" font-size="9" text-anchor="middle">signal-cli REST API</text>
+
+        <rect x="1115" y="208" width="140" height="44" rx="4" fill="rgba(251, 191, 36, 0.14)" stroke="#b45309" stroke-width="1.2"/>
+        <text x="1185" y="225" fill="#0f172a" font-size="11" font-weight="600" text-anchor="middle">Webhook</text>
+        <text x="1185" y="241" fill="#475569" font-size="9" text-anchor="middle">JSON POST · Bearer/Basic</text>
+
+        <text x="1185" y="275" fill="#b45309" font-size="10" font-weight="600" text-anchor="middle">— MONITORED TARGETS —</text>
+
+        <rect x="1115" y="285" width="140" height="44" rx="4" fill="rgba(251, 191, 36, 0.14)" stroke="#b45309" stroke-width="1.2"/>
+        <text x="1185" y="302" fill="#0f172a" font-size="11" font-weight="600" text-anchor="middle">HTTP / HTTPS</text>
+        <text x="1185" y="318" fill="#475569" font-size="9" text-anchor="middle">URL probes · status / body</text>
+
+        <rect x="1115" y="333" width="140" height="44" rx="4" fill="rgba(251, 191, 36, 0.14)" stroke="#b45309" stroke-width="1.2"/>
+        <text x="1185" y="350" fill="#0f172a" font-size="11" font-weight="600" text-anchor="middle">TCP</text>
+        <text x="1185" y="366" fill="#475569" font-size="9" text-anchor="middle">port reachability</text>
+
+        <rect x="1115" y="381" width="140" height="44" rx="4" fill="rgba(251, 191, 36, 0.14)" stroke="#b45309" stroke-width="1.2"/>
+        <text x="1185" y="398" fill="#0f172a" font-size="11" font-weight="600" text-anchor="middle">ICMP (ping)</text>
+        <text x="1185" y="414" fill="#475569" font-size="9" text-anchor="middle">pro-bing · NET_RAW</text>
+
+        <rect x="1115" y="429" width="140" height="44" rx="4" fill="rgba(251, 191, 36, 0.14)" stroke="#b45309" stroke-width="1.2"/>
+        <text x="1185" y="446" fill="#0f172a" font-size="11" font-weight="600" text-anchor="middle">SNMP v2c/v3</text>
+        <text x="1185" y="462" fill="#475569" font-size="9" text-anchor="middle">gosnmp · 15m cred cache</text>
+
+        <rect x="1115" y="477" width="140" height="44" rx="4" fill="rgba(251, 191, 36, 0.14)" stroke="#b45309" stroke-width="1.2"/>
+        <text x="1185" y="494" fill="#0f172a" font-size="11" font-weight="600" text-anchor="middle">DNS · TLS cert</text>
+        <text x="1185" y="510" fill="#475569" font-size="9" text-anchor="middle">resolution · expiry watch</text>
+
+        <line x1="1053" y1="557" x2="1112" y2="225" stroke="#b45309" stroke-width="1" stroke-dasharray="4,4" marker-end="url(#arrowhead-amber)"/>
+        <text x="1083" y="390" fill="#b45309" font-size="9" text-anchor="middle">alerts</text>
+
+        <line x1="1053" y1="495" x2="1112" y2="455" stroke="#b45309" stroke-width="1" stroke-dasharray="4,4" marker-end="url(#arrowhead-amber)"/>
+        <text x="1083" y="480" fill="#b45309" font-size="9" text-anchor="middle">probes</text>
+
+        <!-- ENVIRONMENTS -->
+        <rect x="40" y="830" width="1050" height="60" rx="8" fill="rgba(148, 163, 184, 0.10)" stroke="#475569" stroke-width="1" stroke-dasharray="3,3"/>
+        <text x="55" y="850" fill="#475569" font-size="10" font-weight="600">Environments</text>
+        <text x="60" y="869" fill="#0f172a" font-size="10">Local (Docker on macOS · Alpine 3.23)</text>
+        <text x="60" y="882" fill="#475569" font-size="9">port 65000 · /data/bekci.db (named volume) · cap_add NET_RAW · CGO build in container</text>
+        <text x="500" y="869" fill="#0f172a" font-size="10">Production (dias-bekci · 10.0.9.20 · Ubuntu 22.04)</text>
+        <text x="500" y="882" fill="#475569" font-size="9">bare-metal · /opt/bekci · /etc/bekci/config.yaml · systemd · nginx :443 · embedded frontend</text>
+
+        <!-- AUTH FLOW OVERLAY -->
+        <path d="M 100 142 Q 100 170 130 170 L 230 170 Q 250 170 250 200 L 250 280 Q 250 310 290 310 L 660 310" fill="none" stroke="#be123c" stroke-width="1.5" stroke-dasharray="5,5"/>
+        <text x="170" y="186" fill="#be123c" font-size="9" font-weight="600">JWT cookie (token, HttpOnly)</text>
+
+        <!-- LEGEND -->
+        <rect x="40" y="190" width="320" height="190" rx="8" fill="#ffffff" stroke="#e2e5ea" stroke-width="1"/>
+        <text x="56" y="210" fill="#0f172a" font-size="12" font-weight="600">Legend</text>
+
+        <rect x="56" y="222" width="16" height="11" rx="2" fill="rgba(34, 211, 238, 0.12)" stroke="#0e7490" stroke-width="1"/>
+        <text x="80" y="231" fill="#475569" font-size="10">Frontend (Vue 3)</text>
+
+        <rect x="56" y="238" width="16" height="11" rx="2" fill="rgba(52, 211, 153, 0.12)" stroke="#047857" stroke-width="1"/>
+        <text x="80" y="247" fill="#475569" font-size="10">Backend (Go binary)</text>
+
+        <rect x="56" y="254" width="16" height="11" rx="2" fill="rgba(167, 139, 250, 0.14)" stroke="#6d28d9" stroke-width="1"/>
+        <text x="80" y="263" fill="#475569" font-size="10">Database (SQLite)</text>
+
+        <rect x="56" y="270" width="16" height="11" rx="2" fill="rgba(251, 191, 36, 0.14)" stroke="#b45309" stroke-width="1"/>
+        <text x="80" y="279" fill="#475569" font-size="10">Network / External</text>
+
+        <rect x="56" y="286" width="16" height="11" rx="2" fill="rgba(251, 113, 133, 0.14)" stroke="#be123c" stroke-width="1"/>
+        <text x="80" y="295" fill="#475569" font-size="10">Security / Hardening</text>
+
+        <rect x="56" y="302" width="16" height="11" rx="2" fill="rgba(148, 163, 184, 0.18)" stroke="#475569" stroke-width="1"/>
+        <text x="80" y="311" fill="#475569" font-size="10">Generic / Internal</text>
+
+        <line x1="56" y1="326" x2="72" y2="326" stroke="#be123c" stroke-width="1.5" stroke-dasharray="4,4"/>
+        <text x="80" y="330" fill="#475569" font-size="10">Auth flow (dashed rose)</text>
+
+        <rect x="56" y="338" width="16" height="11" rx="2" fill="transparent" stroke="#b45309" stroke-width="1" stroke-dasharray="6,4"/>
+        <text x="80" y="347" fill="#475569" font-size="10">Trust region (server boundary)</text>
+
+        <line x1="56" y1="360" x2="72" y2="360" stroke="#b45309" stroke-width="1" stroke-dasharray="4,4"/>
+        <text x="80" y="364" fill="#475569" font-size="10">External I/O (dashed amber)</text>
+
+        <text x="56" y="378" fill="#64748b" font-size="9">All arrows: data flow direction →</text>
+      </svg>
+    </div>
+
+    <!-- Info Cards -->
+    <div class="cards">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot emerald"></div>
+          <h3>Backend (Go 1.25)</h3>
+        </div>
+        <ul>
+          <li>• <b>net/http</b> stdlib router (Go 1.22 method routing)</li>
+          <li>• <b>go-sqlite3</b> 1.14.37 (CGO_ENABLED=1 required)</li>
+          <li>• <b>golang-jwt/v5</b> 5.3.1 · <b>bcrypt</b> cost 12</li>
+          <li>• <b>pro-bing</b> 0.8.0 ICMP · <b>gosnmp</b> SNMP v2c/v3</li>
+          <li>• <b>yaml.v3</b> config · env override (`BEKCI_` prefix)</li>
+          <li>• <b>x/crypto</b> bcrypt + Argon2id (backup KDF)</li>
+          <li>• Custom scheduler · per-check time.AfterFunc · sem 200</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot cyan"></div>
+          <h3>Frontend (Vue 3)</h3>
+        </div>
+        <ul>
+          <li>• <b>Vue</b> ^3.5.25 · <b>Vite</b> ^7.3.1 (build only)</li>
+          <li>• <b>vue-router</b> ^4 · <b>pinia</b> ^3 · <b>axios</b> ^1.13</li>
+          <li>• <b>chart.js</b> ^4.5 (SLA page, lazy-loaded)</li>
+          <li>• 11 routes · SearchView + SlaView code-split</li>
+          <li>• Built bundle: 269 KB raw / 88 KB gzipped</li>
+          <li>• Frontend dist embedded in Go binary via //go:embed</li>
+          <li>• SOC page: 30s poll · 48 hosts/page · ~100 req/min</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot rose"></div>
+          <h3>Security &amp; Auth</h3>
+        </div>
+        <ul>
+          <li>• <b>JWT HS256</b> · HttpOnly cookie (token) · path /</li>
+          <li>• <b>bcrypt</b> cost 12 password hash</li>
+          <li>• Default first-boot creds: admin/admin1234 (user changes)</li>
+          <li>• Nginx headers: CSP · HSTS · X-Frame · X-CTO · Referrer</li>
+          <li>• Watchdog: process sends WATCHDOG=1 every 30s</li>
+          <li>• <b>Fail2Ban</b> integration · live + historical (SQLite)</li>
+          <li>• Backups: <b>Argon2id</b> KDF + AES (encrypted variant)</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot violet"></div>
+          <h3>Data Architecture (A-011)</h3>
+        </div>
+        <ul>
+          <li>• <b>SQLite 3</b> WAL · SetMaxOpenConns(1) · schema v24</li>
+          <li>• <b>check_state</b>: ~1.5K rows · current status (1:1)</li>
+          <li>• <b>check_daily_rollups</b>: ~135K rows (90d) · uptime</li>
+          <li>• <b>check_results</b>: ~6.5M rows (3d) · raw history</li>
+          <li>• Triple write in 1 transaction per result save</li>
+          <li>• Hourly purge: raw 3d · rollups 90d</li>
+          <li>• Auto backup: weekly/10day/monthly schedules</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot amber"></div>
+          <h3>Checks &amp; Alerts</h3>
+        </div>
+        <ul>
+          <li>• Probe types: HTTP/S · TCP · ICMP · SNMP · DNS · TLS</li>
+          <li>• ICMP requires CAP_NET_RAW (Docker cap_add / systemd ambient)</li>
+          <li>• SNMP settings cache: 15m TTL · all 7 keys together</li>
+          <li>• HTTP pool: 100 max idle · 5/host · 90s · TLS LRU 128</li>
+          <li>• Rule engine: per-rule mutex · atomic CAS · sem cap 10</li>
+          <li>• Alert channels: <b>Resend</b> email · <b>Signal CLI</b> · webhook</li>
+          <li>• System alerts: scheduler dead · crash detect · unclean restart</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot slate"></div>
+          <h3>Operations &amp; Deploy</h3>
+        </div>
+        <ul>
+          <li>• Local: <b>Docker</b> multi-stage build · Alpine 3.23 runtime</li>
+          <li>• Prod: bare-metal Ubuntu 22.04 · systemd · nginx :443</li>
+          <li>• Deploy: ssh + git pull + go build + systemctl restart</li>
+          <li>• Frontend pre-built · cmd/bekci/frontend_dist/ in git</li>
+          <li>• systemd WatchdogSec=120 · auto-restart on hang</li>
+          <li>• Config: YAML + env override (BEKCI_ prefix)</li>
+          <li>• Health endpoint cached 120s · scheduler heartbeat live</li>
+        </ul>
+      </div>
+    </div>
+
+    <p class="footer">
+      Bekci · Generated 13/05/2026 · light theme · companion to <code style="color:#0e7490">tech_stack.md</code> reference
+    </p>
+  </div>
+</body>
+</html>
