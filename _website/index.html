@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Bekci — Website Design Directions</title>
+<link rel="icon" href="assets/favicon-32.png" />
+<style>
+  :root{
+    --bg:#0b0c0f; --panel:#121419; --panel2:#171a21; --line:#242833;
+    --ink:#eef0f4; --mut:#9aa1ad; --faint:#6b7280;
+    --gold:#e5b769;
+    --font:'Hanken Grotesk',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    --mono:ui-monospace,'JetBrains Mono',SFMono-Regular,Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:radial-gradient(1200px 600px at 50% -8%, rgba(229,183,105,.06), transparent 60%), var(--bg);
+    color:var(--ink); font-family:var(--font);
+    -webkit-font-smoothing:antialiased; line-height:1.55; min-height:100vh;
+  }
+  a{color:inherit}
+  .wrap{max-width:1240px;margin:0 auto;padding:0 24px}
+
+  header.top{padding:60px 0 22px;text-align:center}
+  .kicker{font-family:var(--mono);font-size:12px;letter-spacing:.28em;text-transform:uppercase;color:var(--gold);margin:0 0 18px}
+  h1{font-weight:800;letter-spacing:-.02em;font-size:clamp(30px,5vw,52px);line-height:1.04;margin:0 0 16px;text-wrap:balance}
+  h1 .m{color:var(--mut);font-weight:500}
+  .lead{max-width:730px;margin:0 auto;color:var(--mut);font-size:clamp(15px,1.6vw,18px)}
+  .lead b{color:var(--ink);font-weight:600}
+  .shared{max-width:900px;margin:26px auto 0;padding:14px 18px;border:1px solid var(--line);border-radius:16px;
+    background:linear-gradient(180deg,var(--panel),rgba(18,20,25,.4));
+    display:flex;flex-wrap:wrap;gap:10px 14px;justify-content:center;align-items:center}
+  .shared .lbl{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--faint)}
+  .chip{font-family:var(--mono);font-size:12px;color:var(--ink);border:1px solid var(--line);border-radius:999px;padding:5px 11px;background:var(--panel2);white-space:nowrap}
+
+  /* section headers */
+  .band{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin:52px 0 22px}
+  .band h2{margin:0;font-size:22px;font-weight:800;letter-spacing:-.01em}
+  .band .tag{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);
+    border:1px solid rgba(229,183,105,.35);border-radius:999px;padding:4px 10px}
+  .band .sub{color:var(--mut);font-size:14px}
+  .band .rule{flex:1;height:1px;background:var(--line);min-width:20px;align-self:center}
+
+  /* preview frame shared */
+  .frame{position:relative;width:100%;overflow:hidden;background:#000;border-bottom:1px solid var(--line)}
+  .frame iframe{position:absolute;top:0;left:0;width:1400px;height:875px;border:0;transform-origin:top left;pointer-events:none}
+  .frame .open{position:absolute;inset:0;display:flex;align-items:flex-end;padding:14px;text-decoration:none;
+    background:linear-gradient(180deg,transparent 55%,rgba(6,7,9,.55));opacity:0;transition:opacity .2s ease}
+  .frame:hover .open{opacity:1}
+  .frame .open span{font-family:var(--mono);font-size:12px;letter-spacing:.06em;color:#fff;background:rgba(10,12,16,.72);
+    border:1px solid rgba(255,255,255,.25);border-radius:999px;padding:7px 13px;backdrop-filter:blur(4px)}
+  .num{position:absolute;top:12px;left:14px;z-index:2;font-family:var(--mono);font-size:12px;letter-spacing:.1em;color:#fff;
+    background:rgba(10,12,16,.62);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:3px 8px;backdrop-filter:blur(3px)}
+
+  .card{border:1px solid var(--line);border-radius:20px;overflow:hidden;background:var(--panel);display:flex;flex-direction:column;transition:border-color .2s,transform .2s}
+  .card:hover{border-color:#3a4150;transform:translateY(-2px)}
+  .name{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+  .name h3{margin:0;font-size:21px;font-weight:800;letter-spacing:-.01em}
+  .name .mood{color:var(--mut);font-size:14px;font-style:italic}
+  .desc{margin:0;color:var(--mut);font-size:14.5px}
+  .meta{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center}
+  .swatches{display:flex}
+  .swatches i{width:22px;height:22px;display:block;border:1px solid rgba(255,255,255,.12)}
+  .swatches i:first-child{border-radius:6px 0 0 6px}.swatches i:last-child{border-radius:0 6px 6px 0}
+  .type{font-family:var(--mono);font-size:11.5px;color:var(--faint)}
+  .btn{text-decoration:none;font-size:14px;font-weight:600;border-radius:10px;padding:10px 16px;display:inline-flex;align-items:center;gap:8px;transition:.15s}
+  .btn.pri{background:var(--gold);color:#231b08}.btn.pri:hover{filter:brightness(1.06)}
+
+  /* featured (round 2) */
+  .feat{display:grid;grid-template-columns:1fr 1fr;gap:26px}
+  @media(max-width:860px){.feat{grid-template-columns:1fr}}
+  .feat .card{border-color:rgba(229,183,105,.28)}
+  .feat .frame{aspect-ratio:16/10}
+  .feat .body{padding:20px 22px 22px;display:flex;flex-direction:column;gap:12px;flex:1}
+  .like{font-family:var(--mono);font-size:11.5px;color:var(--gold);letter-spacing:.02em;
+    border-left:2px solid rgba(229,183,105,.5);padding-left:10px}
+
+  /* round 1 (compact) */
+  .r1{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+  @media(max-width:980px){.r1{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:520px){.r1{grid-template-columns:1fr}}
+  .r1 .frame{aspect-ratio:16/11}
+  .r1 .body{padding:14px 16px 16px;display:flex;flex-direction:column;gap:9px;flex:1}
+  .r1 .name h3{font-size:17px}
+  .r1 .desc{font-size:13px}
+  .r1 .open-link{margin-top:auto;font-family:var(--mono);font-size:12px;color:var(--mut);text-decoration:none}
+  .r1 .open-link:hover{color:var(--ink)}
+  .r1 .note{font-family:var(--mono);font-size:11px;color:var(--gold);letter-spacing:.02em}
+
+  footer{padding:34px 0 60px;text-align:center;color:var(--faint);font-size:13px;border-top:1px solid var(--line);margin-top:44px}
+  footer .mono{font-family:var(--mono);font-size:12px;letter-spacing:.04em}
+  footer a{color:var(--mut);text-decoration:none;border-bottom:1px solid transparent}
+  footer a:hover{border-bottom-color:var(--mut)}
+  @media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <p class="kicker">Bekci · Website Direction Pitch</p>
+      <h1>Dress the watchman. <span class="m">Pick a direction.</span></h1>
+      <p class="lead">Same product, same facts — different visual worlds. Every direction is a full,
+      responsive landing page for <b>Bekci</b>, the self-hosted tactical monitor. Round two takes your
+      notes further: a stronger owl hero, and the AND/OR condition logic turned into a living centrepiece.
+      Hover any card to open the live page — the readouts and animations are running.</p>
+      <div class="shared">
+        <span class="lbl">Consistent across every direction</span>
+        <span class="chip">4h + 90d dual bars</span>
+        <span class="chip">(TCP AND HTTP) OR PING</span>
+        <span class="chip">Zero false positives</span>
+        <span class="chip">8 check types</span>
+        <span class="chip">Open source · MIT</span>
+      </div>
+    </header>
+
+    <!-- ROUND 2 -->
+    <div class="band">
+      <span class="tag">Round 2 · more creative</span>
+      <h2>The two to focus on</h2>
+      <span class="sub">Bolder worlds, animated condition logic.</span>
+      <span class="rule"></span>
+    </div>
+
+    <section class="feat">
+      <article class="card">
+        <div class="frame">
+          <span class="num">05</span>
+          <iframe data-src="demos/5-sentinel.html" title="Sentinel preview" scrolling="no" tabindex="-1"></iframe>
+          <a class="open" href="demos/5-sentinel.html" target="_blank" rel="noopener"><span>Open full page ↗</span></a>
+        </div>
+        <div class="body">
+          <div class="name"><h3>Sentinel</h3><span class="mood">a circuit board come alive</span></div>
+          <p class="desc">The owl’s circuit-medallion, exploded across the page. Glowing copper traces, an owl-chip hero — and the AND/OR rule drawn as <b>real logic gates</b> that light up and pulse as signals resolve.</p>
+          <p class="like">↳ evolves Blueprint’s schematic into a live, animated centrepiece</p>
+          <div class="meta">
+            <div class="swatches" aria-hidden="true"><i style="background:#06090C"></i><i style="background:#0A1512"></i><i style="background:#35E0D0"></i><i style="background:#F5B740"></i><i style="background:#35D07A"></i></div>
+            <span class="type">Familjen Grotesk · Hanken · Spline Mono</span>
+          </div>
+          <div><a class="btn pri" href="demos/5-sentinel.html" target="_blank" rel="noopener">Open demo</a></div>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="frame">
+          <span class="num">07</span>
+          <iframe data-src="demos/7-terminal.html" title="Terminal preview" scrolling="no" tabindex="-1"></iframe>
+          <a class="open" href="demos/7-terminal.html" target="_blank" rel="noopener"><span>Open full page ↗</span></a>
+        </div>
+        <div class="body">
+          <div class="name"><h3>Terminal</h3><span class="mood">a CRT ops console, watchman online</span></div>
+          <p class="desc">A phosphor-glow terminal boots up with the owl in gold. The showpiece <b>evaluates the rule live</b> — a single blip is held at <span style="font-family:var(--mono)">streak 1/3</span>, then a real outage trips the page. Zero false positives, on screen.</p>
+          <p class="like">↳ the condition logic you can watch decide</p>
+          <div class="meta">
+            <div class="swatches" aria-hidden="true"><i style="background:#080B0E"></i><i style="background:#FFB454"></i><i style="background:#5BE58A"></i><i style="background:#FF5C57"></i><i style="background:#0B1014"></i></div>
+            <span class="type">JetBrains Mono · VT323 · Hanken</span>
+          </div>
+          <div><a class="btn pri" href="demos/7-terminal.html" target="_blank" rel="noopener">Open demo</a></div>
+        </div>
+      </article>
+    </section>
+
+    <!-- ROUND 1 -->
+    <div class="band">
+      <span class="tag" style="color:var(--mut);border-color:var(--line)">Round 1 · first pass</span>
+      <h2>The originals</h2>
+      <span class="sub">Here for reference — you liked #3’s hero and #4’s schematic idea.</span>
+      <span class="rule"></span>
+    </div>
+
+    <section class="r1">
+      <article class="card">
+        <div class="frame"><span class="num">01</span>
+          <iframe data-src="demos/1-night-watch.html" title="Night Watch preview" scrolling="no" tabindex="-1"></iframe>
+          <a class="open" href="demos/1-night-watch.html" target="_blank" rel="noopener"><span>Open ↗</span></a></div>
+        <div class="body"><div class="name"><h3>Night Watch</h3></div>
+          <p class="desc">Dark, calm ops-room · amber lantern.</p>
+          <a class="open-link" href="demos/1-night-watch.html" target="_blank" rel="noopener">Open full page ↗</a></div>
+      </article>
+      <article class="card">
+        <div class="frame"><span class="num">02</span>
+          <iframe data-src="demos/2-signal.html" title="Signal preview" scrolling="no" tabindex="-1"></iframe>
+          <a class="open" href="demos/2-signal.html" target="_blank" rel="noopener"><span>Open ↗</span></a></div>
+        <div class="body"><div class="name"><h3>Signal</h3></div>
+          <p class="desc">Light engineering datasheet · teal.</p>
+          <a class="open-link" href="demos/2-signal.html" target="_blank" rel="noopener">Open full page ↗</a></div>
+      </article>
+      <article class="card">
+        <div class="frame"><span class="num">03</span>
+          <iframe data-src="demos/3-watchman.html" title="Watchman preview" scrolling="no" tabindex="-1"></iframe>
+          <a class="open" href="demos/3-watchman.html" target="_blank" rel="noopener"><span>Open ↗</span></a></div>
+        <div class="body"><div class="name"><h3>Watchman</h3></div>
+          <p class="note">✓ liked: the owl hero</p>
+          <p class="desc">Warm serif brand story · gold + teal.</p>
+          <a class="open-link" href="demos/3-watchman.html" target="_blank" rel="noopener">Open full page ↗</a></div>
+      </article>
+      <article class="card">
+        <div class="frame"><span class="num">04</span>
+          <iframe data-src="demos/4-blueprint.html" title="Blueprint preview" scrolling="no" tabindex="-1"></iframe>
+          <a class="open" href="demos/4-blueprint.html" target="_blank" rel="noopener"><span>Open ↗</span></a></div>
+        <div class="body"><div class="name"><h3>Blueprint</h3></div>
+          <p class="note">✓ liked: the schematic idea</p>
+          <p class="desc">Light technical schematic · condensed.</p>
+          <a class="open-link" href="demos/4-blueprint.html" target="_blank" rel="noopener">Open full page ↗</a></div>
+      </article>
+    </section>
+
+    <footer>
+      <p class="mono">bekci · design pitch</p>
+      <p>Tell me which to build out — or mix: e.g. “Sentinel’s gates, Terminal’s owl.” &nbsp;·&nbsp; <a href="BRIEF.md" target="_blank" rel="noopener">product brief</a></p>
+    </footer>
+  </div>
+
+<script>
+  const DESIGN_W = 1400;
+  function fit(frame){ const ifr=frame.querySelector('iframe'); if(!ifr) return; ifr.style.transform='scale('+(frame.clientWidth/DESIGN_W)+')'; }
+  const frames=[...document.querySelectorAll('.frame')];
+  const io=new IntersectionObserver((ents)=>{ ents.forEach(e=>{ if(e.isIntersecting){ const ifr=e.target.querySelector('iframe'); if(ifr&&!ifr.src) ifr.src=ifr.dataset.src; io.unobserve(e.target);} }); },{rootMargin:'400px'});
+  frames.forEach(f=>{ fit(f); io.observe(f); });
+  let raf; window.addEventListener('resize',()=>{ cancelAnimationFrame(raf); raf=requestAnimationFrame(()=>frames.forEach(fit)); });
+</script>
+</body>
+</html>

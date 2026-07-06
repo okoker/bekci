@@ -1,0 +1,1207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bekci — The Sentinel Board · Self-Hosted Monitoring, Wired for Silence</title>
+<meta name="description" content="Bekci is a self-hosted host &amp; network monitor built like a circuit board: independent checks corroborate through real AND/OR logic gates so the alarm only fires when it's real. One Go binary, one port. Open source, MIT.">
+<link rel="icon" href="../assets/favicon-32.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@700&family=Hanken+Grotesk:wght@400;500;600&family=Spline+Sans+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   BEKCI — DIRECTION 5 · "SENTINEL"
+   A living printed-circuit board. Single committed dark world.
+   The owl is the chip; corroboration logic is real gates.
+   ============================================================ */
+
+:root{
+  color-scheme: dark;
+  /* board */
+  --board:#06090C;
+  --mask:#0A1512;
+  --panel:#0D1A18;
+  --panel-2:#0F211E;
+  /* copper / current */
+  --copper:#35E0D0;
+  --electric:#22D3EE;
+  --amber:#F5B740;
+  /* text */
+  --text:#E7F0EE;
+  --muted:#8AA39E;
+  --dim:#5C726D;
+  /* status */
+  --up:#35D07A;
+  --warn:#E0A63B;
+  --orange:#E6873B;
+  --down:#FF5A52;
+  --nodata:#16211F;
+  /* derived */
+  --trace-dim: rgba(53,224,208,.24);
+  --hairline: rgba(53,224,208,.14);
+  --edge: rgba(53,224,208,.10);
+  --pad: #0B1512;
+  --maxw:1160px;
+
+  --f-disp:'Familjen Grotesk', system-ui, sans-serif;
+  --f-body:'Hanken Grotesk', system-ui, sans-serif;
+  --f-mono:'Spline Sans Mono', ui-monospace, monospace;
+}
+
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion: reduce){ html{scroll-behavior:auto} }
+
+body{
+  margin:0;
+  background:var(--board);
+  color:var(--text);
+  font-family:var(--f-body);
+  font-weight:400;
+  font-size:clamp(15px,1vw + 12px,17px);
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+
+/* faint PCB grid + soldermask wash, fixed behind everything */
+body::before{
+  content:"";
+  position:fixed; inset:0; z-index:0; pointer-events:none;
+  background-image:
+    linear-gradient(rgba(53,224,208,.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(53,224,208,.045) 1px, transparent 1px);
+  background-size:46px 46px;
+  -webkit-mask-image:radial-gradient(120% 90% at 50% 0%, #000 40%, transparent 92%);
+  mask-image:radial-gradient(120% 90% at 50% 0%, #000 40%, transparent 92%);
+}
+body::after{
+  content:"";
+  position:fixed; inset:0; z-index:0; pointer-events:none;
+  background:
+    radial-gradient(60% 45% at 18% 8%, rgba(34,211,238,.06), transparent 60%),
+    radial-gradient(55% 45% at 88% 78%, rgba(53,224,208,.05), transparent 60%),
+    radial-gradient(40% 30% at 50% 40%, rgba(245,183,64,.03), transparent 70%);
+}
+
+.wrap{width:100%; max-width:var(--maxw); margin-inline:auto; padding-inline:clamp(18px,4vw,40px)}
+main{position:relative; z-index:1}
+img{max-width:100%; display:block}
+
+a{color:inherit}
+:focus-visible{outline:2px solid var(--amber); outline-offset:3px; border-radius:3px}
+
+.skip{position:absolute; left:-999px; top:0; background:var(--amber); color:#20160a; padding:10px 14px; font:600 14px var(--f-mono); z-index:100; border-radius:0 0 6px 0}
+.skip:focus{left:0}
+
+.vh{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ---------- silkscreen label ---------- */
+.silk{
+  display:inline-flex; align-items:center; gap:10px;
+  font-family:var(--f-mono); font-weight:600; font-size:12px;
+  letter-spacing:.24em; text-transform:uppercase; color:var(--copper);
+}
+.silk::before{
+  content:""; width:9px; height:9px; border-radius:50%;
+  background:var(--pad); border:2px solid var(--copper);
+  box-shadow:0 0 8px rgba(53,224,208,.5);
+}
+.silk .ref{color:var(--muted)}
+
+h1,h2,h3{font-family:var(--f-disp); font-weight:700; line-height:1.03; letter-spacing:-.01em; text-wrap:balance; margin:0}
+
+/* ---------- buttons ---------- */
+.btn{
+  display:inline-flex; align-items:center; gap:9px;
+  font-family:var(--f-mono); font-weight:600; font-size:13.5px; letter-spacing:.04em;
+  padding:12px 20px; border-radius:8px; text-decoration:none; cursor:pointer;
+  border:1px solid transparent; transition:transform .15s ease, background .15s ease, border-color .15s ease, box-shadow .15s ease;
+  white-space:nowrap;
+}
+.btn:hover{transform:translateY(-1px)}
+.btn-primary{
+  background:linear-gradient(180deg,#3ff0df,#25c8b8);
+  color:#04201d;
+  box-shadow:0 0 0 1px rgba(53,224,208,.5), 0 6px 22px rgba(53,224,208,.22);
+}
+.btn-primary:hover{box-shadow:0 0 0 1px rgba(53,224,208,.8), 0 10px 30px rgba(53,224,208,.34)}
+.btn-ghost{
+  background:rgba(53,224,208,.04); color:var(--text);
+  border-color:var(--hairline);
+}
+.btn-ghost:hover{border-color:var(--copper); background:rgba(53,224,208,.09)}
+.btn svg{width:16px;height:16px;flex:none}
+
+/* ============================================================
+   NAV
+   ============================================================ */
+.nav{
+  position:sticky; top:0; z-index:40;
+  background:rgba(6,9,12,.72);
+  backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--edge);
+}
+.nav-inner{display:flex; align-items:center; gap:22px; height:66px}
+.brand{display:flex; align-items:center; gap:11px; text-decoration:none; margin-right:auto}
+.brand-owl{width:34px; height:34px; filter:drop-shadow(0 0 10px rgba(53,224,208,.35))}
+.brand-name{font-family:var(--f-disp); font-weight:700; font-size:20px; letter-spacing:.02em}
+.brand-dot{width:7px;height:7px;border-radius:50%;background:var(--up);box-shadow:0 0 8px var(--up)}
+.nav-links{display:flex; align-items:center; gap:26px}
+.nav-links a{
+  text-decoration:none; color:var(--muted); font-family:var(--f-mono);
+  font-size:13px; letter-spacing:.03em; transition:color .15s ease; white-space:nowrap;
+}
+.nav-links a:hover{color:var(--text)}
+.nav-cta{display:flex; align-items:center; gap:10px}
+.nav-toggle{
+  display:none; width:44px; height:40px; border-radius:8px;
+  background:rgba(53,224,208,.05); border:1px solid var(--hairline);
+  color:var(--text); cursor:pointer; align-items:center; justify-content:center;
+}
+.nav-toggle svg{width:20px;height:20px}
+.mobile-panel{display:none}
+
+@media (max-width:860px){
+  .nav-links, .nav-cta{display:none}
+  .nav-toggle{display:inline-flex}
+  .mobile-panel{
+    display:none; flex-direction:column; gap:4px;
+    padding:12px 0 18px; border-top:1px solid var(--edge);
+  }
+  .nav.open .mobile-panel{display:flex}
+  .mobile-panel a.mlink{
+    text-decoration:none; color:var(--text); font-family:var(--f-mono); font-size:14px;
+    padding:12px 6px; border-bottom:1px solid var(--edge);
+  }
+  .mobile-panel .btn{justify-content:center; margin-top:10px}
+}
+
+/* ============================================================
+   HERO
+   ============================================================ */
+.hero{padding:clamp(40px,7vw,84px) 0 clamp(30px,5vw,52px); position:relative}
+.hero-grid{display:grid; grid-template-columns:1.05fr .95fr; gap:clamp(28px,4vw,56px); align-items:center}
+@media (max-width:820px){ .hero-grid{grid-template-columns:1fr} .hero .hero-chip{max-width:330px; order:-1} }
+
+.eyebrow{display:flex; flex-wrap:wrap; gap:8px; margin:0 0 22px}
+.badge{
+  font-family:var(--f-mono); font-weight:600; font-size:11px; letter-spacing:.18em; text-transform:uppercase;
+  color:var(--copper); padding:5px 10px; border:1px solid var(--hairline); border-radius:6px;
+  background:rgba(53,224,208,.04);
+}
+.hero h1{font-size:clamp(2.35rem,5.4vw,4rem)}
+.hero h1 .accent{
+  color:transparent;
+  background:linear-gradient(180deg,#ffd982,var(--amber));
+  -webkit-background-clip:text; background-clip:text;
+}
+.lede{color:var(--muted); font-size:clamp(1rem,1.5vw,1.16rem); max-width:56ch; margin:20px 0 28px}
+.cta-row{display:flex; flex-wrap:wrap; gap:12px; margin-bottom:26px}
+.stack-line{
+  font-family:var(--f-mono); font-size:12px; letter-spacing:.05em; color:var(--dim);
+  border-top:1px dashed var(--edge); padding-top:16px; margin:0;
+}
+
+/* the owl-chip */
+.hero-chip{position:relative; width:100%; max-width:500px; margin-inline:auto; aspect-ratio:1/1}
+.hero-chip .traces{position:absolute; inset:0; width:100%; height:100%; overflow:visible}
+.chip-glow{
+  position:absolute; top:50%; left:50%; width:64%; height:64%;
+  transform:translate(-50%,-50%);
+  border-radius:50%;
+  background:radial-gradient(circle, rgba(245,183,64,.34), rgba(245,183,64,.06) 52%, transparent 72%);
+  filter:blur(4px); z-index:1;
+  animation:powerpulse 3.6s ease-in-out infinite;
+}
+@keyframes powerpulse{0%,100%{opacity:.5; transform:translate(-50%,-50%) scale(.95)} 50%{opacity:1; transform:translate(-50%,-50%) scale(1.05)}}
+.chip-owl{
+  position:absolute; top:50%; left:50%; width:47%;
+  transform:translate(-50%,-50%); z-index:2;
+  filter:drop-shadow(0 8px 34px rgba(0,0,0,.55)) drop-shadow(0 0 24px rgba(34,211,238,.18));
+}
+.trace-ring{fill:none; stroke:var(--edge); stroke-width:1}
+.fan-trace{fill:none; stroke:var(--trace-dim); stroke-width:2; stroke-linecap:round; stroke-linejoin:round}
+.fan-trace.hot{stroke:rgba(245,183,64,.4)}
+.fan-pad{fill:var(--pad); stroke:var(--trace-dim); stroke-width:2}
+.fan-pad.hot{stroke:var(--amber); fill:#1a1206}
+.fan-pulse{
+  fill:none; stroke:var(--amber); stroke-width:2.4; stroke-linecap:round;
+  stroke-dasharray:9 900; filter:drop-shadow(0 0 4px rgba(245,183,64,.9));
+  animation:flow 2.4s linear infinite;
+}
+
+/* ---------- signal readout (oscilloscope strip) ---------- */
+.readout{
+  margin-top:clamp(26px,4vw,44px);
+  background:linear-gradient(180deg, rgba(13,26,24,.9), rgba(9,17,15,.9));
+  border:1px solid var(--hairline); border-radius:16px;
+  padding:clamp(16px,2.4vw,24px);
+  position:relative; overflow:hidden;
+  box-shadow:0 30px 80px -50px rgba(0,0,0,.9), inset 0 0 0 1px rgba(255,255,255,.02);
+}
+.readout-corner{position:absolute; width:12px; height:12px; border:2px solid var(--edge)}
+.rc1{top:8px;left:8px;border-right:0;border-bottom:0}
+.rc2{top:8px;right:8px;border-left:0;border-bottom:0}
+.rc3{bottom:8px;left:8px;border-right:0;border-top:0}
+.rc4{bottom:8px;right:8px;border-left:0;border-top:0}
+.readout-head{display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px; flex-wrap:wrap}
+.readout-title{font-family:var(--f-mono); font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted)}
+.readout-live{display:inline-flex; align-items:center; gap:8px; font-family:var(--f-mono); font-size:11.5px; letter-spacing:.14em; color:var(--up)}
+.readout-live .dot{width:8px;height:8px;border-radius:50%;background:var(--up);box-shadow:0 0 8px var(--up); animation:blink 1.6s ease-in-out infinite}
+.scanline{
+  position:absolute; left:0; right:0; top:0; height:64px; pointer-events:none; z-index:3;
+  background:linear-gradient(180deg, rgba(53,224,208,.10), transparent);
+  animation:scan 6s linear infinite;
+}
+
+.ck{padding:12px 0; border-top:1px solid var(--edge)}
+.ck:first-of-type{border-top:0}
+.ck-head{display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:9px}
+.ck-host{font-family:var(--f-mono); font-weight:600; font-size:14px; color:var(--text)}
+.ck-type{font-family:var(--f-mono); font-size:11.5px; letter-spacing:.06em; color:var(--muted); padding:2px 8px; border:1px solid var(--edge); border-radius:5px}
+.ck-up{margin-left:auto; font-family:var(--f-mono); font-size:12.5px; color:var(--muted); font-variant-numeric:tabular-nums}
+.pill{font-family:var(--f-mono); font-weight:600; font-size:10.5px; letter-spacing:.14em; padding:3px 9px; border-radius:20px; text-transform:uppercase}
+.pill-healthy{color:var(--up); background:rgba(53,208,122,.12); box-shadow:inset 0 0 0 1px rgba(53,208,122,.35)}
+.pill-up{color:var(--warn); background:rgba(224,166,59,.12); box-shadow:inset 0 0 0 1px rgba(224,166,59,.35)}
+.pill-down{color:var(--down); background:rgba(255,90,82,.14); box-shadow:inset 0 0 0 1px rgba(255,90,82,.45)}
+
+.ck-bars{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+@media (max-width:560px){ .ck-bars{grid-template-columns:1fr; gap:10px} }
+.barwrap{display:flex; flex-direction:column; gap:6px}
+.bar-label{display:flex; justify-content:space-between; font-family:var(--f-mono); font-size:10px; letter-spacing:.12em; color:var(--dim); text-transform:uppercase}
+.bar{display:flex; gap:1.4px; height:34px; align-items:stretch}
+.bar .s{flex:1 1 0; min-width:0; border-radius:1.5px; opacity:.92}
+.bar .s.blink{animation:segblink 1.1s steps(2) infinite}
+
+.legend{display:flex; flex-wrap:wrap; gap:14px 18px; margin-top:14px; padding-top:14px; border-top:1px solid var(--edge)}
+.legend span{display:inline-flex; align-items:center; gap:7px; font-family:var(--f-mono); font-size:11px; letter-spacing:.04em; color:var(--muted)}
+.legend i{width:12px;height:12px;border-radius:3px; display:inline-block}
+
+@keyframes flow{from{stroke-dashoffset:900}to{stroke-dashoffset:0}}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
+@keyframes segblink{50%{opacity:.4}}
+@keyframes scan{0%{transform:translateY(-70px)}100%{transform:translateY(680px)}}
+
+/* ============================================================
+   SECTION FRAME
+   ============================================================ */
+.section{padding:clamp(56px,8vw,104px) 0; position:relative; scroll-margin-top:80px}
+.section-head{max-width:640px; margin-bottom:clamp(30px,4vw,52px)}
+.section-head h2{font-size:clamp(1.9rem,3.6vw,2.9rem); margin:16px 0 0}
+.section-head p{color:var(--muted); margin:16px 0 0; font-size:clamp(1rem,1.3vw,1.1rem)}
+.rule{height:1px; background:linear-gradient(90deg,var(--copper),transparent); opacity:.4; position:relative; margin-top:6px}
+
+/* tactical */
+.tactical-grid{display:grid; grid-template-columns:.9fr 1.1fr; gap:clamp(26px,4vw,48px); align-items:center}
+@media (max-width:880px){ .tactical-grid{grid-template-columns:1fr} }
+.time-card{
+  background:var(--panel); border:1px solid var(--hairline); border-radius:14px; padding:20px 22px;
+  margin-bottom:14px;
+}
+.time-card h3{font-size:1.15rem; display:flex; align-items:center; gap:10px}
+.time-card .tag{font-family:var(--f-mono); font-size:11px; letter-spacing:.1em; color:var(--copper); border:1px solid var(--hairline); padding:3px 8px; border-radius:5px}
+.time-card p{color:var(--muted); margin:10px 0 0; font-size:.96rem}
+.tactical-panel{
+  background:linear-gradient(180deg, rgba(13,26,24,.9), rgba(9,17,15,.92));
+  border:1px solid var(--hairline); border-radius:16px; padding:clamp(18px,2.4vw,26px);
+  position:relative; overflow:hidden;
+}
+
+/* ============================================================
+   ZERO FALSE POSITIVES — LOGIC CIRCUIT (the hero moment)
+   ============================================================ */
+.circuit-panel{
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(53,224,208,.06), transparent 60%),
+    linear-gradient(180deg, rgba(13,26,24,.94), rgba(8,14,13,.96));
+  border:1px solid var(--hairline); border-radius:20px;
+  padding:clamp(20px,3vw,34px);
+  position:relative; overflow:hidden;
+  box-shadow:0 40px 90px -55px rgba(0,0,0,.95);
+}
+.circuit-scroll{overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch; padding-bottom:4px}
+.circuit-svg{width:100%; min-width:660px; height:auto; display:block}
+
+/* wires */
+.trace{fill:none; stroke:var(--trace-dim); stroke-width:3; stroke-linecap:round; stroke-linejoin:round; transition:stroke .25s ease}
+.pulse{fill:none; stroke:var(--amber); stroke-width:3; stroke-linecap:round; stroke-linejoin:round;
+  opacity:0; stroke-dasharray:13 700; filter:drop-shadow(0 0 5px rgba(245,183,64,.85)); transition:opacity .2s ease}
+.wire.live .trace{stroke:rgba(245,183,64,.5)}
+.wire.live .pulse{opacity:1; animation:flow 1.1s linear infinite}
+.wire.alertwire.live .trace{stroke:rgba(255,90,82,.55)}
+.wire.alertwire.live .pulse{stroke:var(--down); filter:drop-shadow(0 0 6px rgba(255,90,82,.9))}
+
+/* gates */
+.gate{fill:var(--panel-2); stroke:var(--trace-dim); stroke-width:2.6; transition:stroke .25s ease, fill .25s ease, filter .25s ease}
+.gate-grp.on .gate{stroke:var(--amber); fill:rgba(245,183,64,.10); filter:drop-shadow(0 0 10px rgba(245,183,64,.45))}
+.gate-label{fill:var(--muted); font-family:var(--f-mono); font-weight:600; font-size:14px; letter-spacing:.1em; text-anchor:middle; dominant-baseline:middle; transition:fill .25s ease}
+.gate-grp.on .gate-label{fill:var(--text)}
+
+/* input nodes */
+.node .pad{fill:var(--pad); stroke:var(--trace-dim); stroke-width:2.6; transition:stroke .25s ease, filter .25s ease}
+.node .core{fill:var(--trace-dim); transition:fill .25s ease}
+.node.on .pad{stroke:var(--amber); filter:drop-shadow(0 0 9px rgba(245,183,64,.6))}
+.node.on .core{fill:var(--amber)}
+.node-label{fill:var(--muted); font-family:var(--f-mono); font-weight:600; font-size:13px; letter-spacing:.05em; text-anchor:end; dominant-baseline:middle; transition:fill .25s ease}
+.node.on .node-label{fill:var(--text)}
+.node-state{fill:var(--dim); font-family:var(--f-mono); font-size:10px; letter-spacing:.08em; text-anchor:end; dominant-baseline:middle}
+.node.on .node-state{fill:var(--amber)}
+
+/* alert output */
+.alert-box{fill:var(--panel-2); stroke:var(--trace-dim); stroke-width:2.6; transition:stroke .25s ease, fill .25s ease, filter .25s ease}
+.alert-grp.firing .alert-box{stroke:var(--down); fill:rgba(255,90,82,.12); filter:drop-shadow(0 0 14px rgba(255,90,82,.5))}
+.alert-led{fill:#2a1416; transition:fill .2s ease}
+.alert-grp.firing .alert-led{fill:var(--down); animation:segblink .85s steps(1) infinite}
+.alert-text{fill:var(--muted); font-family:var(--f-mono); font-weight:600; font-size:15px; letter-spacing:.14em; text-anchor:middle; dominant-baseline:middle; transition:fill .25s ease}
+.alert-grp.firing .alert-text{fill:var(--text)}
+.wireflag{fill:var(--dim); font-family:var(--f-mono); font-size:9.5px; letter-spacing:.1em}
+
+/* controls */
+.circuit-controls{
+  display:grid; grid-template-columns:1fr; gap:18px; margin-top:22px;
+  padding-top:22px; border-top:1px solid var(--edge);
+}
+.ctrl-row{display:flex; flex-wrap:wrap; align-items:center; gap:10px}
+.ctrl-label{font-family:var(--f-mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--dim); margin-right:4px}
+.tog{
+  font-family:var(--f-mono); font-weight:600; font-size:12.5px; letter-spacing:.06em;
+  padding:9px 14px; border-radius:8px; cursor:pointer;
+  background:var(--panel); border:1px solid var(--hairline); color:var(--muted);
+  display:inline-flex; align-items:center; gap:8px; transition:all .18s ease;
+}
+.tog .led{width:9px;height:9px;border-radius:50%; background:var(--nodata); box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
+.tog[aria-pressed="true"]{color:#20160a; background:linear-gradient(180deg,#ffd982,var(--amber)); border-color:var(--amber); box-shadow:0 0 16px rgba(245,183,64,.3)}
+.tog[aria-pressed="true"] .led{background:#5a3e0c; box-shadow:0 0 6px rgba(255,255,255,.4)}
+.tog:hover{border-color:var(--amber)}
+.tog.auto[aria-pressed="true"]{background:linear-gradient(180deg,#4ff0df,var(--copper)); color:#04201d; border-color:var(--copper); box-shadow:0 0 16px rgba(53,224,208,.3)}
+
+.formula{
+  font-family:var(--f-mono); font-weight:600; font-size:clamp(15px,2.4vw,20px); letter-spacing:.03em;
+  color:var(--muted); background:var(--board); border:1px solid var(--hairline); border-radius:10px;
+  padding:14px 18px; overflow-x:auto; white-space:nowrap;
+}
+.formula .op{color:var(--copper)}
+.formula .term{color:var(--dim); transition:color .2s ease, text-shadow .2s ease; padding:0 2px}
+.formula .term.hot{color:var(--amber); text-shadow:0 0 12px rgba(245,183,64,.7)}
+
+.verdict-row{display:flex; align-items:center; gap:14px; flex-wrap:wrap}
+.verdict{font-family:var(--f-mono); font-weight:600; font-size:13px; letter-spacing:.16em; padding:8px 14px; border-radius:8px}
+.verdict.is-fire{color:var(--down); background:rgba(255,90,82,.12); box-shadow:inset 0 0 0 1px rgba(255,90,82,.4)}
+.verdict.is-silent{color:var(--up); background:rgba(53,208,122,.10); box-shadow:inset 0 0 0 1px rgba(53,208,122,.35)}
+.circuit-status{color:var(--muted); font-size:.96rem; margin:0}
+
+/* mechanisms */
+.mech-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-top:26px}
+@media (max-width:860px){ .mech-grid{grid-template-columns:1fr} }
+.mech{
+  background:var(--panel); border:1px solid var(--hairline); border-radius:14px; padding:22px;
+  position:relative; overflow:hidden;
+}
+.mech::before{content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:linear-gradient(180deg,var(--copper),transparent)}
+.mech .ref{font-family:var(--f-mono); font-size:11px; letter-spacing:.14em; color:var(--copper)}
+.mech h3{font-size:1.15rem; margin:12px 0 8px}
+.mech p{color:var(--muted); margin:0; font-size:.95rem}
+.mech code{font-family:var(--f-mono); color:var(--amber); font-size:.88em; background:rgba(245,183,64,.08); padding:1px 5px; border-radius:4px}
+
+/* ============================================================
+   CHECK COMPONENTS
+   ============================================================ */
+.checks-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:14px}
+@media (max-width:1000px){ .checks-grid{grid-template-columns:repeat(2,1fr)} }
+@media (max-width:520px){ .checks-grid{grid-template-columns:1fr} }
+.comp{
+  background:var(--panel); border:1px solid var(--hairline); border-radius:14px; padding:20px;
+  transition:border-color .18s ease, transform .18s ease, box-shadow .18s ease;
+  position:relative;
+}
+.comp:hover{border-color:var(--copper); transform:translateY(-3px); box-shadow:0 20px 40px -30px rgba(53,224,208,.5)}
+.comp-top{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px}
+.comp-des{font-family:var(--f-mono); font-size:11px; letter-spacing:.1em; color:var(--dim)}
+.comp-ico{width:40px; height:40px}
+.comp-ico svg{width:100%; height:100%}
+.comp h3{font-size:1.05rem; margin-bottom:6px}
+.comp p{color:var(--muted); margin:0; font-size:.9rem}
+
+/* ============================================================
+   FEATURE MODULES
+   ============================================================ */
+.feat-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:14px}
+@media (max-width:1000px){ .feat-grid{grid-template-columns:repeat(2,1fr)} }
+@media (max-width:520px){ .feat-grid{grid-template-columns:1fr} }
+.feat{
+  background:linear-gradient(180deg, rgba(15,33,30,.6), rgba(10,21,18,.6));
+  border:1px solid var(--hairline); border-radius:14px; padding:22px;
+  transition:border-color .18s ease, background .18s ease;
+}
+.feat:hover{border-color:var(--copper)}
+.feat .fico{display:inline-flex; width:28px; height:28px; color:var(--copper); margin-bottom:14px}
+.feat .fico svg{width:100%;height:100%; display:block}
+.feat h3{font-size:1.04rem; margin-bottom:8px}
+.feat p{color:var(--muted); margin:0; font-size:.9rem}
+
+/* ============================================================
+   PRODUCT SHOT (framed browser mockup)
+   ============================================================ */
+.shot{margin:36px 0 0}
+.shot-frame{border:1px solid var(--hairline); border-radius:14px; overflow:hidden;
+  background:var(--board); box-shadow:0 44px 100px -60px rgba(0,0,0,.95)}
+.shot-bar{display:flex; align-items:center; gap:8px; padding:11px 15px;
+  border-bottom:1px solid var(--edge); background:rgba(13,26,24,.72)}
+.shot-dot{width:11px; height:11px; border-radius:50%}
+.shot-url{font-family:var(--f-mono); font-size:11.5px; letter-spacing:.08em;
+  color:var(--muted); margin-left:10px}
+.shot-img{display:block; width:100%; height:auto}
+.shot figcaption{margin-top:14px; font-family:var(--f-mono); font-size:12px;
+  color:var(--dim); text-align:center; letter-spacing:.02em}
+
+/* ============================================================
+   DEPLOY
+   ============================================================ */
+.deploy-grid{display:grid; grid-template-columns:1fr 1.05fr; gap:clamp(26px,4vw,48px); align-items:center}
+@media (max-width:880px){ .deploy-grid{grid-template-columns:1fr} }
+.deploy-points{list-style:none; padding:0; margin:22px 0 0; display:flex; flex-direction:column; gap:14px}
+.deploy-points li{display:flex; gap:12px; align-items:flex-start; color:var(--muted)}
+.deploy-points b{color:var(--text); font-weight:600}
+.deploy-points .dp-ico{flex:none; width:22px; height:22px; color:var(--copper); margin-top:2px}
+.deploy-points .dp-ico svg{width:100%;height:100%}
+
+.terminal{
+  background:var(--board); border:1px solid var(--hairline); border-radius:14px; overflow:hidden;
+  box-shadow:0 40px 90px -55px rgba(0,0,0,.95);
+}
+.term-bar{display:flex; align-items:center; gap:8px; padding:12px 16px; border-bottom:1px solid var(--edge); background:rgba(13,26,24,.7)}
+.term-bar .tdot{width:11px;height:11px;border-radius:50%}
+.term-title{font-family:var(--f-mono); font-size:11.5px; letter-spacing:.1em; color:var(--muted); margin-left:8px}
+.term-copy{margin-left:auto; font-family:var(--f-mono); font-size:11.5px; color:var(--copper); background:transparent; border:1px solid var(--hairline); border-radius:6px; padding:5px 11px; cursor:pointer; transition:all .15s ease}
+.term-copy:hover{border-color:var(--copper); background:rgba(53,224,208,.08)}
+.term-body{padding:20px; overflow-x:auto}
+.term-body pre{margin:0; font-family:var(--f-mono); font-size:13.5px; line-height:1.8; color:var(--text)}
+.term-body .cmt{color:var(--dim)}
+.term-body .prm{color:var(--copper)}
+.term-body .out{color:var(--muted)}
+.term-body .url{color:var(--amber)}
+
+/* ============================================================
+   FOOTER
+   ============================================================ */
+.foot{border-top:1px solid var(--edge); padding:clamp(38px,5vw,60px) 0 40px; margin-top:clamp(40px,6vw,72px); position:relative}
+.foot-grid{display:flex; align-items:flex-start; justify-content:space-between; gap:28px; flex-wrap:wrap}
+.foot-brand{display:flex; align-items:center; gap:12px}
+.foot-owl{width:44px;height:44px; filter:drop-shadow(0 0 12px rgba(53,224,208,.3))}
+.foot-brand .fb-name{font-family:var(--f-disp); font-weight:700; font-size:22px}
+.foot-brand .fb-sub{font-family:var(--f-mono); font-size:11px; letter-spacing:.06em; color:var(--muted); margin-top:2px}
+.foot-links{display:flex; flex-direction:column; gap:10px; font-family:var(--f-mono); font-size:12.5px}
+.foot-links a{color:var(--muted); text-decoration:none}
+.foot-links a:hover{color:var(--copper)}
+.foot-meta{font-family:var(--f-mono); font-size:11.5px; color:var(--dim); letter-spacing:.03em; text-align:right; max-width:280px}
+@media (max-width:640px){ .foot-meta{text-align:left} }
+
+/* ============================================================
+   REDUCED MOTION — clean static board
+   ============================================================ */
+@media (prefers-reduced-motion: reduce){
+  *{animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important}
+  .pulse, .fan-pulse, .scanline{display:none !important}
+  .chip-glow{opacity:.8; transform:translate(-50%,-50%) scale(1)}
+  .readout-live .dot{opacity:1}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<!-- ===================== NAV ===================== -->
+<header class="nav" id="siteNav">
+  <div class="wrap nav-inner">
+    <a class="brand" href="#top" aria-label="Bekci home">
+      <img class="brand-owl" src="../assets/bekci-owl.png" alt="" aria-hidden="true">
+      <span class="brand-name">Bekci</span>
+      <span class="brand-dot" title="operational" aria-hidden="true"></span>
+    </a>
+    <nav class="nav-links" aria-label="Primary">
+      <a href="#tactical">Tactical</a>
+      <a href="#zero">Zero false positives</a>
+      <a href="#checks">Checks</a>
+      <a href="#deploy">Deploy</a>
+    </nav>
+    <div class="nav-cta">
+      <a class="btn btn-ghost" href="https://github.com/okoker/bekci" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.85 9.73.5.1.68-.22.68-.49v-1.7c-2.79.62-3.38-1.22-3.38-1.22-.45-1.18-1.11-1.49-1.11-1.49-.91-.64.07-.63.07-.63 1 .07 1.53 1.06 1.53 1.06.9 1.57 2.36 1.12 2.94.86.09-.67.35-1.12.63-1.38-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05a9.4 9.4 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.79-4.57 5.05.36.32.68.94.68 1.9v2.81c0 .27.18.6.69.49A10.26 10.26 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z"/></svg>
+        Star on GitHub
+      </a>
+      <a class="btn btn-primary" href="#deploy">Deploy</a>
+    </div>
+    <button class="nav-toggle" id="navToggle" aria-expanded="false" aria-controls="mobilePanel" aria-label="Open menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
+  </div>
+  <div class="wrap mobile-panel" id="mobilePanel">
+    <a class="mlink" href="#tactical">Tactical</a>
+    <a class="mlink" href="#zero">Zero false positives</a>
+    <a class="mlink" href="#checks">Checks</a>
+    <a class="mlink" href="#deploy">Deploy</a>
+    <a class="btn btn-ghost" href="https://github.com/okoker/bekci" target="_blank" rel="noopener">Star on GitHub</a>
+    <a class="btn btn-primary" href="#deploy">Deploy</a>
+  </div>
+</header>
+
+<main id="main">
+<a id="top"></a>
+
+<!-- ===================== HERO ===================== -->
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div class="hero-copy">
+      <h1>The watchman that only wakes you when it's <span class="accent">real</span>.</h1>
+      <p class="lede">Bekci was born out of frustration with monitors that take a weekend to install and a full-time job to keep alive. Bekci, on the other hand, is one Go binary and one port — quick to deploy, painless to run, and genuinely fun to tune. Checks corroborate through real logic gates and a failure must sustain itself before the alarm fires, so it only ever wakes you when it's real. One box, 1000+ hosts.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="#deploy">Deploy Bekci</a>
+        <a class="btn btn-ghost" href="https://github.com/okoker/bekci" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.85 9.73.5.1.68-.22.68-.49v-1.7c-2.79.62-3.38-1.22-3.38-1.22-.45-1.18-1.11-1.49-1.11-1.49-.91-.64.07-.63.07-.63 1 .07 1.53 1.06 1.53 1.06.9 1.57 2.36 1.12 2.94.86.09-.67.35-1.12.63-1.38-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05a9.4 9.4 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.79-4.57 5.05.36.32.68.94.68 1.9v2.81c0 .27.18.6.69.49A10.26 10.26 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z"/></svg>
+          View on GitHub
+        </a>
+      </div>
+      <p class="stack-line">Go 1.25 · Vue 3 + Vite · SQLite (WAL) · Docker · single self-contained binary</p>
+    </div>
+
+    <div class="hero-chip" aria-hidden="false">
+      <svg class="traces" id="heroTraces" viewBox="0 0 600 600" role="presentation"></svg>
+      <div class="chip-glow" aria-hidden="true"></div>
+      <img class="chip-owl" src="../assets/bekci-owl.png"
+           alt="Bekci's mascot: a vigilant owl with cyan feathers, a circuit-board medallion on its chest and glowing amber eyes, seated at the centre of the board like an integrated circuit.">
+    </div>
+  </div>
+
+  <!-- signal readout / oscilloscope strip -->
+  <div class="wrap">
+    <div class="readout" aria-label="Live signal readout for four monitored checks">
+      <span class="readout-corner rc1" aria-hidden="true"></span>
+      <span class="readout-corner rc2" aria-hidden="true"></span>
+      <span class="readout-corner rc3" aria-hidden="true"></span>
+      <span class="readout-corner rc4" aria-hidden="true"></span>
+      <div class="scanline" aria-hidden="true"></div>
+      <div class="readout-head">
+        <span class="readout-title">Live signal · 4H tactical + 90D strategic</span>
+        <span class="readout-live"><span class="dot"></span>Scanning</span>
+      </div>
+      <div id="heroReadout"></div>
+      <div class="legend" aria-hidden="true">
+        <span><i style="background:var(--up)"></i>100%</span>
+        <span><i style="background:var(--warn)"></i>95–99%</span>
+        <span><i style="background:var(--orange)"></i>80–94%</span>
+        <span><i style="background:var(--down)"></i>&lt;80%</span>
+        <span><i style="background:var(--nodata);box-shadow:inset 0 0 0 1px var(--edge)"></i>no data</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== SYSTEM MODULES ===================== -->
+<section class="section" id="modules">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="silk"><span class="ref">REF·01</span> System modules</span>
+      <h2>Everything a watch-floor needs, on board.</h2>
+      <p>Beyond the checks, Bekci ships the operational surface security teams actually run on.</p>
+    </div>
+    <div class="feat-grid" id="featGrid"></div>
+  </div>
+</section>
+
+<!-- ===================== ZERO FALSE POSITIVES ===================== -->
+<section class="section" id="zero">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="silk"><span class="ref">REF·02</span> Corroboration logic</span>
+      <h2>Zero false positives, wired into the board.</h2>
+      <p>Most uptime monitors page you on a single failed check. Bekci routes independent signals through real AND/OR logic and demands sustained failure — driving false positives toward zero. Flip the inputs and watch the gates resolve.</p>
+    </div>
+
+    <div class="circuit-panel">
+      <div class="circuit-scroll">
+        <svg class="circuit-svg" viewBox="0 0 760 340" role="img" aria-labelledby="circuitTitle circuitDesc">
+          <title id="circuitTitle">Corroboration logic circuit</title>
+          <desc id="circuitDesc">TCP and HTTP feed an AND gate; its output and PING feed an OR gate; the OR gate drives the ALERT output, expressing (TCP AND HTTP) OR PING.</desc>
+
+          <!-- wires -->
+          <g class="wire" id="wTcp">
+            <path class="trace" d="M110,80 H230 V120 H300"/>
+            <path class="pulse" d="M110,80 H230 V120 H300"/>
+          </g>
+          <g class="wire" id="wHttp">
+            <path class="trace" d="M110,150 H230 V160 H300"/>
+            <path class="pulse" d="M110,150 H230 V160 H300"/>
+          </g>
+          <g class="wire" id="wAnd">
+            <path class="trace" d="M380,140 H430 V130 H470"/>
+            <path class="pulse" d="M380,140 H430 V130 H470"/>
+          </g>
+          <g class="wire" id="wPing">
+            <path class="trace" d="M110,270 H430 V190 H470"/>
+            <path class="pulse" d="M110,270 H430 V190 H470"/>
+          </g>
+          <g class="wire alertwire" id="wAlert">
+            <path class="trace" d="M580,160 H636"/>
+            <path class="pulse" d="M580,160 H636"/>
+          </g>
+
+          <!-- AND gate -->
+          <g class="gate-grp" id="gAnd">
+            <path class="gate" d="M300,100 L342,100 A40,40 0 0 1 342,180 L300,180 Z"/>
+            <text class="gate-label" x="333" y="140">AND</text>
+          </g>
+          <!-- OR gate -->
+          <g class="gate-grp" id="gOr">
+            <path class="gate" d="M470,100 C520,105 554,128 580,160 C554,192 520,215 470,220 Q506,160 470,100 Z"/>
+            <text class="gate-label" x="516" y="160">OR</text>
+          </g>
+
+          <!-- input nodes -->
+          <g class="node" id="nTcp">
+            <text class="node-label" x="72" y="80">TCP</text>
+            <text class="node-state" x="72" y="96" id="sTcp">up</text>
+            <circle class="pad" cx="96" cy="80" r="11"/>
+            <circle class="core" cx="96" cy="80" r="4.5"/>
+          </g>
+          <g class="node" id="nHttp">
+            <text class="node-label" x="72" y="150">HTTP</text>
+            <text class="node-state" x="72" y="166" id="sHttp">up</text>
+            <circle class="pad" cx="96" cy="150" r="11"/>
+            <circle class="core" cx="96" cy="150" r="4.5"/>
+          </g>
+          <g class="node" id="nPing">
+            <text class="node-label" x="72" y="270">PING</text>
+            <text class="node-state" x="72" y="286" id="sPing">up</text>
+            <circle class="pad" cx="96" cy="270" r="11"/>
+            <circle class="core" cx="96" cy="270" r="4.5"/>
+          </g>
+
+          <!-- flags -->
+          <text class="wireflag" x="392" y="130">AND OUT</text>
+
+          <!-- alert output -->
+          <g class="alert-grp" id="alertGrp">
+            <rect class="alert-box" x="636" y="134" width="104" height="52" rx="10"/>
+            <circle class="alert-led" cx="656" cy="160" r="6"/>
+            <text class="alert-text" x="695" y="161">ALERT</text>
+          </g>
+        </svg>
+      </div>
+
+      <div class="circuit-controls">
+        <div class="ctrl-row" role="group" aria-label="Toggle which checks are currently failing">
+          <span class="ctrl-label">Signals down</span>
+          <button class="tog" type="button" data-toggle="tcp" aria-pressed="false"><span class="led"></span>TCP</button>
+          <button class="tog" type="button" data-toggle="http" aria-pressed="false"><span class="led"></span>HTTP</button>
+          <button class="tog" type="button" data-toggle="ping" aria-pressed="false"><span class="led"></span>PING</button>
+          <button class="tog auto" type="button" id="autoBtn" aria-pressed="false" aria-label="Auto-cycle the demo">⤳ Auto-demo</button>
+        </div>
+        <div class="formula" aria-hidden="true">
+          <span class="op">(</span><span class="term" id="fTcp">TCP</span> <span class="op">AND</span> <span class="term" id="fHttp">HTTP</span><span class="op">)</span> <span class="op">OR</span> <span class="term" id="fPing">PING</span>
+        </div>
+        <div class="verdict-row" aria-live="polite">
+          <span class="verdict is-silent" id="circuitVerdict">SILENT</span>
+          <p class="circuit-status" id="circuitStatus">All signals healthy. Nothing to report.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="mech-grid">
+      <div class="mech">
+        <span class="ref">M1 · CORROBORATION</span>
+        <h3>Independent signals must agree</h3>
+        <p>Combine checks with boolean logic — <code>(TCP AND HTTP) OR PING</code>. Groups are joined by AND/OR internally; across groups the logic is OR. Nestable and composable, so one flaky probe can't speak for the whole target.</p>
+      </div>
+      <div class="mech">
+        <span class="ref">M2 · SUSTAINED FAILURE</span>
+        <h3>A blip is not an outage</h3>
+        <p>A condition must fail <b>N times</b> inside a time window before it counts as down — <code>fail_count × fail_window</code>. A single dropped packet or momentary timeout is ignored. The window's floor is fail_count × interval.</p>
+      </div>
+      <div class="mech">
+        <span class="ref">M3 · FLAP SUPPRESSION</span>
+        <h3>No alert storms</h3>
+        <p>Per-rule alert <b>cooldown</b>, a configurable <b>re-alert</b> interval for issues still firing, and a <b>recovery cooldown</b> — so a target that flaps up and down can never bury you in notifications.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== CHECK COMPONENTS ===================== -->
+<section class="section" id="checks">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="silk"><span class="ref">REF·03</span> Check components</span>
+      <h2>Eight ways to test a target.</h2>
+      <p>Each check populates the board as its own component, yielding a clean pass or fail that feeds the corroboration logic.</p>
+    </div>
+    <div class="checks-grid" id="checksGrid"></div>
+  </div>
+</section>
+
+<!-- ===================== DUAL TIMESCALE ===================== -->
+<section class="section" id="tactical">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="silk"><span class="ref">REF·04</span> Dual timescale</span>
+      <h2>Built to watch right now — not to relive last year.</h2>
+      <p>Bekci is a real-time tactical monitor. The point is the 4-hour bar at 5-minute resolution: what is wrong <em>this minute</em>. The 90-day bar is there for context and trend — just enough history to catch a slow degrade, not a year of metrics to trawl through when the pager goes off.</p>
+    </div>
+    <div class="tactical-grid">
+      <div>
+        <div class="time-card">
+          <h3><span class="tag">4H</span> Tactical — the live view</h3>
+          <p>48 segments, one per 5 minutes. This is where you live: watch an incident start, escalate and recover in near-real time. Correct, current status is the whole job.</p>
+        </div>
+        <div class="time-card">
+          <h3><span class="tag">90D</span> Context — the trend</h3>
+          <p>90 segments, one per day. Enough history to spot a target that's quietly degrading before it becomes an outage — deliberately not an archive to go digging through. Fast, not buried in dashboards.</p>
+        </div>
+      </div>
+      <div class="tactical-panel">
+        <div class="readout-head">
+          <span class="readout-title">core-api · HTTPS · sample readout</span>
+          <span class="readout-live"><span class="dot"></span>Live</span>
+        </div>
+        <div id="tacticalReadout"></div>
+        <div class="legend" aria-hidden="true">
+          <span><i style="background:var(--up)"></i>100%</span>
+          <span><i style="background:var(--warn)"></i>95–99%</span>
+          <span><i style="background:var(--orange)"></i>80–94%</span>
+          <span><i style="background:var(--down)"></i>&lt;80%</span>
+        </div>
+      </div>
+    </div>
+    <figure class="shot">
+      <div class="shot-frame">
+        <div class="shot-bar">
+          <span class="shot-dot" style="background:#FF5A52"></span>
+          <span class="shot-dot" style="background:#E0A63B"></span>
+          <span class="shot-dot" style="background:#35D07A"></span>
+          <span class="shot-url">bekci · dashboard</span>
+        </div>
+        <img class="shot-img" src="../assets/screenshots/dashboard-dual-bars.png" alt="Bekci dashboard: each monitored host shows a 90-day daily uptime bar beside a 4-hour, 5-minute bar, with ping latency, uptime %, category tag and UP / HEALTHY state." loading="lazy">
+      </div>
+      <figcaption>The real thing — every host on both clocks at once: 90 days on the left, the last 4 hours on the right.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ===================== DEPLOY ===================== -->
+<section class="section" id="deploy">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="silk"><span class="ref">REF·05</span> Power on</span>
+      <h2>One container. One binary. One port.</h2>
+      <p>Bekci exists because the alternatives were a chore — sprawling installs, fragile upgrades, config you're afraid to touch, an afternoon lost every time something needs maintenance. This is the opposite on purpose: clone, compose, and it's watching. No agents on your targets, no external services, no separate database to babysit — quick to stand up, painless to keep running, and actually enjoyable to tune.</p>
+    </div>
+    <div class="deploy-grid">
+      <div>
+        <ul class="deploy-points">
+          <li><span class="dp-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><span><b>Single Go binary</b> with the Vue 3 UI embedded — nothing else to wire up.</span></li>
+          <li><span class="dp-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><span><b>SQLite storage</b> in WAL mode. Your data stays on your host.</span></li>
+          <li><span class="dp-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><span><b>Scales to 1000+ hosts</b> from one container on modest hardware.</span></li>
+          <li><span class="dp-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><span><b>MIT licensed, open source.</b> Read every line, fork it, own it.</span></li>
+        </ul>
+      </div>
+      <div class="terminal">
+        <div class="term-bar">
+          <span class="tdot" style="background:#FF5A52"></span>
+          <span class="tdot" style="background:#E0A63B"></span>
+          <span class="tdot" style="background:#35D07A"></span>
+          <span class="term-title">bekci — quick start</span>
+          <button class="term-copy" id="copyBtn" type="button">Copy</button>
+        </div>
+        <div class="term-body">
+<pre><span class="prm">$</span> git clone https://github.com/okoker/bekci.git
+<span class="prm">$</span> cd bekci
+<span class="prm">$</span> docker compose up -d
+
+<span class="cmt"># then open</span>
+<span class="url">http://localhost:65000</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- ===================== FOOTER ===================== -->
+<footer class="foot">
+  <div class="wrap foot-grid">
+    <div class="foot-brand">
+      <img class="foot-owl" src="../assets/bekci-owl.png" alt="Bekci owl mascot" >
+      <div>
+        <div class="fb-name">Bekci</div>
+        <div class="fb-sub">the watchman</div>
+      </div>
+    </div>
+    <nav class="foot-links" aria-label="Footer">
+      <a href="#tactical">Tactical timescales</a>
+      <a href="#zero">Zero false positives</a>
+      <a href="#checks">Check types</a>
+      <a href="#deploy">Deploy</a>
+      <a href="https://github.com/okoker/bekci/blob/main/roadmap.md" target="_blank" rel="noopener">Roadmap</a>
+      <a href="https://github.com/okoker/bekci" target="_blank" rel="noopener">GitHub repository</a>
+    </nav>
+    <div class="foot-meta">
+      <span style="white-space:nowrap">MIT Licensed</span> · <span style="white-space:nowrap">Open Source</span> · <span style="white-space:nowrap">Self-hosted</span><br>
+      Bekci as a Service — coming soon.<br>
+      Bekci © 2026 <a href="https://objectsconsulting.co.uk" target="_new" rel="noopener" style="color:var(--copper);text-decoration:none">Objects Consulting</a>.
+    </div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  "use strict";
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---------------- mobile nav ---------------- */
+  var navToggle = document.getElementById('navToggle');
+  var siteNav = document.getElementById('siteNav');
+  if(navToggle){
+    navToggle.addEventListener('click', function(){
+      var open = siteNav.classList.toggle('open');
+      navToggle.setAttribute('aria-expanded', open ? 'true':'false');
+      navToggle.setAttribute('aria-label', open ? 'Close menu':'Open menu');
+    });
+    document.querySelectorAll('#mobilePanel a').forEach(function(a){
+      a.addEventListener('click', function(){
+        siteNav.classList.remove('open');
+        navToggle.setAttribute('aria-expanded','false');
+      });
+    });
+  }
+
+  /* ---------------- hero owl-chip trace fan ---------------- */
+  (function heroTraces(){
+    var svg = document.getElementById('heroTraces');
+    if(!svg) return;
+    var NS = 'http://www.w3.org/2000/svg';
+    var cx = 300, cy = 300;
+    function pt(a,r){ return [cx + Math.cos(a)*r, cy + Math.sin(a)*r]; }
+    // faint guide rings
+    [172, 250].forEach(function(r){
+      var c = document.createElementNS(NS,'circle');
+      c.setAttribute('cx',cx); c.setAttribute('cy',cy); c.setAttribute('r',r);
+      c.setAttribute('class','trace-ring');
+      c.setAttribute('stroke-dasharray','2 7');
+      svg.appendChild(c);
+    });
+    var N = 18;
+    var hotSet = {};
+    for(var h=0; h<5; h++){ hotSet[Math.floor(Math.random()*N)] = true; }
+    for(var i=0;i<N;i++){
+      var a = (i/N)*Math.PI*2 + (Math.random()-0.5)*0.06;
+      var r0 = 158;
+      var r1 = 240 + Math.random()*46;
+      var ak = a + (Math.random()-0.5)*0.14;
+      var rk = r0 + (r1-r0)*0.55;
+      var p0 = pt(a, r0), pk = pt(ak, rk), p1 = pt(ak, r1);
+      var d = 'M'+p0[0].toFixed(1)+','+p0[1].toFixed(1)+' L'+pk[0].toFixed(1)+','+pk[1].toFixed(1)+' L'+p1[0].toFixed(1)+','+p1[1].toFixed(1);
+      var hot = !!hotSet[i];
+      var path = document.createElementNS(NS,'path');
+      path.setAttribute('d',d);
+      path.setAttribute('class','fan-trace'+(hot?' hot':''));
+      svg.appendChild(path);
+      if(hot && !reduce){
+        var pulse = document.createElementNS(NS,'path');
+        pulse.setAttribute('d',d);
+        pulse.setAttribute('class','fan-pulse');
+        pulse.style.animationDelay = (Math.random()*2.4).toFixed(2)+'s';
+        svg.appendChild(pulse);
+      }
+      var pad = document.createElementNS(NS,'circle');
+      pad.setAttribute('cx',p1[0].toFixed(1)); pad.setAttribute('cy',p1[1].toFixed(1));
+      pad.setAttribute('r', hot ? 4.6 : 3.4);
+      pad.setAttribute('class','fan-pad'+(hot?' hot':''));
+      svg.appendChild(pad);
+    }
+  })();
+
+  /* ---------------- signal readout ---------------- */
+  var COL = { up:'#35D07A', warn:'#E0A63B', orange:'#E6873B', down:'#FF5A52', nodata:'#16211F' };
+
+  function genSegments(count, opts){
+    opts = opts || {};
+    var a = [];
+    for(var i=0;i<count;i++){
+      var r = Math.random(); var v='up';
+      if(r < 0.028) v='warn'; else if(r < 0.04) v='orange';
+      a.push(v);
+    }
+    if(opts.incidentStart != null){
+      var len = opts.incidentLen || 3;
+      for(var j=0;j<len;j++){
+        var idx = opts.incidentStart + j;
+        if(idx < count) a[idx] = (j===0 || j===len-1) ? 'orange' : 'down';
+      }
+    }
+    if(opts.tailDown){
+      for(var k=0;k<opts.tailDown;k++){ a[count-1-k] = 'down'; }
+      if(count-opts.tailDown-1 >= 0) a[count-opts.tailDown-1] = 'orange';
+    }
+    return a;
+  }
+
+  var CHECKS = [
+    { host:'api.acme.io',  type:'HTTPS',     state:'HEALTHY', pill:'healthy', up:'99.98%',
+      four:{}, ninety:{} },
+    { host:'db-primary',   type:'TCP:5432',  state:'UP',      pill:'up',      up:'99.61%',
+      four:{ incidentStart:22, incidentLen:5 }, ninety:{ incidentStart:63, incidentLen:2 } },
+    { host:'edge-router',  type:'SNMP',      state:'DOWN',    pill:'down',    up:'98.90%',
+      four:{ tailDown:4 }, ninety:{ incidentStart:78, incidentLen:2, tailDown:1 } },
+    { host:'www.acme.io',  type:'TLS',       state:'HEALTHY', pill:'healthy', up:'100.0%',
+      four:{}, ninety:{ incidentStart:40, incidentLen:1 } }
+  ];
+
+  function buildBar(count, opts, tagLeft, tagRight, markTail){
+    var wrap = document.createElement('div'); wrap.className='barwrap';
+    var lab = document.createElement('div'); lab.className='bar-label';
+    lab.innerHTML = '<span>'+tagLeft+'</span><span>'+tagRight+'</span>';
+    var bar = document.createElement('div'); bar.className='bar';
+    bar.setAttribute('role','img');
+    var segs = genSegments(count, opts);
+    var down=0;
+    segs.forEach(function(s, i){
+      var el = document.createElement('span'); el.className='s';
+      el.style.background = COL[s];
+      if(s==='down') down++;
+      if(markTail && s==='down' && i>=count-1) el.className='s blink';
+      bar.appendChild(el);
+    });
+    bar.setAttribute('aria-label', tagLeft+' timeline, '+count+' segments, '+(down? down+' showing failure':'all operational'));
+    wrap.appendChild(lab); wrap.appendChild(bar);
+    return wrap;
+  }
+
+  function buildReadout(mount, checks){
+    checks.forEach(function(c){
+      var row = document.createElement('div'); row.className='ck';
+      var head = document.createElement('div'); head.className='ck-head';
+      head.innerHTML =
+        '<span class="ck-host">'+c.host+'</span>'+
+        '<span class="ck-type">'+c.type+'</span>'+
+        '<span class="pill pill-'+c.pill+'">'+c.state+'</span>'+
+        '<span class="ck-up">'+c.up+' · 90d</span>';
+      var bars = document.createElement('div'); bars.className='ck-bars';
+      var tailMark = c.pill==='down';
+      bars.appendChild(buildBar(48, c.four, '4H','48 × 5min', tailMark));
+      bars.appendChild(buildBar(90, c.ninety, '90D','90 × 1day', false));
+      row.appendChild(head); row.appendChild(bars);
+      mount.appendChild(row);
+    });
+  }
+  var hr = document.getElementById('heroReadout');
+  if(hr) buildReadout(hr, CHECKS);
+
+  // tactical: one featured check, larger
+  var tr = document.getElementById('tacticalReadout');
+  if(tr){
+    buildReadout(tr, [{ host:'core-api', type:'HTTPS', state:'UP', pill:'up', up:'99.72%',
+      four:{ incidentStart:30, incidentLen:4 }, ninety:{ incidentStart:55, incidentLen:2, incidentStart2:0 } }]);
+    // enlarge featured bars
+    tr.querySelectorAll('.bar').forEach(function(b){ b.style.height='46px'; });
+  }
+
+  /* ---------------- check components ---------------- */
+  var ic = {
+    ping:'<svg viewBox="0 0 48 48" fill="none" stroke="#35E0D0" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 26h8l4-12 8 22 5-16 3 6h8"/></svg>',
+    http:'<svg viewBox="0 0 48 48" fill="none" stroke="#35E0D0" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="24" cy="24" r="16"/><path d="M8 24h32M24 8c5 5 5 27 0 32M24 8c-5 5-5 27 0 32"/></svg>',
+    tcp:'<svg viewBox="0 0 48 48" fill="none" stroke="#35E0D0" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="10" y="16" width="28" height="16" rx="3"/><path d="M4 24h6M38 24h6M16 16v-6M24 16v-6M32 16v-6M16 32v6M24 32v6M32 32v6"/></svg>',
+    dns:'<svg viewBox="0 0 48 48" fill="none" stroke="#35E0D0" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="24" cy="24" r="16"/><path d="M8 24h32M24 8v32M13 14c6 4 16 4 22 0M13 34c6-4 16-4 22 0"/></svg>',
+    hash:'<svg viewBox="0 0 48 48" fill="none" stroke="#35E0D0" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8 14 40M34 8 30 40M8 18h32M6 30h32"/></svg>',
+    tls:'<svg viewBox="0 0 48 48" fill="none" stroke="#35E0D0" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M24 6l14 5v10c0 9-6 16-14 21-8-5-14-12-14-21V11z"/><path d="M18 24l4 4 8-9"/></svg>',
+    snmp:'<svg viewBox="0 0 48 48" fill="none" stroke="#35E0D0" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="10" width="30" height="12" rx="2"/><rect x="9" y="26" width="30" height="12" rx="2"/><path d="M15 16h.02M15 32h.02"/></svg>',
+    snmp3:'<svg viewBox="0 0 48 48" fill="none" stroke="#35E0D0" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="10" width="30" height="12" rx="2"/><rect x="9" y="26" width="30" height="12" rx="2"/><path d="M28 30l3 3 6-6"/><path d="M15 16h.02"/></svg>'
+  };
+  var CHECKTYPES = [
+    ['U1', ic.ping,  'Ping (ICMP)',      'Reachability with RTT and packet loss. Passes on anything short of 100% loss.'],
+    ['U2', ic.http,  'HTTP / HTTPS',     'Expected status code on a path or custom port. GET, follows redirects.'],
+    ['U3', ic.tcp,   'TCP',              'A straight port-connect test — is the socket accepting?'],
+    ['U4', ic.dns,   'DNS',              'Resolve a host; optionally assert record type, value and nameserver.'],
+    ['U5', ic.hash,  'Page Hash',        'SHA-256 of the response body flags defacement or unexpected change.'],
+    ['U6', ic.tls,   'TLS Certificate',  'Watches certificate expiry and warns N days ahead.'],
+    ['U7', ic.snmp,  'SNMP v2c',         'sysUpTime, sysDescr, and best-effort CPU and memory.'],
+    ['U8', ic.snmp3, 'SNMP v3',          'Same telemetry over authPriv / authNoPriv / noAuthNoPriv.']
+  ];
+  var cg = document.getElementById('checksGrid');
+  if(cg){
+    CHECKTYPES.forEach(function(c){
+      var el = document.createElement('article'); el.className='comp';
+      el.innerHTML =
+        '<div class="comp-top"><span class="comp-ico">'+c[1]+'</span><span class="comp-des">'+c[0]+'</span></div>'+
+        '<h3>'+c[2]+'</h3><p>'+c[3]+'</p>';
+      cg.appendChild(el);
+    });
+  }
+
+  /* ---------------- feature modules ---------------- */
+  var fic = {
+    wall:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="7" height="7" rx="1"/><rect x="14" y="4" width="7" height="7" rx="1"/><rect x="3" y="15" width="7" height="5" rx="1"/><rect x="14" y="15" width="7" height="5" rx="1"/></svg>',
+    sla:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18M6 20v-6M11 20V8M16 20v-9M21 20V5"/></svg>',
+    rbac:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><path d="M17 11l2 2 3-3"/></svg>',
+    alert:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M10.5 21a1.8 1.8 0 0 0 3 0"/></svg>',
+    backup:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>',
+    heart:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2-5 3 10 2-7 2 2h5"/></svg>',
+    audit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h8l4 4v14H4V3z"/><path d="M8 12h8M8 16h5M8 8h4"/></svg>',
+    ban:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>'
+  };
+  var FEATURES = [
+    [fic.wall,  'SOC status wall',    'A flat status page built for a security-operations display. Optionally public.'],
+    [fic.sla,   'SLA compliance',     'Give every group of hosts its own SLA target — each category measured against its own threshold on 90-day daily-uptime charts.'],
+    [fic.rbac,  'Role-based access',  'Role-based user profiles decide who can see, operate and administer. Outbound webhooks push every event to your SOAR, SIEM or ticketing.'],
+    [fic.alert, 'Alerting channels',  'Email (Resend or Microsoft 365), Signal, and generic JSON webhooks with Bearer or Basic auth. Recovery notices carry downtime duration.'],
+    [fic.backup,'Encrypted backups',  'Full DB snapshots, optionally sealed with AES-256-GCM via an Argon2id diceware passphrase.'],
+    [fic.heart, 'Self-health switch', 'A dead man’s switch on the scheduler heartbeat — the monitor watches itself and alerts if it stalls.'],
+    [fic.audit, 'Audit log',          'Every admin and operator action — and every webhook dispatch — recorded and searchable server-side.'],
+    [fic.ban,   'fail2ban integration','Login brute-force protection with ban detail.']
+  ];
+  var fg = document.getElementById('featGrid');
+  if(fg){
+    FEATURES.forEach(function(f){
+      var el = document.createElement('article'); el.className='feat';
+      el.innerHTML = '<span class="fico">'+f[0]+'</span><h3>'+f[1]+'</h3><p>'+f[2]+'</p>';
+      fg.appendChild(el);
+    });
+  }
+
+  /* ---------------- logic circuit ---------------- */
+  var state = { tcp:false, http:false, ping:false };
+  var el = {
+    nTcp:document.getElementById('nTcp'), nHttp:document.getElementById('nHttp'), nPing:document.getElementById('nPing'),
+    sTcp:document.getElementById('sTcp'), sHttp:document.getElementById('sHttp'), sPing:document.getElementById('sPing'),
+    wTcp:document.getElementById('wTcp'), wHttp:document.getElementById('wHttp'), wAnd:document.getElementById('wAnd'),
+    wPing:document.getElementById('wPing'), wAlert:document.getElementById('wAlert'),
+    gAnd:document.getElementById('gAnd'), gOr:document.getElementById('gOr'), alert:document.getElementById('alertGrp'),
+    fTcp:document.getElementById('fTcp'), fHttp:document.getElementById('fHttp'), fPing:document.getElementById('fPing'),
+    verdict:document.getElementById('circuitVerdict'), status:document.getElementById('circuitStatus')
+  };
+  var togs = {
+    tcp:document.querySelector('[data-toggle="tcp"]'),
+    http:document.querySelector('[data-toggle="http"]'),
+    ping:document.querySelector('[data-toggle="ping"]')
+  };
+  var autoBtn = document.getElementById('autoBtn');
+
+  function setC(node, cls, on){ if(node) node.classList.toggle(cls, !!on); }
+
+  function render(){
+    var AND = state.tcp && state.http;
+    var OR  = AND || state.ping;
+
+    setC(el.nTcp,'on',state.tcp); setC(el.nHttp,'on',state.http); setC(el.nPing,'on',state.ping);
+    if(el.sTcp)  el.sTcp.textContent  = state.tcp ? 'down' : 'up';
+    if(el.sHttp) el.sHttp.textContent = state.http ? 'down' : 'up';
+    if(el.sPing) el.sPing.textContent = state.ping ? 'down' : 'up';
+
+    setC(el.wTcp,'live',state.tcp); setC(el.wHttp,'live',state.http);
+    setC(el.wAnd,'live',AND); setC(el.wPing,'live',state.ping); setC(el.wAlert,'live',OR);
+    setC(el.gAnd,'on',AND); setC(el.gOr,'on',OR);
+    setC(el.alert,'firing',OR);
+
+    setC(el.fTcp,'hot',state.tcp); setC(el.fHttp,'hot',state.http); setC(el.fPing,'hot',state.ping);
+
+    if(togs.tcp)  togs.tcp.setAttribute('aria-pressed', state.tcp?'true':'false');
+    if(togs.http) togs.http.setAttribute('aria-pressed', state.http?'true':'false');
+    if(togs.ping) togs.ping.setAttribute('aria-pressed', state.ping?'true':'false');
+
+    var msg;
+    if(OR){
+      el.verdict.textContent = 'ALERT FIRES';
+      el.verdict.className = 'verdict is-fire';
+      if(AND && state.ping) msg = 'TCP and HTTP corroborate, and PING is also down — the alert fires.';
+      else if(AND) msg = 'TCP and HTTP agree the target is down. Corroboration met — the alert fires.';
+      else msg = 'PING is down on its own OR branch — that alone is enough to fire.';
+    } else {
+      el.verdict.textContent = 'SILENT';
+      el.verdict.className = 'verdict is-silent';
+      if(state.tcp || state.http) msg = 'Only one signal is down. No corroboration and no PING — Bekci stays silent.';
+      else msg = 'All signals healthy. Nothing to report.';
+    }
+    el.status.textContent = msg;
+  }
+
+  var SEQ = [
+    { tcp:true,  http:true,  ping:false },
+    { tcp:true,  http:false, ping:false },
+    { tcp:false, http:false, ping:true  },
+    { tcp:true,  http:true,  ping:true  },
+    { tcp:false, http:false, ping:false }
+  ];
+  var si = 0, timer = null, autoOn = false;
+  function tick(){
+    var s = SEQ[si];
+    state.tcp = s.tcp; state.http = s.http; state.ping = s.ping;
+    render();
+    si = (si + 1) % SEQ.length;
+  }
+  function startAuto(){
+    if(autoOn || reduce) return;
+    autoOn = true;
+    autoBtn.setAttribute('aria-pressed','true');
+    tick();
+    timer = setInterval(tick, 2400);
+  }
+  function stopAuto(){
+    autoOn = false;
+    if(timer){ clearInterval(timer); timer = null; }
+    autoBtn.setAttribute('aria-pressed','false');
+  }
+
+  ['tcp','http','ping'].forEach(function(k){
+    if(!togs[k]) return;
+    togs[k].addEventListener('click', function(){
+      stopAuto();
+      state[k] = !state[k];
+      render();
+    });
+  });
+  if(autoBtn){
+    autoBtn.addEventListener('click', function(){ if(autoOn) stopAuto(); else startAuto(); });
+  }
+
+  // init
+  if(reduce){
+    // clean, resolved static state — corroboration met
+    state.tcp = true; state.http = true; state.ping = false;
+    render();
+  } else {
+    render();
+    // start the demo when the circuit scrolls into view
+    var panel = document.querySelector('.circuit-panel');
+    var started = false;
+    if('IntersectionObserver' in window && panel){
+      var io = new IntersectionObserver(function(entries){
+        entries.forEach(function(e){
+          if(e.isIntersecting && !started){ started = true; startAuto(); }
+        });
+      }, { threshold:0.3 });
+      io.observe(panel);
+    } else {
+      startAuto();
+    }
+  }
+
+  /* ---------------- copy button ---------------- */
+  var SNIPPET = 'git clone https://github.com/okoker/bekci.git\ncd bekci\ndocker compose up -d';
+  var copyBtn = document.getElementById('copyBtn');
+  if(copyBtn){
+    copyBtn.addEventListener('click', function(){
+      var done = function(){ copyBtn.textContent = 'Copied'; setTimeout(function(){ copyBtn.textContent = 'Copy'; }, 1400); };
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(SNIPPET).then(done).catch(done);
+      } else {
+        var ta = document.createElement('textarea'); ta.value = SNIPPET; document.body.appendChild(ta);
+        ta.select(); try{ document.execCommand('copy'); }catch(e){} document.body.removeChild(ta); done();
+      }
+    });
+  }
+})();
+</script>
+</body>
+</html>

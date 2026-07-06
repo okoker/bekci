@@ -1,0 +1,950 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bekci — Monitoring, Engineered Not to Cry Wolf</title>
+<meta name="description" content="Bekci: self-hosted tactical host & network monitoring. Diagrams your alert logic — corroborate independent checks, require sustained failure, page on-call only when it's real. Open source, MIT.">
+<link rel="icon" href="../assets/favicon-32.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+/* ============================================================
+   BEKCI — DIRECTION 4 · "BLUEPRINT"
+   Single, deliberate light-technical world (an engineering
+   schematic / spec sheet). No dark variant by design.
+   ============================================================ */
+
+:root{
+  color-scheme: light;
+  --paper:#EEF1EE;
+  --panel:#E4E9E5;
+  --card:#FAFBFA;
+  --ink:#111619;
+  --body:#2C3439;
+  --muted:#5B676D;
+  --grid:#D3DBD6;
+  --grid-strong:#C6D0CB;
+  --accent:#15489A;
+  --accent-hover:#0E3576;
+  --signal:#E4572E;
+  --up:#1F8A4C;
+  --warn:#C77A12;
+  --orange:#E4572E;
+  --down:#C42B2B;
+  --nodata:#D7DEDA;
+  --maxw:1200px;
+
+  --f-disp:'Big Shoulders Display', 'Arial Narrow', sans-serif;
+  --f-body:'IBM Plex Sans', system-ui, sans-serif;
+  --f-mono:'IBM Plex Mono', ui-monospace, monospace;
+}
+
+*,*::before,*::after{box-sizing:border-box}
+
+html{ -webkit-text-size-adjust:100%; overflow-x:clip; }
+body{
+  margin:0;
+  font-family:var(--f-body);
+  color:var(--body);
+  background:var(--paper);
+  line-height:1.6;
+  overflow-x:hidden;
+  position:relative;
+}
+
+/* --- measurement grid ground (graph paper) --- */
+body::before{
+  content:"";
+  position:fixed; inset:0; z-index:0; pointer-events:none;
+  background-image:
+    linear-gradient(var(--grid-strong) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-strong) 1px, transparent 1px),
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size:140px 140px, 140px 140px, 28px 28px, 28px 28px;
+  background-position:center top;
+  opacity:.55;
+}
+
+.wrap{ position:relative; z-index:1; }
+main{ position:relative; z-index:1; }
+
+/* ---------- typography primitives ---------- */
+h1,h2,h3{ margin:0; font-family:var(--f-disp); color:var(--ink); text-transform:uppercase; line-height:.94; font-weight:800; letter-spacing:.004em; }
+p{ margin:0; }
+a{ color:var(--accent); text-decoration:none; }
+
+.eyebrow{
+  font-family:var(--f-mono); font-weight:600; font-size:.68rem;
+  letter-spacing:.2em; text-transform:uppercase; color:var(--accent);
+  display:inline-flex; align-items:center; gap:.6em;
+}
+.eyebrow::before{ content:""; width:14px; height:14px; background:var(--accent);
+  clip-path:polygon(0 0,100% 0,100% 100%,0 100%,0 60%,55% 60%,55% 40%,0 40%); }
+
+.mono{ font-family:var(--f-mono); }
+.tnum{ font-variant-numeric:tabular-nums; }
+
+/* focus */
+a:focus-visible, button:focus-visible{ outline:2px solid var(--accent); outline-offset:3px; border-radius:1px; }
+
+.skip{ position:absolute; left:-9999px; top:0; background:var(--accent); color:#fff; padding:10px 16px; z-index:100; font-family:var(--f-mono); font-size:.8rem; }
+.skip:focus{ left:12px; top:12px; }
+
+/* ---------- container ---------- */
+.shell{ max-width:var(--maxw); margin:0 auto; padding:0 clamp(16px,4vw,40px); }
+
+/* ---------- corner registration ticks ---------- */
+.ticks{ position:relative; }
+.ticks > .t{ position:absolute; width:11px; height:11px; border:1.6px solid var(--accent); z-index:2; }
+.ticks > .tl{ top:-1px; left:-1px; border-width:1.6px 0 0 1.6px; }
+.ticks > .tr{ top:-1px; right:-1px; border-width:1.6px 1.6px 0 0; }
+.ticks > .bl{ bottom:-1px; left:-1px; border-width:0 0 1.6px 1.6px; }
+.ticks > .br{ bottom:-1px; right:-1px; border-width:0 1.6px 1.6px 0; }
+
+/* ---------- dimension line (mono measure) ---------- */
+.dim{ display:flex; align-items:center; gap:6px; color:var(--muted);
+  font-family:var(--f-mono); font-weight:600; font-size:.58rem; letter-spacing:.14em;
+  text-transform:uppercase; white-space:nowrap; }
+.dim .cap{ width:1px; height:9px; background:var(--accent); flex:0 0 auto; }
+.dim .ln{ flex:1; height:1px; background:var(--grid-strong); min-width:14px; }
+.dim .txt{ color:var(--body); }
+
+/* ---------- ruler divider ---------- */
+.ruler{ position:relative; height:26px; margin-top:2px;
+  border-top:1px solid var(--grid-strong); }
+.ruler::before{ content:""; position:absolute; top:0; left:0; right:0; height:9px;
+  background-image:repeating-linear-gradient(90deg, var(--grid-strong) 0 1px, transparent 1px 40px);
+  background-repeat:repeat-x; }
+.ruler .coord{ position:absolute; top:11px; font-family:var(--f-mono); font-size:.56rem;
+  letter-spacing:.14em; color:var(--muted); }
+.ruler .coord.l{ left:0; } .ruler .coord.r{ right:0; }
+
+/* =========================================================
+   NAV
+   ========================================================= */
+.nav{
+  position:sticky; top:0; z-index:20;
+  display:flex; align-items:center; gap:18px; flex-wrap:wrap;
+  padding:12px clamp(16px,4vw,40px);
+  background:color-mix(in srgb, var(--paper) 90%, transparent);
+  backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+  border-bottom:2px solid var(--ink);
+}
+.brand{ display:flex; align-items:center; gap:11px; color:var(--ink); margin-right:auto; }
+.brand img{ width:34px; height:34px; display:block; }
+.brand .wm{ font-family:var(--f-disp); font-weight:800; font-size:1.5rem; letter-spacing:.05em; line-height:1; }
+.brand .wm small{ display:block; font-family:var(--f-mono); font-weight:500; font-size:.5rem;
+  letter-spacing:.24em; color:var(--muted); margin-top:2px; }
+
+.nav-links{ display:flex; align-items:center; gap:6px; }
+.nav-links a{ font-family:var(--f-mono); font-weight:500; font-size:.72rem; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--body); padding:7px 11px; border:1px solid transparent; }
+.nav-links a:hover{ color:var(--accent); border-color:var(--grid-strong); background:var(--card); }
+
+.nav-cta{ display:flex; align-items:center; gap:10px; }
+
+.btn{ font-family:var(--f-mono); font-weight:600; font-size:.74rem; letter-spacing:.06em;
+  text-transform:uppercase; padding:10px 16px; border:1.5px solid var(--ink);
+  display:inline-flex; align-items:center; gap:8px; cursor:pointer; background:transparent;
+  color:var(--ink); transition:transform .12s ease, background .15s ease, color .15s ease, border-color .15s ease; }
+.btn svg{ width:16px; height:16px; }
+.btn-primary{ background:var(--accent); border-color:var(--accent); color:#fff; }
+.btn-primary:hover{ background:var(--accent-hover); border-color:var(--accent-hover); color:#fff; transform:translateY(-1px); }
+.btn-ghost:hover{ background:var(--card); border-color:var(--accent); color:var(--accent); transform:translateY(-1px); }
+.btn-lg{ padding:14px 22px; font-size:.82rem; }
+
+.gh-mini{ font-family:var(--f-mono); font-weight:500; font-size:.72rem; letter-spacing:.05em;
+  color:var(--body); display:inline-flex; align-items:center; gap:7px; padding:8px 10px; }
+.gh-mini:hover{ color:var(--accent); }
+.gh-mini svg{ width:17px; height:17px; }
+
+/* =========================================================
+   HERO
+   ========================================================= */
+.hero{ padding:clamp(40px,7vw,80px) 0 34px; }
+.hero-grid{ display:grid; grid-template-columns:minmax(0,1fr); gap:26px; }
+.hero-eyebrow-row{ display:flex; align-items:center; gap:18px; flex-wrap:wrap; }
+.plate{ font-family:var(--f-mono); font-weight:500; font-size:.6rem; letter-spacing:.16em;
+  color:var(--muted); text-transform:uppercase; }
+
+.hero h1{ font-size:clamp(2.7rem, 8.2vw, 6rem); max-width:15ch; text-wrap:balance; margin-top:18px; }
+.hero h1 .em{ color:var(--accent); }
+.hero .sub{ font-size:clamp(1.05rem,2.1vw,1.28rem); color:var(--body); max-width:60ch; margin-top:22px; line-height:1.55; }
+.hero .sub b{ font-weight:600; color:var(--ink); }
+
+.cta-row{ display:flex; gap:14px; flex-wrap:wrap; margin-top:30px; align-items:center; }
+
+.chips{ display:flex; gap:8px; flex-wrap:wrap; margin-top:26px; }
+.chip{ font-family:var(--f-mono); font-weight:500; font-size:.62rem; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--body); border:1px solid var(--grid-strong);
+  padding:6px 10px; background:var(--card); display:inline-flex; align-items:center; gap:7px; }
+.chip::before{ content:""; width:6px; height:6px; background:var(--accent); }
+
+/* ---------- instrument (dual-bar readout) ---------- */
+.instrument-fig{ margin-top:42px; }
+.figframe{ border:1.5px solid var(--ink); background:var(--card); }
+.figframe .head{ display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;
+  padding:12px 16px; border-bottom:1.5px solid var(--ink); background:var(--panel); }
+.figframe .head .l{ font-family:var(--f-disp); font-weight:700; font-size:1.05rem; letter-spacing:.05em;
+  text-transform:uppercase; color:var(--ink); display:flex; align-items:center; gap:12px; }
+.figtag{ font-family:var(--f-mono); font-weight:600; font-size:.6rem; letter-spacing:.14em; color:#fff;
+  background:var(--accent); padding:4px 8px; }
+.figframe .head .r{ font-family:var(--f-mono); font-weight:500; font-size:.58rem; letter-spacing:.14em;
+  color:var(--muted); text-transform:uppercase; display:flex; align-items:center; gap:8px; }
+.blink{ width:8px; height:8px; border-radius:50%; background:var(--up); box-shadow:0 0 0 3px color-mix(in srgb,var(--up) 22%, transparent); }
+
+.iscroll{ overflow-x:auto; padding:20px 16px 8px; }
+.instrument{ display:grid; grid-template-columns:max-content max-content max-content max-content;
+  column-gap:18px; row-gap:0; align-items:center; min-width:700px; }
+
+.rowline{ display:contents; }
+.cell{ padding:11px 0; border-bottom:1px solid var(--grid); }
+.cell.dimcell{ padding-bottom:8px; border-bottom:none; }
+
+.lblcell .host{ font-family:var(--f-mono); font-weight:600; font-size:.86rem; color:var(--ink); letter-spacing:.01em; }
+.lblcell .type{ font-family:var(--f-mono); font-weight:500; font-size:.62rem; color:var(--muted);
+  letter-spacing:.06em; text-transform:uppercase; margin-top:3px; }
+
+.strip{ display:flex; gap:2px; align-items:flex-end; }
+.strip .s{ flex:0 0 auto; border-radius:1px; transform-origin:bottom; }
+.strip.h4 .s{ width:6px; height:30px; }
+.strip.h90{ gap:1px; }
+.strip.h90 .s{ width:3px; height:30px; }
+.s-up{ background:var(--up); }
+.s-warn{ background:var(--warn); }
+.s-orange{ background:var(--orange); }
+.s-down{ background:var(--down); }
+.s-nodata{ background:var(--nodata); }
+
+.statcell{ text-align:right; }
+.uptime{ font-family:var(--f-mono); font-weight:600; font-size:.82rem; color:var(--ink); margin-top:8px; letter-spacing:.02em; }
+.uptime span{ font-size:.56rem; color:var(--muted); display:block; letter-spacing:.14em; font-weight:500; }
+
+.pill{ font-family:var(--f-mono); font-weight:600; font-size:.6rem; letter-spacing:.12em;
+  text-transform:uppercase; padding:5px 9px; display:inline-flex; align-items:center; gap:6px;
+  border:1px solid; white-space:nowrap; }
+.pill::before{ content:""; width:7px; height:7px; border-radius:50%; }
+.pill.healthy{ color:var(--up); border-color:var(--up); background:color-mix(in srgb,var(--up) 12%, transparent); }
+.pill.healthy::before{ background:var(--up); }
+.pill.up{ color:var(--up); border-color:color-mix(in srgb,var(--up) 55%, var(--grid-strong)); background:transparent; }
+.pill.up::before{ background:var(--up); }
+.pill.warn{ color:var(--warn); border-color:var(--warn); background:color-mix(in srgb,var(--warn) 12%, transparent); }
+.pill.warn::before{ background:var(--warn); }
+.pill.down{ color:#fff; border-color:var(--down); background:var(--down); }
+.pill.down::before{ background:#fff; }
+
+.figframe .foot{ padding:9px 16px; border-top:1.5px solid var(--ink); background:var(--panel);
+  font-family:var(--f-mono); font-size:.58rem; letter-spacing:.12em; color:var(--muted);
+  text-transform:uppercase; display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+
+/* =========================================================
+   SECTION scaffolding
+   ========================================================= */
+section{ padding:clamp(52px,8vw,90px) 0; scroll-margin-top:96px; }
+.sec-head{ max-width:66ch; }
+.sec-head h2{ font-size:clamp(2rem,4.6vw,3.4rem); margin-top:16px; text-wrap:balance; }
+.sec-head .lede{ font-size:clamp(1.02rem,1.7vw,1.15rem); color:var(--body); margin-top:18px; max-width:60ch; }
+
+/* ---------- TACTICAL ---------- */
+.tac-grid{ display:grid; grid-template-columns:minmax(0,1fr); gap:34px; margin-top:44px; }
+
+.legend{ display:flex; flex-wrap:wrap; gap:16px 22px; margin-top:22px; }
+.legend .lg{ display:flex; align-items:center; gap:8px; font-family:var(--f-mono); font-size:.64rem;
+  letter-spacing:.06em; color:var(--body); }
+.legend .sw{ width:14px; height:14px; border-radius:1px; }
+
+.exploded{ border:1.5px solid var(--ink); background:var(--card); }
+.exploded .xhead{ padding:12px 16px; border-bottom:1.5px solid var(--ink); background:var(--panel);
+  display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.exploded .xhead .h{ font-family:var(--f-mono); font-weight:600; font-size:.82rem; color:var(--ink); letter-spacing:.02em; }
+.xbody{ overflow-x:auto; padding:24px 18px 18px; }
+.xrow{ display:flex; gap:34px; min-width:560px; flex-wrap:nowrap; }
+.xcol{ display:flex; flex-direction:column; gap:9px; }
+.xcol .strip.h4 .s{ height:44px; }
+.xcol .strip.h90 .s{ height:44px; }
+.xmeta{ display:flex; justify-content:space-between; gap:10px; font-family:var(--f-mono); font-size:.58rem;
+  letter-spacing:.1em; color:var(--muted); text-transform:uppercase; }
+.xmeta b{ color:var(--body); font-weight:600; }
+
+/* ---------- ZERO FALSE POSITIVES ---------- */
+.schematic-fig{ margin-top:44px; border:1.5px solid var(--ink); background:var(--card); }
+.schematic-fig .shead{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+  padding:12px 16px; border-bottom:1.5px solid var(--ink); background:var(--panel); }
+.schematic-fig .shead .t{ font-family:var(--f-disp); font-weight:700; font-size:1.05rem; text-transform:uppercase;
+  letter-spacing:.05em; color:var(--ink); display:flex; align-items:center; gap:12px; }
+.schematic-fig .shead .expr{ font-family:var(--f-mono); font-weight:600; font-size:.72rem; letter-spacing:.06em; color:var(--accent); }
+.schematic-fig .expr .op{ color:var(--signal); }
+.svgscroll{ overflow-x:auto; padding:26px 18px; }
+.svgscroll svg{ display:block; min-width:660px; width:100%; height:auto; }
+.scaption{ padding:11px 16px; border-top:1.5px solid var(--ink); background:var(--panel);
+  font-family:var(--f-mono); font-size:.6rem; letter-spacing:.1em; text-transform:uppercase; color:var(--muted);
+  display:flex; gap:14px; flex-wrap:wrap; }
+.scaption b{ color:var(--body); font-weight:600; }
+
+/* schematic svg classes */
+.sch-box{ fill:var(--card); stroke:var(--accent); stroke-width:1.5; }
+.sch-node{ fill:color-mix(in srgb, var(--accent) 12%, var(--card)); stroke:var(--accent); stroke-width:1.6; }
+.sch-alert{ fill:color-mix(in srgb, var(--signal) 12%, var(--card)); stroke:var(--signal); stroke-width:2; }
+.sch-wire{ stroke:var(--ink); stroke-width:1.6; fill:none; }
+.sch-dot{ fill:var(--ink); }
+.sch-t{ fill:var(--ink); font-family:var(--f-mono); font-weight:600; }
+.sch-sub{ fill:var(--muted); font-family:var(--f-mono); font-weight:500; }
+.sch-lbl{ fill:var(--accent); font-family:var(--f-mono); font-weight:600; }
+.sch-node-t{ fill:var(--accent); font-family:var(--f-mono); font-weight:700; }
+.sch-alert-t{ fill:var(--signal); font-family:var(--f-mono); font-weight:700; }
+
+/* mechanisms FIG 01/02/03 */
+.mechs{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; margin-top:34px; }
+.mech{ position:relative; border:1px solid var(--grid-strong); background:var(--card); padding:22px 20px 24px; }
+.mech .fig{ font-family:var(--f-mono); font-weight:600; font-size:.62rem; letter-spacing:.16em; color:var(--signal); }
+.mech h3{ font-size:1.4rem; margin-top:12px; letter-spacing:.02em; }
+.mech p{ margin-top:12px; font-size:.95rem; color:var(--body); }
+.mech code{ font-family:var(--f-mono); font-size:.82em; background:var(--panel); padding:1px 5px; color:var(--ink); border:1px solid var(--grid-strong); }
+.mech .op{ color:var(--signal); font-weight:600; }
+
+/* ---------- CHECK CATALOG ---------- */
+.checks-grid{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; margin-top:40px; }
+.chk{ position:relative; border:1px solid var(--grid-strong); background:var(--card); padding:18px 16px 20px;
+  display:flex; flex-direction:column; gap:10px; transition:border-color .15s ease, transform .12s ease, box-shadow .15s ease; }
+.chk:hover{ border-color:var(--accent); transform:translateY(-2px); box-shadow:4px 4px 0 color-mix(in srgb,var(--accent) 16%, transparent); }
+.chk .top{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.chk .pn{ font-family:var(--f-mono); font-weight:600; font-size:.62rem; letter-spacing:.12em; color:var(--accent); }
+.chk .tag{ font-family:var(--f-mono); font-weight:500; font-size:.56rem; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--muted); border:1px solid var(--grid-strong); padding:3px 6px; }
+.chk h3{ font-size:1.32rem; letter-spacing:.02em; }
+.chk p{ font-size:.85rem; color:var(--body); line-height:1.5; }
+
+/* ---------- FEATURE GRID ---------- */
+.feat-grid{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; margin-top:40px; }
+.feat{ border:1px solid var(--grid-strong); background:var(--card); padding:20px 18px 22px;
+  display:flex; flex-direction:column; gap:12px; transition:border-color .15s ease, box-shadow .15s ease; }
+.feat:hover{ border-color:var(--accent); box-shadow:4px 4px 0 color-mix(in srgb,var(--accent) 14%, transparent); }
+.feat .fic{ stroke:var(--accent); fill:none; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; width:26px; height:26px; }
+.feat h3{ font-size:1.18rem; letter-spacing:.02em; }
+.feat p{ font-size:.85rem; color:var(--body); line-height:1.5; }
+.feat .ch{ margin-top:auto; }
+.feat .chtag{ display:inline-block; font-family:var(--f-mono); font-weight:500; font-size:.56rem; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--muted); border:1px solid var(--grid-strong); padding:3px 7px; }
+.feat.wide{ grid-column:span 2; }
+
+/* ---------- DEPLOY ---------- */
+.deploy-grid{ display:grid; grid-template-columns:1.05fr 1fr; gap:30px; margin-top:44px; align-items:start; }
+.steps{ display:flex; flex-direction:column; gap:2px; }
+.step{ display:grid; grid-template-columns:auto 1fr; gap:16px; align-items:start; padding:18px 0; border-bottom:1px solid var(--grid); }
+.step:first-child{ border-top:1px solid var(--grid); }
+.step .n{ font-family:var(--f-disp); font-weight:800; font-size:2.1rem; line-height:1; color:var(--accent); }
+.step .st h3{ font-size:1.2rem; letter-spacing:.02em; }
+.step .st p{ font-size:.9rem; color:var(--body); margin-top:6px; }
+.step .st code{ font-family:var(--f-mono); font-size:.82em; color:var(--ink); }
+
+.codepanel{ border:1.5px solid var(--ink); background:#0f1519; color:#dfe7e2; }
+.codepanel .chead{ display:flex; align-items:center; justify-content:space-between; gap:12px;
+  padding:10px 14px; border-bottom:1.5px solid #263038; }
+.codepanel .chead .lab{ font-family:var(--f-mono); font-weight:600; font-size:.6rem; letter-spacing:.14em;
+  text-transform:uppercase; color:#8ea6b8; }
+.copybtn{ font-family:var(--f-mono); font-weight:600; font-size:.6rem; letter-spacing:.1em; text-transform:uppercase;
+  color:#cfe0ff; background:transparent; border:1px solid #2f5aa0; padding:5px 10px; cursor:pointer; }
+.copybtn:hover{ background:#15489A; border-color:#15489A; color:#fff; }
+.codepanel pre{ margin:0; padding:16px 16px 18px; overflow-x:auto; }
+.codepanel code{ font-family:var(--f-mono); font-size:.82rem; line-height:1.8; white-space:pre; }
+.codepanel .cmt{ color:#6c8393; }
+.codepanel .c-b{ color:#7fb2ff; }   /* command binary */
+.codepanel .c-f{ color:#e7efe9; }   /* flags/args */
+.codepanel .prompt{ color:#5a7386; }
+.deploy-note{ margin-top:18px; font-family:var(--f-mono); font-size:.72rem; letter-spacing:.03em; color:var(--body); }
+.deploy-note b{ color:var(--ink); }
+.deploy-note .url{ color:var(--accent); }
+.stack-line{ margin-top:20px; display:flex; flex-wrap:wrap; gap:8px; }
+
+/* =========================================================
+   FOOTER / TITLE BLOCK
+   ========================================================= */
+.foot{ border-top:2px solid var(--ink); padding:42px 0 60px; margin-top:10px; }
+.titleblock{ border:1.5px solid var(--ink); background:var(--card);
+  display:grid; grid-template-columns:1.4fr 1fr 1fr; }
+.titleblock .tb{ padding:14px 16px; border-right:1px solid var(--grid-strong); border-bottom:1px solid var(--grid-strong); }
+.titleblock .tb:nth-child(3n){ border-right:none; }
+.titleblock .k{ font-family:var(--f-mono); font-weight:500; font-size:.54rem; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--muted); }
+.titleblock .v{ font-family:var(--f-mono); font-weight:600; font-size:.82rem; color:var(--ink); margin-top:5px; letter-spacing:.02em; }
+.titleblock .brandcell{ display:flex; align-items:center; gap:12px; grid-column:1 / -1; border-right:none; border-bottom:none; }
+.titleblock .brandcell img{ width:44px; height:44px; }
+.titleblock .brandcell .bt{ font-family:var(--f-disp); font-weight:800; font-size:1.7rem; letter-spacing:.05em;
+  text-transform:uppercase; color:var(--ink); line-height:1; }
+.titleblock .brandcell .bs{ font-family:var(--f-mono); font-size:.6rem; letter-spacing:.08em; color:var(--muted); margin-top:5px; }
+.foot-links{ margin-top:20px; display:flex; align-items:center; gap:20px; flex-wrap:wrap;
+  font-family:var(--f-mono); font-size:.72rem; letter-spacing:.04em; color:var(--muted); }
+.foot-links a{ color:var(--body); display:inline-flex; align-items:center; gap:7px; }
+.foot-links a:hover{ color:var(--accent); }
+.foot-links svg{ width:16px; height:16px; }
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+@media (max-width:980px){
+  .checks-grid{ grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .feat-grid{ grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .mechs{ grid-template-columns:1fr; }
+  .deploy-grid{ grid-template-columns:1fr; }
+  .titleblock{ grid-template-columns:1fr 1fr; }
+  .titleblock .tb:nth-child(3n){ border-right:1px solid var(--grid-strong); }
+  .titleblock .tb:nth-child(2n){ border-right:none; }
+}
+@media (max-width:820px){
+  .nav-links{ order:3; width:100%; justify-content:flex-start; overflow-x:auto; flex-wrap:nowrap;
+    border-top:1px solid var(--grid-strong); padding-top:10px; margin-top:2px; -webkit-overflow-scrolling:touch; }
+  .nav-links a{ flex:0 0 auto; white-space:nowrap; }
+  .nav-links::-webkit-scrollbar{ height:0; }
+}
+@media (max-width:560px){
+  .checks-grid{ grid-template-columns:1fr; }
+  .feat-grid{ grid-template-columns:1fr; }
+  .feat.wide{ grid-column:span 1; }
+  .titleblock{ grid-template-columns:1fr; }
+  .titleblock .tb{ border-right:none !important; }
+  .brand .wm{ font-size:1.3rem; }
+  .cta-row .btn{ flex:1 1 auto; justify-content:center; }
+}
+
+/* =========================================================
+   MOTION
+   ========================================================= */
+@media (prefers-reduced-motion:no-preference){
+  .strip .s{ animation:plot .42s var(--d,0ms) both cubic-bezier(.2,.7,.3,1); }
+  @keyframes plot{ from{ opacity:0; transform:scaleY(.12); } to{ opacity:1; transform:scaleY(1); } }
+}
+</style>
+
+<a class="skip" href="#main">Skip to content</a>
+
+<div class="wrap">
+
+<!-- ===================== NAV ===================== -->
+<header class="nav">
+  <a class="brand" href="#top" aria-label="Bekci home">
+    <img src="../assets/bekci-owl.png" alt="Bekci owl mascot — a vigilant blue owl">
+    <span class="wm">BEKCI<small>WATCHMAN · BEKÇI</small></span>
+  </a>
+  <nav class="nav-links" aria-label="Primary">
+    <a href="#tactical">Tactical</a>
+    <a href="#zero">Zero false positives</a>
+    <a href="#checks">Checks</a>
+    <a href="#deploy">Deploy</a>
+  </nav>
+  <div class="nav-cta">
+    <a class="gh-mini" href="https://github.com/okoker/bekci" rel="noopener">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.42c.57.1.78-.25.78-.55v-2c-3.2.7-3.88-1.36-3.88-1.36-.53-1.34-1.3-1.7-1.3-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.72-1.55-2.55-.29-5.24-1.28-5.24-5.7 0-1.26.45-2.29 1.2-3.1-.12-.3-.52-1.47.11-3.07 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.8 0c2.2-1.5 3.17-1.18 3.17-1.18.63 1.6.23 2.77.11 3.07.75.81 1.2 1.84 1.2 3.1 0 4.43-2.7 5.4-5.26 5.69.41.36.78 1.06.78 2.14v3.17c0 .31.2.66.79.55A11.5 11.5 0 0 0 12 .5Z"/></svg>
+      GitHub
+    </a>
+    <a class="btn btn-primary" href="#deploy">Deploy Bekci</a>
+  </div>
+</header>
+
+<main id="main">
+<div id="top"></div>
+
+<!-- ===================== HERO ===================== -->
+<section class="hero" aria-labelledby="hero-h">
+  <div class="shell hero-grid">
+    <div>
+      <div class="hero-eyebrow-row">
+        <span class="eyebrow">Self-hosted · Open source · MIT</span>
+        <span class="plate">DWG. BEKCI-01 · MONITORING SCHEMATIC</span>
+      </div>
+      <h1 id="hero-h">Monitoring, engineered <span class="em">not to cry wolf.</span></h1>
+      <p class="sub">Bekci diagrams your alert logic — <b>corroborate independent checks</b>, <b>require sustained failure</b>, and page on-call only when the design says it's real.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary btn-lg" href="#deploy">Deploy Bekci</a>
+        <a class="btn btn-ghost btn-lg" href="https://github.com/okoker/bekci" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.42c.57.1.78-.25.78-.55v-2c-3.2.7-3.88-1.36-3.88-1.36-.53-1.34-1.3-1.7-1.3-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.72-1.55-2.55-.29-5.24-1.28-5.24-5.7 0-1.26.45-2.29 1.2-3.1-.12-.3-.52-1.47.11-3.07 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.8 0c2.2-1.5 3.17-1.18 3.17-1.18.63 1.6.23 2.77.11 3.07.75.81 1.2 1.84 1.2 3.1 0 4.43-2.7 5.4-5.26 5.69.41.36.78 1.06.78 2.14v3.17c0 .31.2.66.79.55A11.5 11.5 0 0 0 12 .5Z"/></svg>
+          View on GitHub
+        </a>
+      </div>
+      <div class="chips">
+        <span class="chip">Single Go binary</span>
+        <span class="chip">SQLite · WAL</span>
+        <span class="chip">Docker-first</span>
+        <span class="chip">~1000 hosts</span>
+        <span class="chip">Port 65000</span>
+      </div>
+    </div>
+
+    <!-- INSTRUMENT: dual-timescale readout -->
+    <div class="instrument-fig ticks">
+      <span class="t tl"></span><span class="t tr"></span><span class="t bl"></span><span class="t br"></span>
+      <div class="figframe">
+        <div class="head">
+          <span class="l"><span class="figtag">FIG. A</span> Dual-timescale readout</span>
+          <span class="r"><span class="blink" aria-hidden="true"></span> Demo data · regenerated on load</span>
+        </div>
+        <div class="iscroll">
+          <div class="instrument" id="instrument" aria-label="Live monitoring readout for four checks">
+            <!-- header dimension row -->
+            <div class="rowline">
+              <span class="cell dimcell" aria-hidden="true"></span>
+              <div class="cell dimcell"><div class="dim"><span class="cap"></span><span class="ln"></span><span class="txt">4H · 5-MIN · 48</span><span class="ln"></span><span class="cap"></span></div></div>
+              <div class="cell dimcell"><div class="dim"><span class="cap"></span><span class="ln"></span><span class="txt">90D · DAILY · 90</span><span class="ln"></span><span class="cap"></span></div></div>
+              <span class="cell dimcell" aria-hidden="true"></span>
+            </div>
+            <!-- rows injected by JS -->
+          </div>
+        </div>
+        <div class="foot">
+          <span>◍ Green 100% · Amber 95–99% · Orange 80–94% · Red &lt;80% · Grey no data</span>
+          <span>Read the incident + the 90-day pattern in one glance</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="shell"><div class="ruler"><span class="coord l">X · 0000</span><span class="coord r">SHEET 1 / 1</span></div></div>
+
+<!-- ===================== TACTICAL ===================== -->
+<section id="tactical" aria-labelledby="tac-h">
+  <div class="shell">
+    <div class="sec-head">
+      <span class="eyebrow">Tactical readout · dual timescale</span>
+      <h2 id="tac-h">Two clocks on every check</h2>
+      <p class="lede">Every check is plotted on two clocks at once. The 4-hour strip shows the last 48 five-minute windows — what's happening right now. The 90-day strip shows 90 daily windows — the reliability trend behind it. Read the incident and the pattern in a single glance.</p>
+    </div>
+
+    <div class="tac-grid">
+      <div class="exploded ticks">
+        <span class="t tl"></span><span class="t tr"></span><span class="t bl"></span><span class="t br"></span>
+        <div class="xhead">
+          <span class="h">edge-router · SNMP v2c</span>
+          <span class="pill down">Down</span>
+        </div>
+        <div class="xbody">
+          <div class="xrow">
+            <div class="xcol">
+              <div class="dim"><span class="cap"></span><span class="ln"></span><span class="txt">4-Hour · Tactical</span><span class="ln"></span><span class="cap"></span></div>
+              <div class="strip h4" id="xstrip4" aria-hidden="true"></div>
+              <div class="xmeta"><span>−04:00</span><b>48 SEG · 5-MIN EACH</b><span>NOW</span></div>
+            </div>
+            <div class="xcol">
+              <div class="dim"><span class="cap"></span><span class="ln"></span><span class="txt">90-Day · Strategic</span><span class="ln"></span><span class="cap"></span></div>
+              <div class="strip h90" id="xstrip90" aria-hidden="true"></div>
+              <div class="xmeta"><span>−90D</span><b>90 SEG · 1 DAY EACH</b><span>TODAY</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <p style="font-family:var(--f-mono);font-size:.82rem;letter-spacing:.02em;color:var(--body);max-width:60ch">
+          The same measure, two resolutions. The tactical strip resolves a live incident down to a 5-minute cell; the strategic strip keeps 90 days of daily uptime so a recurring pattern can't hide inside a "good enough" monthly average.
+        </p>
+        <div class="legend" aria-hidden="true">
+          <span class="lg"><span class="sw" style="background:var(--up)"></span>100% · up</span>
+          <span class="lg"><span class="sw" style="background:var(--warn)"></span>95–99%</span>
+          <span class="lg"><span class="sw" style="background:var(--orange)"></span>80–94%</span>
+          <span class="lg"><span class="sw" style="background:var(--down)"></span>&lt;80% · down</span>
+          <span class="lg"><span class="sw" style="background:var(--nodata)"></span>no data</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== ZERO FALSE POSITIVES ===================== -->
+<section id="zero" aria-labelledby="zero-h">
+  <div class="shell">
+    <div class="sec-head">
+      <span class="eyebrow">Alert logic · zero false positives</span>
+      <h2 id="zero-h">Page on-call only when the design says it's real</h2>
+      <p class="lede">Most uptime monitors fire on a single failed check. Bekci demands corroboration <em>and</em> sustained failure — driving false positives toward zero. Here's the condition logic, diagrammed.</p>
+    </div>
+
+    <!-- SVG SCHEMATIC -->
+    <figure class="schematic-fig ticks" style="margin:44px 0 0">
+      <span class="t tl"></span><span class="t tr"></span><span class="t bl"></span><span class="t br"></span>
+      <div class="shead">
+        <span class="t"><span class="figtag">FIG. 00</span> Condition schematic</span>
+        <span class="expr">( TCP <span class="op">AND</span> HTTP ) <span class="op">OR</span> PING &nbsp;→&nbsp; ALERT?</span>
+      </div>
+      <div class="svgscroll">
+        <svg viewBox="0 0 880 340" role="img" aria-label="Schematic: TCP AND HTTP grouped, then OR'd with PING, resolving to one ALERT node.">
+          <defs>
+            <marker id="arw" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
+              <path d="M0 1 L8 4.5 L0 8 Z" class="sch-dot"></path>
+            </marker>
+          </defs>
+
+          <!-- INPUT BOXES -->
+          <g>
+            <rect class="sch-box" x="24" y="26" width="132" height="58"></rect>
+            <text class="sch-t" x="40" y="52" font-size="18">TCP</text>
+            <text class="sch-sub" x="40" y="70" font-size="9.5">PORT CONNECT · L4</text>
+          </g>
+          <g>
+            <rect class="sch-box" x="24" y="141" width="132" height="58"></rect>
+            <text class="sch-t" x="40" y="167" font-size="18">HTTP</text>
+            <text class="sch-sub" x="40" y="185" font-size="9.5">STATUS · L7</text>
+          </g>
+          <g>
+            <rect class="sch-box" x="24" y="256" width="132" height="58"></rect>
+            <text class="sch-t" x="40" y="282" font-size="18">PING</text>
+            <text class="sch-sub" x="40" y="300" font-size="9.5">ICMP REACH</text>
+          </g>
+
+          <!-- WIRES into AND -->
+          <path class="sch-wire" d="M156 55 H240 V112 H272" marker-end="url(#arw)"></path>
+          <path class="sch-wire" d="M156 170 H240 V112" ></path>
+          <circle class="sch-dot" cx="240" cy="112" r="3.4"></circle>
+
+          <!-- AND NODE -->
+          <circle class="sch-node" cx="300" cy="112" r="30"></circle>
+          <text class="sch-node-t" x="300" y="117" font-size="14" text-anchor="middle">AND</text>
+
+          <!-- group result wire -->
+          <text class="sch-lbl" x="352" y="98" font-size="10.5">(TCP AND HTTP)</text>
+          <path class="sch-wire" d="M330 112 H440"></path>
+          <circle class="sch-dot" cx="440" cy="112" r="3.4"></circle>
+
+          <!-- PING into OR bus -->
+          <path class="sch-wire" d="M156 285 H440 V112"></path>
+          <path class="sch-wire" d="M440 198 H470" marker-end="url(#arw)"></path>
+
+          <!-- OR NODE -->
+          <circle class="sch-node" cx="500" cy="198" r="30"></circle>
+          <text class="sch-node-t" x="500" y="203" font-size="15" text-anchor="middle">OR</text>
+
+          <!-- OR out -> ALERT -->
+          <path class="sch-wire" d="M530 198 H612" marker-end="url(#arw)"></path>
+
+          <!-- ALERT NODE -->
+          <rect class="sch-alert" x="616" y="168" width="150" height="60"></rect>
+          <text class="sch-alert-t" x="691" y="197" font-size="17" text-anchor="middle">ALERT?</text>
+          <text class="sch-sub" x="691" y="215" font-size="9" text-anchor="middle" fill="var(--signal)">PAGE ON-CALL</text>
+
+          <!-- dimension caption under -->
+          <path class="sch-wire" d="M24 328 H766" stroke="var(--grid-strong)" marker-end="url(#arw)" marker-start="url(#arw)"></path>
+          <text class="sch-sub" x="395" y="323" font-size="9" text-anchor="middle">GROUPS COMBINE BY AND/OR · ACROSS GROUPS THE LOGIC IS OR · NESTABLE</text>
+        </svg>
+      </div>
+      <figcaption class="scaption">
+        <span><b>INPUT</b> — 3 independent checks</span>
+        <span><b>LOGIC</b> — (TCP AND HTTP) OR PING</span>
+        <span><b>OUTPUT</b> — one alert decision</span>
+      </figcaption>
+    </figure>
+
+    <!-- 3 MECHANISMS -->
+    <div class="mechs">
+      <article class="mech">
+        <span class="fig">FIG. 01</span>
+        <h3>Corroboration</h3>
+        <p>Combine checks with boolean <b>AND/OR</b> groups. An alert fires only when independent signals agree — e.g. <code>(TCP <span class="op">AND</span> HTTP) <span class="op">OR</span> PING</code>. Groups nest and compose; across groups the logic is OR.</p>
+      </article>
+      <article class="mech">
+        <span class="fig">FIG. 02</span>
+        <h3>Sustained failure</h3>
+        <p>A condition must fail <b>N times within a fail window</b> before it counts as down. A single blip is ignored. Window minimum <code>= fail_count × interval</code>.</p>
+      </article>
+      <article class="mech">
+        <span class="fig">FIG. 03</span>
+        <h3>Flap suppression</h3>
+        <p>Per-rule alert <b>cooldown</b>, a configurable <b>re-alert</b> interval for still-firing issues, and a <b>recovery cooldown</b> — so a flapping target can't spawn an alert storm.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== CHECK CATALOG ===================== -->
+<section id="checks" aria-labelledby="chk-h">
+  <div class="shell">
+    <div class="sec-head">
+      <span class="eyebrow">Check catalog · 8 types</span>
+      <h2 id="chk-h">Eight ways to probe a target</h2>
+      <p class="lede">Each check evaluates <b>field · comparator · value</b> — a status-code match, a DNS record value, cert days-remaining, a page-hash change — and composes into the AND/OR groups above.</p>
+    </div>
+
+    <div class="checks-grid">
+      <article class="chk">
+        <div class="top"><span class="pn">CHK-01</span><span class="tag">ICMP</span></div>
+        <h3>Ping</h3>
+        <p>Reachability, round-trip time and packet loss.</p>
+      </article>
+      <article class="chk">
+        <div class="top"><span class="pn">CHK-02</span><span class="tag">L7</span></div>
+        <h3>HTTP / HTTPS</h3>
+        <p>Expected status code, endpoint path and custom port.</p>
+      </article>
+      <article class="chk">
+        <div class="top"><span class="pn">CHK-03</span><span class="tag">L4</span></div>
+        <h3>TCP</h3>
+        <p>Port connect — is the socket accepting?</p>
+      </article>
+      <article class="chk">
+        <div class="top"><span class="pn">CHK-04</span><span class="tag">DNS</span></div>
+        <h3>DNS</h3>
+        <p>Resolve host; optional expected value, record type and nameserver.</p>
+      </article>
+      <article class="chk">
+        <div class="top"><span class="pn">CHK-05</span><span class="tag">SHA-256</span></div>
+        <h3>Page Hash</h3>
+        <p>Hashes the response body to detect defacement or unexpected change.</p>
+      </article>
+      <article class="chk">
+        <div class="top"><span class="pn">CHK-06</span><span class="tag">X.509</span></div>
+        <h3>TLS Cert</h3>
+        <p>Certificate expiry — warn N days ahead of the deadline.</p>
+      </article>
+      <article class="chk">
+        <div class="top"><span class="pn">CHK-07</span><span class="tag">SNMP v2c</span></div>
+        <h3>SNMP v2c</h3>
+        <p>sysUpTime, sysDescr, best-effort CPU and memory.</p>
+      </article>
+      <article class="chk">
+        <div class="top"><span class="pn">CHK-08</span><span class="tag">SNMP v3</span></div>
+        <h3>SNMP v3</h3>
+        <p>Same signals with authPriv / authNoPriv / noAuthNoPriv.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== FEATURE GRID ===================== -->
+<section id="features" aria-labelledby="feat-h">
+  <div class="shell">
+    <div class="sec-head">
+      <span class="eyebrow">Capabilities</span>
+      <h2 id="feat-h">Built by security people, for the SOC</h2>
+      <p class="lede">Everything an operator needs to run monitoring as a controlled system — not a noisy inbox.</p>
+    </div>
+
+    <div class="feat-grid">
+      <article class="feat">
+        <svg class="fic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="7" height="7"/><rect x="14" y="4" width="7" height="7"/><rect x="3" y="14" width="7" height="6"/><rect x="14" y="14" width="7" height="6"/></svg>
+        <h3>SOC status wall</h3>
+        <p>A flat status page for a security-operations display — optionally public.</p>
+        <div class="ch"><span class="chtag">Display mode</span></div>
+      </article>
+      <article class="feat">
+        <svg class="fic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 15a8 8 0 0 1 16 0"/><path d="M12 15l4-4"/><circle cx="12" cy="15" r="1.2"/></svg>
+        <h3>SLA compliance</h3>
+        <p>Per-category SLA thresholds with 90-day daily-uptime charts.</p>
+        <div class="ch"><span class="chtag">90-day</span></div>
+      </article>
+      <article class="feat">
+        <svg class="fic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-5 6-5s6 1.7 6 5"/><path d="M16 6a3 3 0 0 1 0 6"/><path d="M21 20c0-2.5-1.5-4-4-4.5"/></svg>
+        <h3>RBAC</h3>
+        <p>Three roles — admin / operator / viewer. JWT in an HttpOnly cookie, bcrypt.</p>
+        <div class="ch"><span class="chtag">admin · operator · viewer</span></div>
+      </article>
+      <article class="feat">
+        <svg class="fic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>
+        <h3>Alerting</h3>
+        <p>Email (Resend / Microsoft 365), Signal, or a generic JSON webhook to SOAR &amp; Slack. Recovery notices carry downtime duration.</p>
+        <div class="ch"><span class="chtag">Email · Signal · Webhook</span></div>
+      </article>
+      <article class="feat">
+        <svg class="fic" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="1"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+        <h3>Encrypted backups</h3>
+        <p>Full DB snapshot with optional AES-256-GCM (Argon2id, diceware passphrase). Config + full-DB restore.</p>
+        <div class="ch"><span class="chtag">AES-256-GCM</span></div>
+      </article>
+      <article class="feat">
+        <svg class="fic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2-5 3 10 2-5h5"/></svg>
+        <h3>Self-health switch</h3>
+        <p>A scheduler-heartbeat dead man's switch — the monitor watches itself and alerts if it stalls.</p>
+        <div class="ch"><span class="chtag">Dead man's switch</span></div>
+      </article>
+      <article class="feat">
+        <svg class="fic" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><path d="M4 6h.01M4 12h.01M4 18h.01"/></svg>
+        <h3>Audit log</h3>
+        <p>A full trail of every admin and operator action, with server-side search.</p>
+        <div class="ch"><span class="chtag">Server-side search</span></div>
+      </article>
+      <article class="feat">
+        <svg class="fic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="M9.5 12l1.8 1.8L15 10"/></svg>
+        <h3>fail2ban integration</h3>
+        <p>Login brute-force protection with ban detail on the security surface.</p>
+        <div class="ch"><span class="chtag">Brute-force guard</span></div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<div class="shell"><div class="ruler"><span class="coord l">QUICK-START</span><span class="coord r">ONE PORT · 65000</span></div></div>
+
+<!-- ===================== DEPLOY ===================== -->
+<section id="deploy" aria-labelledby="dep-h">
+  <div class="shell">
+    <div class="sec-head">
+      <span class="eyebrow">Quick-start</span>
+      <h2 id="dep-h">One container. One binary. One port.</h2>
+      <p class="lede">A single Go binary with the Vue 3 UI embedded, SQLite for storage, Docker-first. Clone, compose up, open the port.</p>
+    </div>
+
+    <div class="deploy-grid">
+      <div class="steps">
+        <div class="step">
+          <span class="n">01</span>
+          <div class="st"><h3>Clone the repository</h3><p>Pull the source from GitHub — <code>github.com/okoker/bekci</code>.</p></div>
+        </div>
+        <div class="step">
+          <span class="n">02</span>
+          <div class="st"><h3>Compose up</h3><p>One container builds and starts in the background. No external services to wire up.</p></div>
+        </div>
+        <div class="step">
+          <span class="n">03</span>
+          <div class="st"><h3>Open the console</h3><p>Browse to <code>http://localhost:65000</code> and start adding checks.</p></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="codepanel ticks">
+          <span class="t tl"></span><span class="t tr"></span><span class="t bl"></span><span class="t br"></span>
+          <div class="chead">
+            <span class="lab">deploy.sh — verbatim</span>
+            <button class="copybtn" id="copyBtn" type="button" aria-label="Copy deploy commands">Copy</button>
+          </div>
+          <pre><code id="snippet"><span class="cmt"># clone, then bring up one container</span>
+<span class="prompt">$</span> <span class="c-b">git</span> <span class="c-f">clone https://github.com/okoker/bekci.git</span>
+<span class="prompt">$</span> <span class="c-b">cd</span> <span class="c-f">bekci</span>
+<span class="prompt">$</span> <span class="c-b">docker</span> <span class="c-f">compose up -d</span>
+<span class="cmt"># then open http://localhost:65000</span></code></pre>
+        </div>
+        <p class="deploy-note"><b>One container. One binary. One port.</b> Open <span class="url">http://localhost:65000</span> — MIT-licensed, self-hosted, yours.</p>
+        <div class="stack-line">
+          <span class="chip">Go 1.25</span>
+          <span class="chip">Vue 3 + Vite</span>
+          <span class="chip">SQLite (WAL)</span>
+          <span class="chip">Docker</span>
+          <span class="chip">MIT</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- ===================== FOOTER / TITLE BLOCK ===================== -->
+<footer class="foot">
+  <div class="shell">
+    <div class="titleblock">
+      <div class="tb brandcell">
+        <img src="../assets/bekci-owl.png" alt="Bekci owl mascot">
+        <div>
+          <div class="bt">Bekci</div>
+          <div class="bs">bekçi — the watchman who only wakes you when it's real</div>
+        </div>
+      </div>
+      <div class="tb"><div class="k">Class</div><div class="v">Host &amp; network monitoring</div></div>
+      <div class="tb"><div class="k">Deployment</div><div class="v">Self-hosted · Docker</div></div>
+      <div class="tb"><div class="k">Storage</div><div class="v">SQLite · WAL</div></div>
+      <div class="tb"><div class="k">Runtime</div><div class="v">Go 1.25 · Vue 3</div></div>
+      <div class="tb"><div class="k">Scale</div><div class="v">~1000 hosts</div></div>
+      <div class="tb"><div class="k">Port</div><div class="v">65000</div></div>
+      <div class="tb"><div class="k">License</div><div class="v">MIT © 2026</div></div>
+      <div class="tb"><div class="k">Sheet</div><div class="v">1 of 1</div></div>
+    </div>
+    <div class="foot-links">
+      <a href="https://github.com/okoker/bekci" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.42c.57.1.78-.25.78-.55v-2c-3.2.7-3.88-1.36-3.88-1.36-.53-1.34-1.3-1.7-1.3-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.72-1.55-2.55-.29-5.24-1.28-5.24-5.7 0-1.26.45-2.29 1.2-3.1-.12-.3-.52-1.47.11-3.07 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.8 0c2.2-1.5 3.17-1.18 3.17-1.18.63 1.6.23 2.77.11 3.07.75.81 1.2 1.84 1.2 3.1 0 4.43-2.7 5.4-5.26 5.69.41.36.78 1.06.78 2.14v3.17c0 .31.2.66.79.55A11.5 11.5 0 0 0 12 .5Z"/></svg>
+        github.com/okoker/bekci
+      </a>
+      <span>Built with Go + Vue</span>
+      <span>Open source · MIT © 2026</span>
+    </div>
+  </div>
+</footer>
+
+</div><!-- /wrap -->
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- segment generation ---------- */
+  // classes map to segment colour tiers:
+  // up=100% · warn=95-99% · orange=80-94% · down=<80% · nodata=no data
+  function generate(n, profile, scale){
+    var a = new Array(n).fill('up');
+    // ambient jitter — the occasional near-perfect-but-not window
+    for(var i=0;i<n;i++){ if(Math.random()<0.045) a[i]='warn'; }
+
+    if(profile==='minor'){
+      var m = Math.floor(n*0.52);
+      a[m]='warn'; a[m+1]= (scale==='4h'?'orange':'warn');
+      if(scale==='90d'){ a[Math.floor(n*0.3)]='orange'; for(var g=0;g<5;g++) a[g]='nodata'; }
+    }
+    if(profile==='warn'){
+      for(var w=0; w<n; w++){ if(Math.random()<0.10) a[w]='warn'; }
+      var p = Math.floor(n*0.72); a[p]='orange'; a[p+1]='orange';
+      if(scale==='90d'){ a[Math.floor(n*0.44)]='orange'; }
+    }
+    if(profile==='down'){
+      var len = (scale==='4h') ? 6 : 3;            // recent outage at the "now" edge
+      for(var d=n-len; d<n; d++){ a[d] = (d > n-3 ? 'down' : 'orange'); }
+      a[Math.floor(n*0.4)]='orange';
+      if(scale==='90d'){ a[Math.floor(n*0.6)]='down'; a[Math.floor(n*0.2)]='orange'; a[Math.floor(n*0.78)]='warn'; }
+    }
+    return a;
+  }
+
+  function stripHTML(arr, scaleClass){
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var out = '';
+    for(var i=0;i<arr.length;i++){
+      var delay = reduce ? 0 : Math.min(i*7, 700);
+      out += '<i class="s s-'+arr[i]+'" style="--d:'+delay+'ms"></i>';
+    }
+    return out;
+  }
+
+  /* ---------- checks (hero instrument) ---------- */
+  var CHECKS = [
+    { host:'api.acme.io',  type:'HTTPS · :443',    state:'healthy', label:'Healthy', up:'99.99', profile:'clean' },
+    { host:'db-primary',   type:'TCP · :5432',     state:'up',      label:'Up',      up:'99.94', profile:'minor' },
+    { host:'edge-router',  type:'SNMP v2c',        state:'down',    label:'Down',    up:'97.20', profile:'down'  },
+    { host:'www.acme.io',  type:'TLS · X.509',     state:'warn',    label:'Warn',    up:'99.81', profile:'warn'  }
+  ];
+
+  function rowHTML(c){
+    var s4  = stripHTML(generate(48, c.profile, '4h'), 'h4');
+    var s90 = stripHTML(generate(90, c.profile, '90d'), 'h90');
+    return ''+
+      '<div class="rowline">'+
+        '<div class="cell lblcell"><div class="host">'+c.host+'</div><div class="type">'+c.type+'</div></div>'+
+        '<div class="cell"><div class="strip h4" role="img" aria-label="'+c.host+' 4-hour readout">'+s4+'</div></div>'+
+        '<div class="cell"><div class="strip h90" role="img" aria-label="'+c.host+' 90-day readout, uptime '+c.up+' percent">'+s90+'</div></div>'+
+        '<div class="cell statcell"><span class="pill '+c.state+'">'+c.label+'</span>'+
+          '<div class="uptime tnum">'+c.up+'%<span>90D UPTIME</span></div></div>'+
+      '</div>';
+  }
+
+  var inst = document.getElementById('instrument');
+  if(inst){
+    var html = '';
+    for(var i=0;i<CHECKS.length;i++){ html += rowHTML(CHECKS[i]); }
+    inst.insertAdjacentHTML('beforeend', html);
+  }
+
+  /* ---------- exploded readout (tactical section) ---------- */
+  var x4 = document.getElementById('xstrip4');
+  var x90 = document.getElementById('xstrip90');
+  if(x4){ x4.innerHTML = stripHTML(generate(48,'down','4h'),'h4'); }
+  if(x90){ x90.innerHTML = stripHTML(generate(90,'down','90d'),'h90'); }
+
+  /* ---------- copy deploy snippet ---------- */
+  var SNIPPET = 'git clone https://github.com/okoker/bekci.git\ncd bekci\ndocker compose up -d';
+  var btn = document.getElementById('copyBtn');
+  if(btn){
+    btn.addEventListener('click', function(){
+      var done = function(){ var t=btn.textContent; btn.textContent='Copied'; setTimeout(function(){ btn.textContent='Copy'; },1400); };
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(SNIPPET).then(done).catch(done);
+      } else {
+        var ta=document.createElement('textarea'); ta.value=SNIPPET; document.body.appendChild(ta);
+        ta.select(); try{ document.execCommand('copy'); }catch(e){} document.body.removeChild(ta); done();
+      }
+    });
+  }
+})();
+</script>
