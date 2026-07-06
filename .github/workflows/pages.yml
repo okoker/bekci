@@ -1,8 +1,7 @@
 name: Deploy website to GitHub Pages
 
-# Publishes ONLY the chosen "Sentinel" landing page as the site homepage, plus
-# shared assets. The gallery, the other demo directions and the internal design
-# brief live in _website/ for reference but are never published.
+# Publishes the Bekci website to GitHub Pages. The site lives in _website/
+# (index.html + assets/) and is served as-is from the artifact.
 
 on:
   push:
@@ -31,23 +30,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Assemble site (Sentinel homepage + assets only)
-        run: |
-          mkdir -p _site
-          # Promote the Sentinel design to the site root as index.html,
-          # rewriting its ../assets/ paths to be relative to the new root.
-          sed 's|\.\./assets/|assets/|g' _website/demos/5-sentinel.html > _site/index.html
-          cp -r _website/assets _site/assets
-          # Skip Jekyll processing.
-          touch _site/.nojekyll
-
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: _site
+          path: _website
 
       - name: Deploy to GitHub Pages
         id: deployment
