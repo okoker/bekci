@@ -15,6 +15,7 @@
 | Network | ICMP ping via pro-bing (uses privileged raw ICMP if root, otherwise unprivileged UDP), SNMP via gosnmp |
 | Config | YAML base + env var overrides (`BEKCI_` prefix) + auto-generated defaults |
 | Deploy | Docker multi-stage build (local) or bare-metal via Makefile (prod) |
+| Website | Static landing page in `_website/`, deployed to GitHub Pages via Actions → https://okoker.github.io/bekci/ |
 
 ---
 
@@ -108,6 +109,12 @@ sudo systemctl stop bekci && sudo cp bin/bekci /opt/bekci/bekci && sudo systemct
 No npm on server — `cmd/bekci/frontend_dist/` is committed to git. Go binary embeds frontend via `//go:embed all:frontend_dist`.
 
 **Critical**: After any frontend source change, run `make frontend` and commit `cmd/bekci/frontend_dist/` before pushing. Prod does NOT run `npm run build`.
+
+### Marketing website (GitHub Pages)
+The public landing page (the "Sentinel" design) lives in `_website/` (`index.html` + `assets/`) — a self-contained static site, separate from the product app.
+- **Live**: https://okoker.github.io/bekci/
+- **Source**: `_website/index.html` — single self-contained HTML (inline CSS/JS, Google Fonts via `<link>`, assets referenced as `assets/...`).
+- **Deploy**: `.github/workflows/pages.yml` runs on push to `main` touching `_website/**` and publishes `_website/` as-is via GitHub Actions (Pages build source = Actions). No build step (~18s). Edit `_website/index.html` → commit → push → auto-deploys.
 
 ---
 

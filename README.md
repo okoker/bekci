@@ -179,7 +179,9 @@ internal/
   alerter/                 Email (Resend) + Signal + Webhook dispatch, cooldown, re-alert
   crypto/                  AES-256-GCM encryption, diceware passphrase generator
 frontend/                  Vue 3 + Vite SPA
+_website/                  Marketing landing page (static, deployed to GitHub Pages)
 docs/reference/            System documentation (API, DB schema, RBAC, backup)
+.github/workflows/         CI — GitHub Pages deploy (pages.yml)
 Makefile                   Build targets
 Dockerfile                 3-stage production build
 docker-compose.yml         Single-service deployment
