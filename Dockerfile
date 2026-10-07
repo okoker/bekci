@@ -7,7 +7,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # Stage 2: Build Go backend
-FROM golang:1.25-alpine AS backend
+FROM golang:1.27-alpine AS backend
 RUN apk add --no-cache gcc musl-dev libcap
 WORKDIR /app
 COPY go.mod go.sum ./
