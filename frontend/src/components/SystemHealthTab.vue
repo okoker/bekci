@@ -36,6 +36,10 @@ function fmtTime(d) {
   if (!d) return ''
   return new Date(d).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
 }
+function fmtClock(d) {
+  if (!d) return ''
+  return new Date(d).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+}
 function fmtBytes(b) {
   if (b == null || b < 0) return '—'
   const mb = b / (1024 * 1024)
@@ -102,7 +106,7 @@ function buildSub(b) {
     <div class="sh-header">
       <h3>System Health</h3>
       <div class="sh-actions">
-        <span v-if="fetchedAt" class="sh-updated">Updated: {{ fmtTime(fetchedAt) }}</span>
+        <span v-if="fetchedAt" class="sh-updated">Updated: {{ fmtClock(fetchedAt) }}</span>
         <button class="btn btn-sm sh-refresh" :disabled="loading" @click="load">
           <svg class="sh-refresh-icon" :class="{ spinning: loading }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
