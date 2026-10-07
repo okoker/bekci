@@ -3,6 +3,7 @@ import { ref, nextTick, onMounted, onUnmounted, watch, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import api from '../api'
+import SystemHealthTab from '../components/SystemHealthTab.vue'
 
 const props = defineProps({
   initialTab: { type: String, default: '' }
@@ -1189,6 +1190,12 @@ onUnmounted(() => {
         :class="{ active: activeTab === 'fail2ban' }"
         @click="activeTab = 'fail2ban'"
       >Fail2Ban</button>
+      <button
+        v-if="auth.isAdmin"
+        class="tab-btn"
+        :class="{ active: activeTab === 'system' }"
+        @click="activeTab = 'system'"
+      >System Health</button>
     </div>
 
     <!-- ── General Tab ── -->
@@ -2218,6 +2225,9 @@ onUnmounted(() => {
     </div>
 
     <!-- ── Fail2Ban Tab ── -->
+    <!-- ── System Health Tab ── -->
+    <SystemHealthTab v-if="activeTab === 'system' && auth.isAdmin" />
+
     <div v-if="activeTab === 'fail2ban' && auth.isAdmin">
       <div class="card">
         <div class="f2b-header">

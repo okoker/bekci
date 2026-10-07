@@ -1481,6 +1481,7 @@ Generates a random 4-word passphrase from a curated word list (~960 words, ~10 b
 |--------|------|------|-------------|
 | GET | `/api/health` | public | Basic health check |
 | GET | `/api/system/health` | socAuth | Detailed system health (public when soc_public=true) |
+| GET | `/api/system/info` | admin | Host + app details for Settings > System Health |
 | GET | `/api/fail2ban/status` | admin | Fail2Ban jail status |
 | GET | `/api/fail2ban/bans` | admin | Historical ban records from fail2ban DB |
 
@@ -1528,6 +1529,37 @@ Returns network connectivity (ICMP ping to 1.1.1.1), disk usage, CPU load, and s
 `net.status`: `"ok"` or `"unreachable"`. When unreachable, `latency_ms` is `-1`.
 
 `scheduler.status`: `"ok"` (last tick within 120s), `"stale"` (no tick for >120s), or `"starting"` (never ticked yet). When stale, audit log entries are written every 60s.
+
+### GET /api/system/info
+
+Admin-only details for **Settings > System Health**. Kept separate from `/api/system/health`, which is public when `soc_public=true`, because host IP, versions and OS state are recon-useful. Host stats are read from `/proc` and `statfs` (Linux; unavailable values are `0`/`-1`). OS updates come from a read-only `apt-get -s upgrade` (no root), **cached 15 min**; hosts without `apt-get` report `"unavailable"`.
+
+**Response (200):**
+```json
+{
+  "disk": { "total_gb": 46.03, "free_gb": 34.85, "used_pct": 24.3 },
+  "ram": { "total_gb": 7.76, "used_gb": 0.72, "used_pct": 9.3 },
+  "cpu": { "load1": 0.03, "load5": 0.01, "load15": 0, "num_cpu": 2 },
+  "uptime": { "system_sec": 9258214, "process_sec": 1820 },
+  "server_ip": "10.0.9.20",
+  "version": "3.4.2",
+  "build": { "commit": "19b66d6", "time": "2026-10-07T01:00:00Z" },
+  "go_version": "go1.27.1",
+  "database": { "status": "ok", "size_bytes": 438202368, "wal_bytes": 65227872, "schema_version": 27 },
+  "email": { "configured": true, "provider": "Microsoft 365" },
+  "updates": { "status": "security", "total": 18, "security": 4, "checked_at": "2026-10-07T01:20:00Z" },
+  "backup": { "count": 4, "last_at": "2026-10-05T00:12:16Z", "last_bytes": 88392024, "encrypted": false, "schedule": "weekly", "time": "03:00" },
+  "log": { "path": "/var/log/bekci/bekci.log", "size_bytes": 5204990 },
+  "scheduler": { "status": "ok", "last_tick": "2026-10-07T01:23:00Z", "active_checks": 241, "stale_seconds": 12 }
+}
+```
+
+- `ram.total_gb` `0` / `cpu.load1` `-1` / `uptime.system_sec` `-1` / `log.size_bytes` `-1`: value unavailable on this host.
+- `build.commit`/`time` are empty when the binary was built without VCS stamping (e.g. the Docker image — no `git` in the build stage). `build.modified` appears (`true`) only for a dirty tree.
+- `email.configured` mirrors the alerter's own rules: `ms365` needs from-address + SMTP host/user/password; otherwise Resend needs from-address + API key.
+- `updates.status`: `up_to_date` | `updates` (non-security only) | `security` (≥1 package from a `*-security` pocket) | `unavailable`.
+- `backup`: newest entry in the server-side backup index; `schedule`/`time` are the `auto_backup_*` settings.
+- `scheduler.status`: as `/api/system/health`, plus `unavailable` when the server runs without a scheduler (tests).
 
 ### GET /api/fail2ban/status
 

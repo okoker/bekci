@@ -34,6 +34,8 @@ type Server struct {
 	socPublicCache    cachedSetting
 	apiRateLimitCache cachedSetting
 	v1RateLimiter     *v1RateLimiter
+	logPath           string    // app log file, shown on System Health
+	startedAt         time.Time // process start, for bekci uptime
 }
 
 // New creates a new API server.
@@ -52,6 +54,7 @@ func New(st *store.Store, authSvc *auth.Service, sched *scheduler.Scheduler, ale
 		loginLimiter:    newLoginLimiter(),
 		usernameLimiter: newLoginLimiter(),
 		v1RateLimiter:   newV1RateLimiter(),
+		startedAt:       time.Now(),
 	}
 }
 
@@ -131,6 +134,7 @@ func (s *Server) Handler() http.Handler {
 	// Fail2Ban status — admin only
 	mux.Handle("GET /api/fail2ban/status", adminAuth(s.handleFail2BanStatus))
 	mux.Handle("GET /api/fail2ban/bans", adminAuth(s.handleFail2BanBans))
+	mux.Handle("GET /api/system/info", adminAuth(s.handleSystemInfo))
 
 	// Auth helpers for monitoring routes
 	anyAuth := func(h http.HandlerFunc) http.Handler {

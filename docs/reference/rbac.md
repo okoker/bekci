@@ -178,6 +178,7 @@ Request
 | Endpoint | Method | Auth | Admin | Operator | Viewer | Notes |
 |----------|--------|------|-------|----------|--------|-------|
 | `/api/system/health` | GET | socAuth | Y | Y | Y | Detailed system health (public when soc_public=true) |
+| `/api/system/info` | GET | adminAuth | Y | N | N | Settings > System Health (host, versions, DB, updates, backup, log, scheduler) |
 | `/api/fail2ban/status` | GET | adminAuth | Y | N | N | Fail2Ban integration status |
 | `/api/fail2ban/bans` | GET | adminAuth | Y | N | N | Historical ban records from fail2ban DB |
 
