@@ -201,26 +201,6 @@ function buildSub(b) {
           <div class="sh-mono">{{ info.go_version }}</div>
         </div>
         <div class="sh-card">
-          <div class="sh-label sh-label-block">Database</div>
-          <div class="sh-status">
-            <span class="sh-dot" :class="info.database.status === 'ok' ? 'dot-green' : 'dot-red'"></span>
-            <span class="sh-status-text">{{ info.database.status === 'ok' ? 'OK' : 'Error' }}</span>
-          </div>
-          <div class="sh-sub">{{ databaseSub(info.database) }}</div>
-        </div>
-      </div>
-
-      <!-- Row 3: services -->
-      <div class="sh-grid sh-grid-gap">
-        <div class="sh-card">
-          <div class="sh-label sh-label-block">Email</div>
-          <div class="sh-status">
-            <span class="sh-dot" :class="info.email.configured ? 'dot-green' : 'dot-yellow'"></span>
-            <span class="sh-status-text">{{ info.email.configured ? 'Configured' : 'Not configured' }}</span>
-          </div>
-          <div class="sh-sub">via {{ info.email.provider }}</div>
-        </div>
-        <div class="sh-card">
           <div class="sh-label sh-label-block">OS Updates</div>
           <div class="sh-status">
             <span class="sh-dot" :class="updatesDot[info.updates.status] || 'dot-grey'"></span>
@@ -228,6 +208,10 @@ function buildSub(b) {
           </div>
           <div class="sh-sub">{{ updatesSub(info.updates) }}</div>
         </div>
+      </div>
+
+      <!-- Row 3: backup + log -->
+      <div class="sh-grid sh-grid-gap">
         <div class="sh-card">
           <div class="sh-label sh-label-block">Last Backup</div>
           <div class="sh-text">{{ info.backup.last_at ? fmtDateTime(info.backup.last_at) : 'Never' }}</div>
@@ -240,7 +224,7 @@ function buildSub(b) {
         </div>
       </div>
 
-      <!-- Row 4: scheduler -->
+      <!-- Row 4: core services -->
       <div class="sh-grid sh-grid-gap">
         <div class="sh-card">
           <div class="sh-label sh-label-block">Scheduler</div>
@@ -249,6 +233,22 @@ function buildSub(b) {
             <span class="sh-status-text">{{ schedulerLabel[info.scheduler.status] || info.scheduler.status }}</span>
           </div>
           <div class="sh-sub">{{ schedulerSub(info.scheduler) }}</div>
+        </div>
+        <div class="sh-card">
+          <div class="sh-label sh-label-block">Database</div>
+          <div class="sh-status">
+            <span class="sh-dot" :class="info.database.status === 'ok' ? 'dot-green' : 'dot-red'"></span>
+            <span class="sh-status-text">{{ info.database.status === 'ok' ? 'OK' : 'Error' }}</span>
+          </div>
+          <div class="sh-sub">{{ databaseSub(info.database) }}</div>
+        </div>
+        <div class="sh-card">
+          <div class="sh-label sh-label-block">Email</div>
+          <div class="sh-status">
+            <span class="sh-dot" :class="info.email.configured ? 'dot-green' : 'dot-yellow'"></span>
+            <span class="sh-status-text">{{ info.email.configured ? 'Configured' : 'Not configured' }}</span>
+          </div>
+          <div class="sh-sub">via {{ info.email.provider }}</div>
         </div>
       </div>
     </div>
