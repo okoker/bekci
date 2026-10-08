@@ -25,6 +25,34 @@ const currentPage = ref(1)
 const pageSize = 48
 let refreshTimer = null
 let healthTimer = null
+let staleTimer = null
+
+// --- Staleness (wallboard alarm) ---
+// Polls run every 30s; 92s = three missed polls plus a little latency slack.
+const STALE_MS = 92000
+// Per-poll timeout so a hung server can't leave requests pending forever
+// (they would queue behind Chrome's 6-connections-per-host limit).
+const POLL_TIMEOUT_MS = 20000
+const mountedAt = ref(Date.now())
+const now = ref(Date.now())
+const staleSince = computed(() => lastUpdated.value ? lastUpdated.value.getTime() : mountedAt.value)
+const isStale = computed(() => now.value - staleSince.value > STALE_MS)
+const staleLabel = computed(() => {
+  if (!lastUpdated.value) return 'STALE · no data received'
+  const sec = Math.floor((now.value - staleSince.value) / 1000)
+  const ago = sec < 120 ? `${sec}s` : sec < 7200 ? `${Math.floor(sec / 60)}m` : `${Math.floor(sec / 3600)}h ${Math.floor((sec % 3600) / 60)}m`
+  const at = lastUpdated.value.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  return `STALE · last update ${at} (${ago} ago)`
+})
+
+// Hidden tabs get their timers throttled; refresh as soon as the wall shows us again
+// so returning from other content doesn't flash a false alarm.
+function onVisibilityChange() {
+  if (document.visibilityState !== 'visible') return
+  now.value = Date.now()
+  loadDashboard()
+  fetchHealth()
+}
 
 // --- System Health ---
 const health = ref(null)
@@ -32,7 +60,7 @@ const showPopover = ref(false)
 
 async function fetchHealth() {
   try {
-    const { data } = await api.get('/system/health')
+    const { data } = await api.get('/system/health', { timeout: POLL_TIMEOUT_MS })
     health.value = data
   } catch {
     health.value = null
@@ -152,7 +180,7 @@ async function loadCategories() {
 
 async function loadDashboard() {
   try {
-    const { data } = await api.get('/soc/status')
+    const { data } = await api.get('/soc/status', { timeout: POLL_TIMEOUT_MS })
     // Pre-compute on plain objects BEFORE reactive assignment
     for (const t of data) {
       t._worstUptime = getWorstUptime(t)
@@ -358,19 +386,23 @@ onMounted(() => {
   refreshTimer = setInterval(loadDashboard, 30000)
   fetchHealth()
   healthTimer = setInterval(fetchHealth, 30000)
+  staleTimer = setInterval(() => { now.value = Date.now() }, 5000)
   document.addEventListener('click', closePopover)
+  document.addEventListener('visibilitychange', onVisibilityChange)
 })
 
 onUnmounted(() => {
   if (refreshTimer) clearInterval(refreshTimer)
   if (healthTimer) clearInterval(healthTimer)
+  if (staleTimer) clearInterval(staleTimer)
   document.removeEventListener('click', closePopover)
+  document.removeEventListener('visibilitychange', onVisibilityChange)
 })
 </script>
 
 <template>
   <div class="soc-page">
-    <header class="soc-header">
+    <header class="soc-header" :class="{ 'soc-stale': isStale }">
       <a href="/" class="soc-brand"><img src="/bekci-icon.png" alt="Bekci" class="soc-icon" />SOC</a>
       <div v-if="!loading && dashboardData.length > 0" class="soc-filter-bar">
         <button v-for="cat in categories" :key="cat"
@@ -405,7 +437,8 @@ onUnmounted(() => {
           <div class="health-row" :class="dotColor('scheduler')">{{ schedulerLabel }}</div>
         </div>
       </div>
-      <span v-if="lastUpdated" class="soc-updated">
+      <span v-if="isStale" class="soc-updated">{{ staleLabel }}</span>
+      <span v-else-if="lastUpdated" class="soc-updated">
         {{ lastUpdated.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) }}
       </span>
     </header>
@@ -517,6 +550,27 @@ onUnmounted(() => {
   white-space: nowrap;
   flex-shrink: 0;
   margin-left: auto;
+}
+
+/* Stale alarm: no successful refresh for 92s, so the header pulses brand orange
+   (1 Hz, well under the 3 Hz photosensitivity limit). The box-shadow spread pads
+   the colour block without shifting the layout; its -0.375rem lift balances the
+   header's 0.75rem bottom padding so the content sits centred in the block. */
+.soc-header.soc-stale {
+  border-radius: 6px;
+  border-bottom-color: transparent;
+  animation: soc-stale-pulse 1s ease-in-out infinite;
+}
+.soc-header.soc-stale .soc-updated {
+  color: #fff;
+  font-weight: 700;
+}
+@keyframes soc-stale-pulse {
+  0%, 100% { background: rgba(234, 88, 12, 0.2); box-shadow: 0 -0.375rem 0 0.5rem rgba(234, 88, 12, 0.2); }
+  50% { background: #ea580c; box-shadow: 0 -0.375rem 0 0.5rem #ea580c; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .soc-header.soc-stale { animation: none; background: #ea580c; box-shadow: 0 -0.375rem 0 0.5rem #ea580c; }
 }
 
 .soc-error {

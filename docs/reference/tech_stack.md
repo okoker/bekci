@@ -176,6 +176,9 @@ SearchView and SlaView are lazy-loaded (code-split). SlaView lazy-load saves ~25
 - **Pagination:** 48 hosts per page (12 rows × 4 columns). History fetched only for visible page.
 - **Page change:** `loadHistoryForVisiblePage()` fires immediately on page navigation — no waiting for next poll.
 - **Net effect:** ~970 requests/min → ~100 requests/min. Initial load 8s → 2s.
+- **Poll timeout:** `/api/soc/status` and `/api/system/health` polls give up after 20s (`POLL_TIMEOUT_MS`), so a hung server can't leave requests pending behind Chrome's 6-connections-per-host limit. Other API calls keep axios' default (no timeout).
+- **Stale alarm:** if no `/api/soc/status` poll has succeeded for 92s (three missed polls + latency slack; `STALE_MS`, measured from page load if none ever succeeded), the SOC header row pulses brand orange (1 Hz; solid under `prefers-reduced-motion`) and the clock reads `STALE · last update HH:MM:SS (Xs/Xm ago)`. Checked every 5s; clears on the next successful poll. Cannot fire if the tab itself is dead (crash page, frozen renderer).
+- **Visibility resume:** when the tab becomes visible again, status and health refresh immediately (hidden tabs have throttled timers), avoiding a false stale alarm after the wall showed other content.
 
 ---
 
