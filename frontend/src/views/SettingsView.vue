@@ -344,6 +344,24 @@ function auditNextPage() {
   if (auditPage.value < auditTotalPages.value) { auditPage.value++; loadAuditLog() }
 }
 
+// Full-entry popup — the table truncates Detail and Resource ID
+const auditSelected = ref(null)
+
+// A drag-to-select that ends on a row or the backdrop still fires a click;
+// copying text must not open or close the popup.
+function selectingText() {
+  return !!window.getSelection()?.toString()
+}
+function openAuditEntry(e) {
+  if (!selectingText()) auditSelected.value = e
+}
+function closeAuditEntryFromBackdrop() {
+  if (!selectingText()) auditSelected.value = null
+}
+function onAuditKeydown(e) {
+  if (e.key === 'Escape' && auditSelected.value) auditSelected.value = null
+}
+
 function fmtDate(d) {
   if (!d) return '-'
   const dt = new Date(d)
@@ -1116,6 +1134,7 @@ watch(() => route.path, (path) => {
 })
 
 onMounted(async () => {
+  document.addEventListener('keydown', onAuditKeydown)
   await loadSLAKeys()
   await loadSettings()
   loadSnmpSettings()
@@ -1132,6 +1151,7 @@ watch(usersSubTab, (v) => {
 
 onUnmounted(() => {
   stopF2BPolling()
+  document.removeEventListener('keydown', onAuditKeydown)
 })
 </script>
 
@@ -1424,12 +1444,12 @@ onUnmounted(() => {
             <tr v-else-if="auditEntries.length === 0">
               <td colspan="7" style="text-align:center; color:#94a3b8;">No audit events</td>
             </tr>
-            <tr v-for="e in auditEntries" :key="e.id">
+            <tr v-for="e in auditEntries" :key="e.id" class="audit-row" @click="openAuditEntry(e)">
               <td class="nowrap">{{ fmtDate(e.created_at) }}</td>
               <td>{{ e.username }}</td>
               <td><span class="badge" :class="actionClass(e.action)">{{ e.action }}</span></td>
               <td>{{ e.resource_type }}<span v-if="e.resource_id" class="text-muted"> #{{ e.resource_id.slice(0, 8) }}</span></td>
-              <td class="detail-cell">{{ e.detail || '-' }}</td>
+              <td class="detail-cell" :title="e.detail">{{ e.detail || '-' }}</td>
               <td><span :class="e.status === 'success' ? 'status-ok' : 'status-fail'">{{ e.status }}</span></td>
               <td class="text-muted">{{ e.ip_address }}</td>
             </tr>
@@ -1441,6 +1461,32 @@ onUnmounted(() => {
         <button class="btn btn-sm" :disabled="auditPage <= 1" @click="auditPrevPage">Prev</button>
         <span>Page {{ auditPage }} of {{ auditTotalPages }}</span>
         <button class="btn btn-sm" :disabled="auditPage >= auditTotalPages" @click="auditNextPage">Next</button>
+      </div>
+
+      <!-- Audit entry detail modal -->
+      <div v-if="auditSelected" class="modal-overlay" @click.self="closeAuditEntryFromBackdrop">
+        <div class="modal-card" style="max-width: 640px;">
+          <div class="audit-modal-header">
+            <h3>Audit Event</h3>
+            <button class="modal-close" aria-label="Close" @click="auditSelected = null">&times;</button>
+          </div>
+          <dl class="audit-fields">
+            <dt>Timestamp</dt>
+            <dd>{{ fmtDate(auditSelected.created_at) }}</dd>
+            <dt>User</dt>
+            <dd>{{ auditSelected.username || '-' }}</dd>
+            <dt>Action</dt>
+            <dd><span class="badge" :class="actionClass(auditSelected.action)">{{ auditSelected.action }}</span></dd>
+            <dt>Resource</dt>
+            <dd>{{ auditSelected.resource_type || '-' }}<span v-if="auditSelected.resource_id" class="text-muted"> #{{ auditSelected.resource_id }}</span></dd>
+            <dt>Status</dt>
+            <dd><span :class="auditSelected.status === 'success' ? 'status-ok' : 'status-fail'">{{ auditSelected.status }}</span></dd>
+            <dt>IP</dt>
+            <dd>{{ auditSelected.ip_address || '-' }}</dd>
+          </dl>
+          <div class="audit-detail-label">Detail</div>
+          <pre class="audit-detail">{{ auditSelected.detail || '-' }}</pre>
+        </div>
       </div>
     </div>
 
@@ -2902,6 +2948,57 @@ table.sla-info-table td:not(:first-child) {
 .badge-action-create { background: #dcfce7; color: #166534; }
 .badge-action-delete { background: #fee2e2; color: #991b1b; }
 .badge-action-default { background: #f1f5f9; color: #475569; }
+.audit-row { cursor: pointer; }
+.audit-row:hover td { background: #f8fafc; }
+.audit-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+.audit-modal-header h3 { margin: 0; }
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 1.6rem;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 6px;
+  line-height: 1;
+}
+.modal-close:hover {
+  background: #f1f5f9;
+  color: #475569;
+}
+.audit-fields {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.4rem 1rem;
+  margin: 0 0 1rem;
+  font-size: 0.85rem;
+}
+.audit-fields dt { color: #64748b; font-weight: 600; }
+.audit-fields dd { margin: 0; overflow-wrap: anywhere; }
+.audit-detail-label {
+  color: #64748b;
+  font-weight: 600;
+  font-size: 0.85rem;
+  margin-bottom: 0.4rem;
+}
+.audit-detail {
+  margin: 0;
+  padding: 0.75rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 50vh;
+  overflow-y: auto;
+}
 
 /* ── Users tab ── */
 .users-header {
