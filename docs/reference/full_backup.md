@@ -78,7 +78,7 @@ Env override: `BEKCI_BACKUP_DIR`.
 
 Directory auto-created on first save. Metadata tracked in `{backup_dir}/index.json` — SHA256 hash computed at save time to avoid re-hashing large files on list.
 
-Auto-save on download + auto-prune oldest when `backup_max_copies` exceeded (default 5). Manual delete also available via the web UI.
+Auto-save on download + auto-prune oldest when `backup_max_copies` exceeded (default 5). The new archive is written first and the oldest copies are pruned only after that write succeeds, so a failed save never removes an existing backup (a partial file from the failed write is deleted). This needs room for one extra archive while saving. Manual delete also available via the web UI.
 
 ### Frontend UI
 

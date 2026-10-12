@@ -240,17 +240,12 @@ func (s *Server) autoSaveBackupCopy(data []byte, filename string, encrypted bool
 		return
 	}
 
-	// Enforce max copies — delete oldest if at limit
 	entries := loadBackupIndex(s.backupDir)
-	for len(entries) >= maxCopies {
-		oldest := entries[0]
-		os.Remove(filepath.Join(s.backupDir, oldest.Filename))
-		entries = entries[1:]
-	}
 
-	// Write file
+	// Write file before pruning, so a failed write never costs an existing backup
 	destPath := filepath.Join(s.backupDir, filename)
 	if err := os.WriteFile(destPath, data, 0600); err != nil {
+		os.Remove(destPath)
 		slog.Warn("Auto-save backup: failed to write file", "error", err)
 		return
 	}
@@ -267,6 +262,13 @@ func (s *Server) autoSaveBackupCopy(data []byte, filename string, encrypted bool
 		CreatedAt: time.Now().UTC().Format(time.RFC3339),
 		Encrypted: encrypted,
 	})
+
+	// Enforce max copies — delete oldest beyond the limit
+	for len(entries) > maxCopies {
+		oldest := entries[0]
+		os.Remove(filepath.Join(s.backupDir, oldest.Filename))
+		entries = entries[1:]
+	}
 	if err := saveBackupIndex(s.backupDir, entries); err != nil {
 		slog.Warn("Auto-save backup: failed to update index", "error", err)
 	}
@@ -382,22 +384,17 @@ func (s *Server) handleSaveFullBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Enforce max copies — delete oldest if at limit
 	entries := loadBackupIndex(s.backupDir)
 	maxStr, _ := s.store.GetSetting("backup_max_copies")
 	maxCopies, _ := strconv.Atoi(maxStr)
 	if maxCopies <= 0 {
 		maxCopies = 5
 	}
-	for len(entries) >= maxCopies {
-		oldest := entries[0]
-		os.Remove(filepath.Join(s.backupDir, oldest.Filename))
-		entries = entries[1:]
-	}
 
-	// Write file
+	// Write file before pruning, so a failed write never costs an existing backup
 	destPath := filepath.Join(s.backupDir, filename)
 	if err := os.WriteFile(destPath, archiveData, 0600); err != nil {
+		os.Remove(destPath)
 		slog.Error("Failed to write backup file", "error", err)
 		writeError(w, http.StatusInternalServerError, "backup failed")
 		return
@@ -415,6 +412,13 @@ func (s *Server) handleSaveFullBackup(w http.ResponseWriter, r *http.Request) {
 		CreatedAt: time.Now().UTC().Format(time.RFC3339),
 		Encrypted: encrypt,
 	})
+
+	// Enforce max copies — delete oldest beyond the limit
+	for len(entries) > maxCopies {
+		oldest := entries[0]
+		os.Remove(filepath.Join(s.backupDir, oldest.Filename))
+		entries = entries[1:]
+	}
 	if err := saveBackupIndex(s.backupDir, entries); err != nil {
 		slog.Warn("Failed to update backup index", "error", err)
 	}
