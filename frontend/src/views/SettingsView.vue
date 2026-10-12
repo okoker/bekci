@@ -2235,7 +2235,7 @@ onUnmounted(() => {
           </div>
           <div class="collapsible-body" :class="{ open: alertSections.system }">
             <div class="collapsible-inner">
-          <p class="text-muted" style="margin: 0 0 1rem;">Recipients for system alerts (unclean restarts, scheduler failures). Alerts are sent via the configured alert method above.</p>
+          <p class="text-muted" style="margin: 0 0 1rem;">Recipients for system alerts (unclean restarts, failed scheduled backups). Alerts are sent via the configured alert method above.</p>
 
           <div class="form-group">
             <label>
