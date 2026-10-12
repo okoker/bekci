@@ -14,8 +14,8 @@ Valid roles enforced at user creation and update: `admin`, `operator`, `viewer`.
 
 ### Login (`POST /api/login`)
 
-1. Rate limiter checks IP -- reject with 429 if locked out
-2. Parse username/password from JSON body
+1. Parse username/password from JSON body (username trimmed) -- reject with 400 if the body is invalid, either field is empty, or the password is longer than 32 bytes
+2. Rate limiters check IP **and** username -- reject with 429 if either is locked out
 3. `auth.Service.Login()`:
    - Look up user by username
    - Verify status is `active` (reject suspended accounts)
@@ -23,8 +23,8 @@ Valid roles enforced at user creation and update: `admin`, `operator`, `viewer`.
    - Read `session_timeout_hours` setting (default: 24h)
    - Create session record in DB (UUID, user_id, expires_at, ip_address)
    - Sign JWT (HS256) with claims: `sub` (user_id), `sid` (session_id), `role`, `exp`, `iat`
-4. On success: reset rate limiter for IP, set HttpOnly cookie (`token`; Secure; SameSite=Strict; MaxAge=session duration), return user info in JSON body
-5. On failure: record failure in rate limiter, audit log entry. All failures return generic 401 to prevent enumeration
+4. On success: reset rate limiters for both IP and username, audit `login`, set HttpOnly cookie (`token`; Secure; SameSite=Strict; MaxAge=session duration), return user info in JSON body
+5. On failure: audit `login_failed`, record a failure for both IP and username. Every `Login()` failure (unknown user, suspended account, wrong password, internal error) returns the same generic 401 to prevent enumeration. The 400 and 429 rejections in steps 1-2 are not recorded as failures
 
 ### Token Structure (JWT HS256)
 
@@ -188,7 +188,7 @@ Request
 |----------|--------|------|-------|----------|--------|-------|
 | `/api/backup` | GET | adminAuth | Y | N | N | Download DB backup (JSON) |
 | `/api/backup/restore` | POST | adminAuth | Y | N | N | Restore DB from backup |
-| `/api/backup/full` | POST | adminAuth | Y | N | N | Create encrypted full backup |
+| `/api/backup/full` | POST | adminAuth | Y | N | N | Create full backup (encryption optional, off by default) |
 | `/api/backup/full/save` | POST | adminAuth | Y | N | N | Create and save backup to server |
 | `/api/backup/full/list` | GET | adminAuth | Y | N | N | List saved backups |
 | `/api/backup/full/saved/{filename}` | GET | adminAuth | Y | N | N | Download saved backup |
@@ -241,7 +241,7 @@ Dual tracking: per-IP **and** per-username (two independent limiters with identi
 
 ### Machine API v1 (bearer auth)
 
-All `/api/v1/*` endpoints are subject to a flat per-token limit, admin-tunable via the `api_rate_limit_per_min` setting (Settings > General > API Rate Limit). Default **60 requests per minute per token**; no burst allowance, fixed 60-second rolling window.
+All `/api/v1/*` endpoints are subject to a flat per-token limit, admin-tunable via the `api_rate_limit_per_min` setting (Settings > General > API Rate Limit). Default **60 requests per minute per token**. Fixed (not sliding) 60-second window per token: it starts at the first request after the previous window ended, and the count resets when it expires. There is no separate burst allowance, but requests are not paced either: all N may arrive at once, and up to 2N can pass in a short span straddling a window boundary.
 
 On overflow the server returns `429 Too Many Requests` with a `Retry-After` header and JSON body `{"error":"rate limit exceeded","retry_after_s":N,"limit_per_min":M}`. Each 429 is logged at WARN and written to `audit_logs` with actor `api-token:<name>`. No IP-based limit is applied.
 
@@ -252,7 +252,7 @@ On overflow the server returns `429 Too Many Requests` with a `Retry-After` head
 Any authenticated user (including viewer) can:
 - `GET /api/me` -- view own profile
 - `PUT /api/me` -- update own email and phone (not role, not username)
-- `PUT /api/me/password` -- change own password (must provide current password, min 15 chars)
+- `PUT /api/me/password` -- change own password (must provide current password; new password 15-32 bytes, else 400)
 
 Password change invalidates all other sessions for the same user (`DeleteUserSessionsExcept`).
 
@@ -269,6 +269,7 @@ Both check `CountActiveAdmins()` -- users where `role = 'admin' AND status = 'ac
 
 `PUT /api/users/{id}/password` (admin only):
 - Does not require the target user's current password
+- New password must be 15-32 bytes, else 400 (same rule for `POST /api/users`)
 - Invalidates **all** sessions for the target user (`DeleteUserSessions`)
 - Forces re-login with new password
 

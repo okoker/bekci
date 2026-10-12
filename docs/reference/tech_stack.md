@@ -5,14 +5,14 @@
 | Layer | Technology |
 |-------|-----------|
 | Backend | Go 1.25 language level (go.mod 1.25.0), built with the Go 1.27.1 toolchain; net/http stdlib router (Go 1.22+ method routing), SQLite WAL |
-| Database | SQLite 3 via go-sqlite3 (CGO required), WAL mode, `SetMaxOpenConns(1)`, baseline schema v24 (future migrations incremental) |
+| Database | SQLite 3 via go-sqlite3 (CGO required), WAL mode, `SetMaxOpenConns(1)`, schema v27 (fresh installs create v27 from the baseline; existing v22+ databases, and v21 via a bridge, migrate incrementally) |
 | Frontend | Vue 3, Vite 7, Vue Router 4, Pinia 3, Axios, Chart.js + vue-chartjs |
 | Auth | JWT HS256 (golang-jwt/v5) in HttpOnly cookie (`token`), bcrypt cost 12 |
 | Reverse Proxy | Nginx 1.18 (prod only) — SSL termination, security headers, gzip |
-| Email | Resend API |
+| Email | Resend API (default) or Microsoft 365 SMTP (`email_provider` = `ms365`; STARTTLS required, LOGIN auth, port 587 default) |
 | Signal | Signal Messenger via signal-cli REST API |
 | Webhook | Generic JSON POST to any HTTP endpoint (SOAR, Slack, etc.), Bearer or Basic auth |
-| Network | ICMP ping via pro-bing (uses privileged raw ICMP if root, otherwise unprivileged UDP), SNMP via gosnmp |
+| Network | ICMP ping via pro-bing (uses privileged raw ICMP if root, otherwise an unprivileged ICMP datagram socket — pro-bing's "udp" mode), SNMP via gosnmp |
 | Config | YAML base + env var overrides (`BEKCI_` prefix) + auto-generated defaults |
 | Deploy | Docker multi-stage build (local) or bare-metal via Makefile (prod) |
 | Website | Static landing page in `_website/`, deployed to GitHub Pages via Actions → https://okoker.github.io/bekci/ |
@@ -160,22 +160,28 @@ The public landing page (the "Sentinel" design) lives in `_website/` (`index.htm
 | chartjs-plugin-zoom | ^2.2.0 | Chart pan/zoom interaction |
 | hammerjs | ^2.0.8 | Touch gestures (used by chartjs-plugin-zoom) |
 
+Versions above are the `package.json` ranges. `package-lock.json` resolves vue 3.5.28 and @vitejs/plugin-vue 6.0.4; every other package resolves to the version shown.
+
 ### Frontend Build Output
+Measured from the committed build in `cmd/bekci/frontend_dist/assets/` at v3.4.5 on 12/10/2026 (raw bytes; gzip -9; kB = 1000 bytes). Figures change with every frontend build.
+
 | Asset | Size (raw) | Size (gzipped) |
 |-------|-----------|----------------|
-| index-*.js | 269 KB | ~88 KB |
-| index-*.css | 42 KB | ~8 KB |
-| SearchView-*.js | 12 KB | ~4 KB |
-| SlaView-*.js | 204 KB | ~70 KB |
+| index-*.js | 313.45 kB | 100.06 kB |
+| index-*.css | 49.71 kB | 9.06 kB |
+| SearchView-*.js | 15.16 kB | 5.21 kB |
+| SearchView-*.css | 5.43 kB | 1.53 kB |
+| SlaView-*.js | 239.78 kB | 82.92 kB |
+| SlaView-*.css | 3.72 kB | 1.11 kB |
 
-SearchView and SlaView are lazy-loaded (code-split). SlaView lazy-load saves ~250KB from main bundle (Chart.js loaded on demand).
+SearchView and SlaView are lazy-loaded (code-split). Lazy-loading SlaView keeps its ~240 kB chunk (SLA view + Chart.js) out of the main bundle; it loads on demand.
 
 ### SOC Page Performance
 - **Poll interval:** 30 seconds (status refresh only; history loaded on page load/navigation, not polls)
 - **90d history:** Off by default. User toggle loads on demand. Not re-fetched on polls — only loaded once when enabled.
 - **Pagination:** 48 hosts per page (12 rows × 4 columns). History fetched only for visible page.
 - **Page change:** `loadHistoryForVisiblePage()` fires immediately on page navigation — no waiting for next poll.
-- **Net effect:** ~970 requests/min → ~100 requests/min. Initial load 8s → 2s.
+- **Net effect (historical measurement):** ~970 requests/min → ~100 requests/min and initial load 8s → 2s, recorded 17/03/2026 at v3.3.0 when the 30s poll, 90d toggle and pagination shipped. Host count and environment were not recorded; these are not current guarantees. At v3.4.5, an open SOC page with an unchanged host list sends 2 requests per 30s (`/soc/status` + `/system/health`) once the visible page's history is loaded.
 - **Poll timeout:** `/api/soc/status` and `/api/system/health` polls give up after 20s (`POLL_TIMEOUT_MS`), so a hung server can't leave requests pending behind Chrome's 6-connections-per-host limit. Other API calls keep axios' default (no timeout).
 - **Stale alarm:** if no `/api/soc/status` poll has succeeded for 92s (three missed polls + latency slack; `STALE_MS`, measured from page load if none ever succeeded), the SOC header row pulses brand orange (1 Hz; solid under `prefers-reduced-motion`) and the clock reads `STALE · last update HH:MM:SS (Xs/Xm ago)`. Checked every 5s; clears on the next successful poll. Cannot fire if the tab itself is dead (crash page, frozen renderer).
 - **Visibility resume:** when the tab becomes visible again, status and health refresh immediately (hidden tabs have throttled timers), avoiding a false stale alarm after the wall showed other content.
@@ -194,20 +200,20 @@ SearchView and SlaView are lazy-loaded (code-split). SlaView lazy-load saves ~25
 - SNMP settings cache: `getCachedSetting()` method with 15m TTL. All 7 SNMP keys cached together — avoids 7 DB reads per SNMP check execution. Long TTL justified because SNMP credentials change rarely (admin action only).
 
 ### Self-Health Monitoring
-- **Scheduler dead man's switch**: 4th navbar dot (green/red), popover with age + check count, red banner on all pages when stale (auto-dismisses on recovery). Audit log entries every 60s while stale.
+- **Scheduler dead man's switch**: 4th navbar dot (green ok / yellow starting / red stale), popover with age + check count, red banner when stale (auto-dismisses on recovery). The banner belongs to `DefaultLayout`, so it shows on every authenticated page but not on Login or the public-route SOC page (`App.vue` renders public routes without the layout). The SOC page has its own scheduler dot, plus a separate stale alarm driven by successful `/soc/status` polls (see SOC Page Performance), not by scheduler health. Audit log entries every 60s while stale; no system alert is sent.
 - **Crash detection**: `.shutdown_clean` marker file written on graceful SIGTERM, consumed on startup. Missing marker = unclean restart → 4 red audit log entries + system alert to configured recipients.
 - **System alerts**: `system_alert_admins` (bool) + `system_alert_users` (CSV user IDs). Sent directly, bypassing the scheduler: from main.go startup (unclean restart) and from `RunScheduledBackup` (failed scheduled backup). Uses configured alert channels (email/signal/webhook).
 
 ### Automated Backups
-- Hourly goroutine checks `auto_backup_schedule` (off/weekly/10days/monthly) + `auto_backup_time` (24h format)
-- Compares last backup timestamp from index.json against schedule interval
+- Hourly goroutine (first tick one hour after startup) checks `auto_backup_schedule` (off/weekly/10days/monthly; empty = off) + `auto_backup_time` (`HH:MM`, empty = `03:00`). Only the hour is used, in the server's local time zone; the minutes are ignored. The backup runs on the tick that falls inside that hour, so the exact minute depends on when the process started
+- Due when the newest entry in index.json (any saved backup: scheduled, Save to server or the download auto-save) is at least 7 / 10 / 30 whole days old. `monthly` means 30 days, not a calendar month
 - Calls `buildFullBackupArchive` (unencrypted) + `saveBackupCopy` (respects `backup_max_copies`; shared with Save to server and the download auto-save)
 - Audit log entries: "Starting scheduled backup" + "Backup completed: {filename}" or "Backup failed: {error}". "Backup completed" is written only after the archive and `index.json` are saved; any build or save error audits a failure and sends a system alert ("Bekci scheduled backup failed")
 - Backup files stored at 0600 (owner-only permissions)
 
 ### Data Architecture (A-011)
 
-The single `check_results` table was split into a 3-table architecture to eliminate full-table scans on the dashboard poll. At 90-day steady state with 1,500 checks, `check_results` held ~194M rows (~30-45 GB). Now:
+The single `check_results` table was split into a 3-table architecture to eliminate full-table scans on the dashboard poll. At 90-day steady state with 1,500 checks, `check_results` would hold ~194M rows (~30-45 GB). Row counts and sizes here and below are estimates for 1,500 checks at a 60s interval, not measurements. Now:
 
 | Table | Rows at scale | Purpose |
 |-------|--------------|---------|
@@ -232,7 +238,7 @@ The single `check_results` table was split into a 3-table architecture to elimin
 | `GetRecentResultsByWindow` | `check_results` | Engine fail_window condition evaluation |
 
 **Retention:**
-- Raw results (`check_results`): 3 days default (code default in `main.go`; `history_days` setting still respected if higher)
+- Raw results (`check_results`): `history_days` setting, seeded as 3 days. Any positive value is applied, lower or higher than 3 (the settings API accepts 1–3650); `main.go` falls back to 3 days if the setting is missing or not a positive integer
 - Daily rollups (`check_daily_rollups`): 90 days (hardcoded in `PurgeOldResults`)
 - Current state (`check_state`): unbounded (removed only on check delete via CASCADE)
 
@@ -251,7 +257,7 @@ The single `check_results` table was split into a 3-table architecture to elimin
 
 ### Docker
 - `ulimits: nofile: 65535` — required for 1500+ concurrent check sockets
-- `cap_add: NET_RAW` — required for ICMP ping
+- `cap_add: NET_RAW` — required for ICMP ping (the container runs as root, so raw ICMP is used)
 
 ---
 
@@ -260,5 +266,5 @@ The single `check_results` table was split into a 3-table architecture to elimin
 - **Local Docker** is self-contained: multi-stage build produces binary + Alpine container. SQLite in a named volume. Single port (65000). No nginx.
 - **Production** is bare-metal Ubuntu. Binary runs as `bekci` user via systemd. Nginx on port 443 handles SSL + gzip + security headers, proxies to Go on 65000. No Docker, no npm.
 - **CGO is required everywhere** — go-sqlite3 needs it. Cannot use `CGO_ENABLED=0`.
-- **ICMP ping requires NET_RAW** — Docker gets it via `cap_add`. Production uses systemd `AmbientCapabilities` (not `setcap` on the binary).
+- **ICMP mode depends on the process UID** (`internal/checker/ping.go`: `SetPrivileged(os.Getuid() == 0)`). As root (the Docker container), Bekci sends raw ICMP, which needs NET_RAW; Docker grants it via `cap_add`. As a non-root user (production `bekci`), it uses unprivileged ICMP datagram sockets, which Linux governs with the `net.ipv4.ping_group_range` sysctl, not CAP_NET_RAW. Production's systemd unit grants `AmbientCapabilities=CAP_NET_RAW` (not `setcap` on the binary), but the ping checker does not use raw sockets as non-root.
 - **Fail2Ban integration** — Live jail status via `sudo fail2ban-client` (requires sudoers config). Historical ban records read from fail2ban's own SQLite DB (`/var/lib/fail2ban/fail2ban.sqlite3`, read-only). DB retention controlled by fail2ban's `dbpurgeage` setting.

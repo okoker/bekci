@@ -7,7 +7,7 @@ Two backup types exist in Bekci:
 | Type | Scope | Format | Restore |
 |------|-------|--------|---------|
 | **Config Backup** | 9 config tables (users, settings, rules, targets, checks, rule_conditions, rule_states, recipients, pause_history) | JSON | Web UI upload |
-| **Full Backup** | Entire SQLite database (all tables + historical data) + config.yaml | tar.gz (optional AES-256-GCM) | CLI only (`bekci restore-full`) |
+| **Full Backup** | Entire SQLite database (all tables + historical data) + config.yaml | tar.gz (optional AES-256-GCM, off by default; scheduled backups are never encrypted) | CLI only (`bekci restore-full`) |
 
 ## Full Backup
 
@@ -35,7 +35,7 @@ Two backup types exist in Bekci:
 
 #### POST /api/backup/full
 
-JSON body: `{"encrypt": bool, "passphrase": "string"}` (passphrase min 8 chars, required when encrypt is true).
+JSON body: `{"encrypt": bool, "passphrase": "string"}` (passphrase min 8 chars, required when encrypt is true). `encrypt` defaults to false: an omitted field or empty body produces a plain `.tar.gz`.
 
 Response: binary stream with `Content-Disposition: attachment`.
 
@@ -147,16 +147,18 @@ When declining the bundled config, the wizard prompts for each field with the bu
 | Log level | warn |
 | Log file path | /var/log/bekci/bekci.log |
 | Admin username | admin |
-| Admin password | (none — must provide) |
+| Admin password | (empty — Enter accepts it) |
+
+The wizard writes only `server.port`, `server.db_path`, `logging.level`, `logging.path` and `init_admin`; there is no `auth` section, and `server.host`, `server.backup_dir` and `server.cors_origin` fall back to env overrides or defaults. `init_admin` is only used to create the first admin when the database has no users. A restored database keeps the users from the backup, so the wizard's admin username and password create no account and reset no password — log in with the credentials stored in the backup.
 
 ### Safety
 
 - Does NOT auto-start the service — user must manually run `systemctl start bekci`
-- Does NOT modify JWT secret — sessions table is restored; existing sessions from backup may remain valid
+- Does not copy or change the `.jwt_secret` file (it is not in the archive). The signing secret at next start is `BEKCI_JWT_SECRET` if set, else `auth.jwt_secret` from the written config (a bundled config may carry one; the wizard config never does), else `.jwt_secret` in the directory of the configured `db_path` (generated if missing) — so the config choice can change the secret. The sessions table is restored with the database: an unexpired session from the backup stays valid only if the effective secret is the one that signed its token and its user is still active; otherwise users log in again
 - Default confirmation is NO — must explicitly type `y`
 - Removes the old database's leftover WAL/journal side files before copying. An unclean stop (crash, `kill -9`, OOM, power loss) leaves committed pages in `bekci.db-wal`; SQLite would replay them onto the restored file on next start, silently mixing old pages into the snapshot or corrupting it. A normal `systemctl stop` closes the database cleanly and leaves none. The existing database file is overwritten in place, so it keeps its owner.
 - Archive extraction sanitizes filenames (only base names, no path traversal)
-- Copy size limited by tar header (prevents decompression bombs)
+- Each extracted entry is copied up to the size declared in its own tar header. That size comes from the archive, and there is no separate limit on entry size, total extracted size or entry count, so this does not guard against decompression bombs. The whole archive is read (and decrypted) in memory before extraction
 
 ### Typical Restore Procedure
 

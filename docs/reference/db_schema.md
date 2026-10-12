@@ -164,7 +164,9 @@ Bearer tokens used by remote machine consumers on `/api/v1/*`. Plaintext is neve
 | last_used_at | DATETIME | DEFAULT NULL — touched on successful auth            |
 | revoked_at   | DATETIME | DEFAULT NULL — soft delete                           |
 
-**Partial index:** `idx_api_tokens_hash ON api_tokens(token_hash) WHERE revoked_at IS NULL` — keeps the hot auth lookup O(1) even as revoked rows accumulate.
+**Partial index:** `idx_api_tokens_hash ON api_tokens(token_hash) WHERE revoked_at IS NULL`. The auth lookup (`WHERE token_hash = ?`, no `revoked_at` filter; revocation is checked in Go) does not use it — SQLite serves that lookup from the automatic index behind the `token_hash` UNIQUE constraint, which also covers revoked rows. No current query uses the partial index.
+
+**Config backup/restore:** this table is not exported, and config restore does not delete its rows, so tokens minted before a restore stay valid afterwards (all sessions, by contrast, are deleted). `created_by` has no FK, so after a restore it may name a user that no longer exists.
 
 **Lifecycle:** plaintext generated via `crypto/rand` (256 bits), returned once from `POST /api/api-tokens`, sha256-hashed + persisted. On every `Authorization: Bearer` arrival, the middleware hashes and looks up the row; `revoked_at IS NOT NULL` → reject 401. `last_used_at` is updated best-effort.
 
@@ -263,7 +265,7 @@ Tactical time-series window. Schema unchanged from pre-A-011, but retention redu
 
 **Read consumers:** `GetRecentResultsSlim` (4h bar chart on dashboard), `GetRecentResultsByWindow` (fail_window condition evaluation in engine), forensic debugging.
 
-**Retention:** Default 3 days (code default in `main.go`; `history_days` setting still respected if set higher). Purged hourly by `PurgeOldResults`. At 3-day steady state with 1,500 checks at 5-min intervals: ~1.3M rows.
+**Retention:** `history_days` setting (seeded 3; any positive value is used, including 1 or 2). `main.go` falls back to 3 days if the setting is missing or not a positive integer. Purged hourly by `PurgeOldResults`. At 3-day steady state with 1,500 checks at 5-min intervals: ~1.3M rows. Config restore (`POST /api/backup/restore`) deletes all rows; deleting `checks` there also cascades away every `check_state` and `check_daily_rollups` row.
 
 ### rules
 
@@ -317,7 +319,7 @@ One row per rule. Tracks current health state for the rule engine.
 
 ### alert_history
 
-Append-only log of sent alerts. Purged daily by `PurgeOldAlertHistory(days)` using `audit_retention_days` setting (default 91).
+Append-only log of sent alerts. Purged daily by `PurgeOldAlertHistory(days)` using `audit_retention_days` setting (default 91). Config restore (`POST /api/backup/restore`) deletes all rows.
 
 | Column          | Type     | Constraints                        |
 |-----------------|----------|------------------------------------|
@@ -365,7 +367,7 @@ Junction table: which users receive alerts for which targets.
 
 ### audit_logs
 
-Append-only audit trail. Purged by `PurgeOldAuditEntries(days)` (runs at startup + daily).
+Append-only audit trail. Purged by `PurgeOldAuditEntries(days)` (runs at startup + daily). Config restore (`POST /api/backup/restore`) deletes all rows; its own `restore_backup` entry is written afterwards.
 
 | Column        | Type     | Constraints               |
 |---------------|----------|---------------------------|
@@ -397,7 +399,7 @@ Append-only audit trail. Purged by `PurgeOldAuditEntries(days)` (runs at startup
 
 ## Migration History
 
-> **A-042 (18/03/2026):** All 22 migration functions were collapsed into a single `baselineSchema` constant in `store.go`. Fresh installs run the baseline SQL and stamp schema version 24. Existing installs at v22 run migration023+024. The individual migration functions no longer exist in code — git history preserves them. Databases below v22 cannot auto-upgrade (the old migration code is removed).
+> **A-042 (18/03/2026):** All 22 migration functions were collapsed into a single `baselineSchema` constant in `store.go`. Fresh installs run the baseline SQL, which is kept equivalent to all migrations and stamps the current version (27). Existing installs at v22 or later run the remaining migrations (023+). The individual migration functions no longer exist in code — git history preserves them. A v21 database is bridged: `migrate()` applies migration022's `history_days` 90 → 3 update, stamps v22 and continues. Databases below v21 cannot auto-upgrade (the old migration code is removed) and startup fails. The `schemaVersion = 22` constant in `store.go` is this migration floor, not the current version.
 >
 > **migration023 (19/03/2026):** Recreates `tag_options` table with CHECK constraint expanded to include `'category'`. Seeds 5 default categories (Key Services, Network, Other, Physical Security, Security). SQLite doesn't support ALTER CHECK, so uses create-new/copy/drop/rename pattern.
 

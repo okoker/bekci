@@ -4,7 +4,7 @@ Base URL: `http://<host>:65000/api`
 
 All request/response bodies are JSON (`Content-Type: application/json`) unless noted otherwise.
 
-**Network access:** The API is designed for the embedded Vue frontend only — not for external consumption. The server binds to `127.0.0.1` (localhost) by default, rejecting non-local connections. To allow remote access (e.g., inside a Docker container), set `BEKCI_HOST=0.0.0.0` or `server.host: "0.0.0.0"` in `config.yaml`.
+**Network access:** The cookie-authenticated `/api/*` endpoints are designed for the embedded Vue frontend — not for external consumption. Remote machine consumers use the bearer-token `/api/v1/*` endpoints ([Machine API (v1)](#machine-api-v1)). The server binds to `127.0.0.1` (localhost) by default, rejecting non-local connections. To allow remote access (e.g., inside a Docker container), set `BEKCI_HOST=0.0.0.0` or `server.host: "0.0.0.0"` in `config.yaml`.
 
 **Compression:** All API responses are gzip-compressed when the client sends `Accept-Encoding: gzip`. Handled by `gzipMiddleware` (stdlib `compress/gzip`), wrapping the outermost layer of the router chain.
 
@@ -69,6 +69,7 @@ Sets `Set-Cookie: token=<jwt>; Path=/; MaxAge=<session_timeout>; HttpOnly; Secur
 | Error | Code |
 |-------|------|
 | Missing fields | 400 |
+| Password longer than 32 bytes | 400 |
 | Invalid credentials | 401 |
 | Rate limited | 429 |
 
@@ -116,7 +117,7 @@ Invalidates all other sessions on success.
 ```json
 {
   "current_password": "string",
-  "new_password": "string (min 15 chars)"
+  "new_password": "string (15–32 bytes)"
 }
 ```
 
@@ -127,7 +128,7 @@ Invalidates all other sessions on success.
 
 | Error | Code |
 |-------|------|
-| Password too short (<15) | 400 |
+| New password not 15–32 bytes | 400 |
 | Wrong current password | 401 |
 
 ---
@@ -168,7 +169,7 @@ Invalidates all other sessions on success.
 {
   "username": "string (required)",
   "email": "string",
-  "password": "string (required, min 15 chars)",
+  "password": "string (required, 15–32 bytes)",
   "role": "admin | operator | viewer (required)"
 }
 ```
@@ -187,7 +188,7 @@ Invalidates all other sessions on success.
 | Error | Code |
 |-------|------|
 | Missing required fields | 400 |
-| Password too short (<15) | 400 |
+| Password not 15–32 bytes | 400 |
 | Invalid role | 400 |
 | Username exists | 409 |
 
@@ -256,7 +257,7 @@ Kills all sessions for the user, forcing re-login.
 **Request:**
 ```json
 {
-  "password": "string (min 15 chars)"
+  "password": "string (15–32 bytes)"
 }
 ```
 
@@ -264,6 +265,11 @@ Kills all sessions for the user, forcing re-login.
 ```json
 { "message": "password reset" }
 ```
+
+| Error | Code |
+|-------|------|
+| Password not 15–32 bytes | 400 |
+| User not found | 404 |
 
 ---
 
@@ -329,7 +335,7 @@ Creates target, checks, rule, and rule conditions in one transaction. Creator is
   "enabled": true,
   "operator": "AND (kept for backward compat, used as fallback for empty group_operator)",
   "category": "string (must exist in tag_options where grp='category', default: Other)",
-  "preferred_check_type": "string (optional, must match a condition's check_type; defaults to 'ping'; validated against conditions, falls back to first condition's type if no ping)",
+  "preferred_check_type": "string (optional, must be a valid check_type; if omitted or not used by any condition, the first condition's check_type is used)",
   "notes": "string (optional)",
   "contacts": "string (optional)",
   "project": "string (optional, must exist in tag_options)",
@@ -361,7 +367,7 @@ If `group_operator` is omitted, it defaults to the top-level `operator` value fo
 - `fail_window > 0`: Counts consecutive matching results from newest (streak mode). Must reach `fail_count` consecutive failures to trigger the condition.
 - `fail_window = 0`: Single result check ("Once" mode). Triggers on a single matching result; `fail_count` is ignored.
 
-**Normalization:** When `fail_count` > 1 and `fail_window` = 0, API auto-sets `fail_window` = `interval_s` (clamped min=interval_s, max=1800)
+**Normalization:** When `fail_count` > 1, API auto-sets `fail_window` = `fail_count` × `interval_s` if it is 0 or omitted, and clamps any value to min=`fail_count` × `interval_s`, max=1800
 
 **Response (201):** Full TargetDetail object (see GET /api/targets/{id}).
 
@@ -372,6 +378,7 @@ If `group_operator` is omitted, it defaults to the top-level `operator` value fo
 | Invalid operator | 400 |
 | Invalid category | 400 |
 | Invalid check_type | 400 |
+| Invalid preferred_check_type | 400 |
 | Missing check_name | 400 |
 | Invalid group_operator | 400 |
 | Invalid project tag | 400 |
@@ -407,7 +414,7 @@ Returns full target detail with conditions, state, and recipient IDs.
       "check_id": "uuid",
       "check_type": "http",
       "check_name": "HTTP Check",
-      "config": "{\"url\":\"http://192.168.1.1\"}",
+      "config": "{\"scheme\":\"http\",\"endpoint\":\"/health\"}",
       "interval_s": 300,
       "field": "status",
       "comparator": "eq",
@@ -432,9 +439,9 @@ Returns full target detail with conditions, state, and recipient IDs.
 
 Smart-diffs conditions: existing checks with `check_id` are updated, new conditions (no `check_id`) create new checks, missing checks are deleted.
 
-**Note:** A check's `type` is immutable after creation. To change a check's type (e.g. http to ping), delete the condition and add a new one with the desired type. The `check_type` field in update payloads for existing checks is ignored.
+**Note:** A check's `type` is immutable after creation. To change a check's type (e.g. http to ping), delete the condition and add a new one with the desired type. The `check_type` field is still required and validated for every condition (400 if invalid), but for existing checks it does not change the stored type.
 
-**Request:** Same structure as POST /api/targets.
+**Request:** Same structure as POST /api/targets. On update, `preferred_check_type` is applied only if it matches a condition's `check_type`; otherwise the stored value is kept. If omitted, the first condition's `check_type` is used.
 
 Conditions can include `check_id` to update existing checks:
 ```json
@@ -619,7 +626,7 @@ For `tag`: deletes the catalog row; DDL-level `ON DELETE CASCADE` on `target_tag
 
 ### GET /api/targets/{id}/recipients
 
-**Response (200):** Array of User objects (same as GET /api/users list format).
+**Response (200):** Array of User objects (same as GET /api/users list format), sorted by username. Only active users are listed: a suspended recipient stays assigned (and appears in the target's `recipient_ids`) but is omitted here and receives no alerts.
 ```json
 [
   {
@@ -634,6 +641,10 @@ For `tag`: deletes the catalog row; DDL-level `ON DELETE CASCADE` on `target_tag
   }
 ]
 ```
+
+| Error | Code |
+|-------|------|
+| Target not found | 404 |
 
 ### PUT /api/targets/{id}/recipients
 
@@ -653,6 +664,8 @@ Replaces all recipients for the target.
 
 | Error | Code |
 |-------|------|
+| Invalid request body | 400 |
+| Unknown user ID | 400 |
 | Target not found | 404 |
 
 ---
@@ -675,7 +688,7 @@ Replaces all recipients for the target.
     "target_id": "uuid",
     "type": "http",
     "name": "HTTP Check",
-    "config": "{\"url\":\"http://example.com\"}",
+    "config": "{\"scheme\":\"https\",\"endpoint\":\"/\"}",
     "interval_s": 300,
     "enabled": true,
     "created_at": "2026-01-15T10:00:00Z",
@@ -765,7 +778,7 @@ Metrics: `addr`. Simple connect-then-close test.
 { "count": 5, "timeout_s": 10 }
 ```
 
-Metrics: `packet_loss`, `avg_rtt_ms`, `packets_sent`, `packets_recv`. Status "down" only on 100% packet loss. Requires `NET_RAW` capability or runs in unprivileged UDP mode.
+Metrics: `packet_loss`, `avg_rtt_ms`, `packets_sent`, `packets_recv`. Status "down" only on 100% packet loss. Mode depends on the process UID: as root it sends raw ICMP (needs `NET_RAW`); otherwise it uses unprivileged ICMP datagram sockets (pro-bing's "udp" mode, allowed by the `net.ipv4.ping_group_range` sysctl).
 
 ### dns
 
@@ -812,7 +825,7 @@ Metrics: `hash`, `baseline_hash`, `url`, `baseline_captured`. On first run (empt
 { "port": 443, "warn_days": 14 }
 ```
 
-Metrics: `days_left`, `issuer`, `subject`, `not_after`, `not_before`. Uses SNI for hostname matching. Connects with `InsecureSkipVerify` to inspect even invalid certs. Status "down" if cert expires within `warn_days` or already expired.
+Metrics: `days_left`, `issuer`, `subject`, `not_after`, `not_before`. Sends the target host as SNI so the server presents the certificate for that name. Connects with `InsecureSkipVerify`: chain trust and hostname are **not** verified — only the leaf certificate's expiry is checked, so an untrusted or mismatched certificate is still "up" unless it is within `warn_days` of expiry. Status "down" if cert expires within `warn_days` or already expired.
 
 ### snmp_v2c
 
@@ -825,7 +838,7 @@ Metrics: `days_left`, `issuer`, `subject`, `not_after`, `not_before`. Uses SNI f
 { "port": 161, "timeout_s": 5 }
 ```
 
-Credentials: uses `snmp_v2c_community` from global settings (not per-check config).
+Credentials: the global `snmp_v2c_community` setting is injected into the config at run time (the scheduler re-reads SNMP settings at most every 15 minutes). A non-empty global value overrides any `community` key in the check's config; when the global value is empty, a per-check `community` key is used if present, else `"public"`. Check config is returned unmasked to every authenticated role by `GET /api/targets/{id}` and `GET /api/targets/{id}/checks`.
 
 Metrics: `sys_descr`, `sys_uptime_s`, `sys_contact`, `sys_name`, `cpu_avg_pct` (best-effort), `memory_total_kb` (best-effort). Status "up" if SNMP responds, "down" on timeout or auth failure.
 
@@ -840,7 +853,7 @@ Metrics: `sys_descr`, `sys_uptime_s`, `sys_contact`, `sys_name`, `cpu_avg_pct` (
 { "port": 161, "timeout_s": 10 }
 ```
 
-Credentials: uses `snmp_v3_*` keys from global settings (username, security_level, auth_protocol, auth_passphrase, privacy_protocol, privacy_passphrase). Not per-check config.
+Credentials: the global `snmp_v3_*` settings (username, security_level, auth_protocol, auth_passphrase, privacy_protocol, privacy_passphrase) are injected into the config at run time, same as `snmp_v2c`. Each non-empty global value overrides the same-named key (without the `snmp_v3_` prefix) in the check's config; an empty global value leaves a per-check key, if present, in effect. Without either, `security_level`/`auth_protocol`/`privacy_protocol` default to `authPriv`/`SHA`/`AES`, and a missing `username` makes the check "down".
 
 Metrics: same as `snmp_v2c` (`sys_descr`, `sys_uptime_s`, `sys_contact`, `sys_name`, `cpu_avg_pct`, `memory_total_kb`). Status "up" if SNMP responds, "down" on timeout or auth failure.
 
@@ -867,8 +880,8 @@ Returns enabled targets with their checks, last status, response time, and 90-da
     "preferred_check_type": "http",
     "state": "healthy",
     "paused": false,
-    "paused_at": null,
     "category": "Network",
+    "tags": ["DEVOPS", "IT", "P1"],
     "sla_status": "healthy",
     "sla_target": 99.9,
     "checks": [
@@ -890,7 +903,8 @@ Returns enabled targets with their checks, last status, response time, and 90-da
 
 **Notes:**
 - Disabled targets (`enabled=false`) are excluded from the response.
-- Paused targets have `state: "paused"`, `paused: true`, and `paused_at` set to an ISO 8601 timestamp.
+- Paused targets have `state: "paused"`, `paused: true`, and `paused_at` set to an ISO 8601 timestamp. `paused_at` is omitted (not `null`) for targets that are not paused.
+- `tags` is always an array (`[]` when the target has no tags).
 - `sla_status` is `""` (empty) and `sla_target` is `0` when the category's SLA threshold is 0 (disabled) or not configured. `sla_status` is also `""` when no check results exist yet for the preferred check.
 
 ### GET /api/dashboard/history/{checkId}
@@ -1026,7 +1040,7 @@ Response formats are identical to their Dashboard counterparts.
 
 `recipient_name` is the username for per-user channels (email, Signal). For webhook entries — which have no per-user recipient — `recipient_id` is empty and `recipient_name` is derived from the message prefix: `Webhook`, `Signal` (global), or `(channel)` as a fallback.
 
-`alert_type` values: `"firing"`, `"recovery"`, `"re-alert"`. Cooldown (`alert_cooldown_s`) applies to all alert types including recovery — prevents unlimited recovery alerts from flapping targets. Recovery alerts include downtime duration (down since, recovered at, total duration).
+`alert_type` values: `"firing"`, `"recovery"`, `"re-alert"`. Cooldown (`alert_cooldown_s`) applies to firing and recovery alerts: a state change within the cooldown of the rule's last firing or recovery alert sends nothing — prevents unlimited alerts from flapping targets. Re-alerts do not reset the cooldown; they run on their own clock (`alert_realert_s`, counted from the last firing or re-alert, checked every 60s). Recovery alerts include downtime duration (down since, recovered at, total duration).
 
 ### POST /api/settings/test-email
 
@@ -1131,6 +1145,7 @@ Bekci POSTs the following JSON to `webhook_url` on `firing`, `recovery`, `re-ale
 - `tags` is an array of uppercase free-form labels attached to the target (from `tag_options` where `grp='tag'`). Always present; `[]` when the target has no tags. The `test` event sends `["TEST"]` as a sentinel.
 - `failing_checks` is `[]` for `recovery` and `test`; populated for `firing` and `re-alert` with every check whose last result isn't `up`.
 - `down_since` + `duration` are only included on `recovery`.
+- System alerts (unclean restart, failed scheduled backup) are also POSTed, with `event: "system_alert"`. That payload sets only `event`, `target` (`"Bekci"`) and `message` (alert subject and text).
 - Non-2xx response is treated as failure (recorded in `webhook_last_error`, audit-logged); no retries.
 
 ---
@@ -1144,7 +1159,13 @@ Bekci POSTs the following JSON to `webhook_url` on `firing`, `recovery`, `re-ale
 
 ### GET /api/settings
 
-Returns all settings as key-value map. **Admin only** (viewers/operators get 403). Sensitive values (e.g. `resend_api_key`, `snmp_v2c_community`, `snmp_v3_auth_passphrase`, `snmp_v3_privacy_passphrase`) are masked. Only keys with existing DB rows are returned; unseeded keys absent.
+Returns all settings as key-value map. **Admin only** (viewers/operators get 403). Only keys with existing DB rows are returned; unseeded keys absent. Non-empty secrets are masked (empty values are returned as `""`):
+
+| Key | Masked as |
+|-----|-----------|
+| `resend_api_key` | first 7 chars + `****` (`****` if 7 chars or fewer) |
+| `snmp_v2c_community` | first 3 chars + `***` (`***` if 3 chars or fewer) |
+| `smtp_password`, `signal_password`, `webhook_bearer_token`, `webhook_basic_password`, `snmp_v3_auth_passphrase`, `snmp_v3_privacy_passphrase` | `"••••••••"` (8 × U+2022) |
 
 **Response (200):**
 ```json
@@ -1173,7 +1194,7 @@ Returns all settings as key-value map. **Admin only** (viewers/operators get 403
   "sla_physical_security": "99.9",
   "sla_key_services": "99.9",
   "sla_other": "99.9",
-  "snmp_v2c_community": "public",
+  "snmp_v2c_community": "pub***",
   "snmp_v3_username": "",
   "snmp_v3_security_level": "authPriv",
   "snmp_v3_auth_protocol": "SHA",
@@ -1186,7 +1207,13 @@ Returns all settings as key-value map. **Admin only** (viewers/operators get 403
 
 ### PUT /api/settings
 
-Update one or more settings. Only known keys are accepted. Sending masked values (`"••••••••"` or `"****"`) for `resend_api_key`, `signal_password`, `smtp_password`, `webhook_bearer_token`, `webhook_basic_password`, `snmp_v3_auth_passphrase`, or `snmp_v3_privacy_passphrase` is silently ignored (preserves existing value).
+Update one or more settings. Only known keys are accepted. A masked secret is silently ignored (existing value preserved) only when it matches that key's rule:
+
+- `resend_api_key`: value contains `••••••••` or ends with `****`.
+- `snmp_v2c_community`: value contains `***`.
+- `smtp_password`, `signal_password`, `webhook_bearer_token`, `webhook_basic_password`, `snmp_v3_auth_passphrase`, `snmp_v3_privacy_passphrase`: value is exactly `"••••••••"`. Any other value — including `"****"` — is saved as the new secret; `""` clears it.
+
+To keep a secret unchanged, omit the key or send back the exact value returned by GET.
 
 **Request:**
 ```json
@@ -1200,22 +1227,22 @@ Update one or more settings. Only known keys are accepted. Sending masked values
 
 | Key | Type | Validation |
 |-----|------|------------|
-| `session_timeout_hours` | positive integer | >= 1 |
-| `history_days` | positive integer | >= 1 (raw result retention; code defaults to 3 days, this setting overrides if higher) |
-| `audit_retention_days` | positive integer | >= 1 |
+| `session_timeout_hours` | positive integer | 1 – 8760 |
+| `history_days` | positive integer | 1 – 3650. Raw `check_results` retention in days; the hourly purge uses any positive value (3 when unset or invalid). |
+| `audit_retention_days` | positive integer | 1 – 3650 |
 | `soc_public` | boolean string | `"true"` or `"false"` |
-| `api_rate_limit_per_min` | positive integer | 1 – 10000. Per-token flat rate limit on `/api/v1/*`. Change takes effect within 30s (invalidation is immediate on save — 30s is the worst case between existing and updated windows). |
+| `api_rate_limit_per_min` | positive integer | 1 – 10000. Per-token flat rate limit on `/api/v1/*`. Saving it here invalidates the cached value, so the next `/api/v1/*` request uses the new limit; a token's current 60s window keeps its count. Otherwise the value is cached for up to 30s. |
 | `alert_method` | string | `""`, `"email"`, `"signal"`, or `"email+signal"` |
 | `email_provider` | string | `"ms365"` selects SMTP; `"resend"` or `""` selects Resend. Applies to target alerts, re-alerts, test emails, and system alerts. |
 | `resend_api_key` | string | any string (empty to clear; masked in GET: first 7 chars + `****`) |
 | `alert_from_email` | string | any string |
 | `smtp_host` | string | SMTP server hostname |
-| `smtp_port` | string | SMTP server port; empty defaults to `"587"` for all email paths |
+| `smtp_port` | string | `""` or an integer 1 – 65535 (SMTP server port); empty defaults to `"587"` for all email paths |
 | `smtp_username` | string | SMTP auth username |
 | `smtp_password` | string | SMTP auth password (masked in GET as `"••••••••"`) |
-| `alert_cooldown_s` | non-negative integer | >= 0 |
-| `alert_realert_s` | non-negative integer | >= 0 |
-| `signal_api_url` | string | any string (full gateway URL) |
+| `alert_cooldown_s` | non-negative integer | 0 – 86400. `0` (or an unset/invalid value) applies the default 1800s cooldown. |
+| `alert_realert_s` | non-negative integer | 0 – 86400. `0` (or an unset/invalid value) disables re-alerts. |
+| `signal_api_url` | string | `""`, or must start with `http://` or `https://` (full gateway URL) |
 | `signal_number` | string | any string (sender phone number) |
 | `signal_username` | string | any string |
 | `signal_password` | string | any string (masked in GET as `"••••••••"`) |
@@ -1229,22 +1256,18 @@ Update one or more settings. Only known keys are accepted. Sending masked values
 | `webhook_skip_tls` | boolean string | `"true"` or `"false"` |
 | `webhook_last_error` | string | auto-set by system; writable via PUT |
 | `webhook_last_success` | string | auto-set by system; writable via PUT |
-| `snmp_v2c_community` | string | SNMP v2c community string |
+| `snmp_v2c_community` | string | SNMP v2c community string (masked in GET as first 3 chars + `***`) |
 | `snmp_v3_username` | string | SNMP v3 USM username |
 | `snmp_v3_security_level` | string | `"noAuthNoPriv"`, `"authNoPriv"`, or `"authPriv"` |
 | `snmp_v3_auth_protocol` | string | `"MD5"` or `"SHA"` |
 | `snmp_v3_auth_passphrase` | string | SNMP v3 auth passphrase (masked in GET as `"••••••••"`) |
 | `snmp_v3_privacy_protocol` | string | `"DES"` or `"AES"` |
 | `snmp_v3_privacy_passphrase` | string | SNMP v3 privacy passphrase (masked in GET as `"••••••••"`) |
-| `sla_network` | float string | 0–100 (0 = disabled) |
-| `sla_security` | float string | 0–100 (0 = disabled) |
-| `sla_physical_security` | float string | 0–100 (0 = disabled) |
-| `sla_key_services` | float string | 0–100 (0 = disabled) |
-| `sla_other` | float string | 0–100 (0 = disabled) |
+| `sla_<category>` | float string | 0–100 (0 = disabled). One key per category in `tag_options` (`grp='category'`): `sla_` + the lowercased name with spaces replaced by `_` (seeded: `sla_network`, `sla_security`, `sla_physical_security`, `sla_key_services`, `sla_other`). A key with no matching category is rejected as unknown. |
 | `backup_max_copies` | positive integer | >= 1 (max saved backups on server) |
-| `webhook_timeout_s` | positive integer string | HTTP timeout for outbound webhook POST. Default 10s; UI accepts 1–120. Values <= 0 fall back to 10. |
-| `auto_backup_schedule` | string | `""`, `"off"`, `"weekly"`, `"10days"`, or `"monthly"`. Controls the hourly goroutine's scheduled backup cadence. |
-| `auto_backup_time` | string | HH:MM (24-hour, UTC) — the hour/minute on which the scheduled backup fires. |
+| `webhook_timeout_s` | positive integer string | >= 1; no upper bound in the API (the UI input is marked 1–120). HTTP timeout for outbound webhook POST. At send time a missing, non-integer or <= 0 stored value falls back to 10s. |
+| `auto_backup_schedule` | string | `""`, `"off"`, `"weekly"`, `"10days"`, or `"monthly"` (`""`/`"off"` = disabled). An hourly check runs an unencrypted scheduled backup during the `auto_backup_time` hour once at least 7, 10 or 30 whole days (`monthly` = 30 days, not a calendar month) have passed since the newest entry in the server-side backup index, or when the index is empty. Every saved backup counts as an entry: scheduled, Save to server, and download auto-saves. |
+| `auto_backup_time` | string | `HH:MM`, 24-hour; empty = `"03:00"`. The API does not validate the format. Only the hour is used, compared against the server's local time zone (not converted to UTC); minutes are ignored. The check runs once an hour, counted from process start, so the backup starts at whatever minute that check falls within the target hour. |
 | `system_alert_admins` | boolean string | `"true"` or `"false"`. When true, every active admin receives system-level alerts (unclean restart, failed scheduled backup). A stale scheduler is reported in the UI and audit log only, not alerted. Defaults to true on first boot. |
 | `system_alert_users` | string | Comma-separated list of user IDs (UUIDs) that additionally receive system-level alerts, independent of role. Empty string = no extra recipients. |
 
@@ -1299,13 +1322,15 @@ Update one or more settings. Only known keys are accepted. Sending masked values
 }
 ```
 
-**Audit actions:** `login`, `login_failed`, `logout`, `create_user`, `update_user`, `suspend_user`, `activate_user`, `reset_password`, `change_password`, `change_password_failed`, `update_profile`, `create_target`, `update_target`, `delete_target`, `pause_target`, `unpause_target`, `set_alert_recipients`, `create_tag`, `delete_tag`, `rename_tag`, `update_settings`, `restore_backup`, `export_backup`, `export_full_backup`, `save_full_backup`, `download_saved_backup`, `delete_saved_backup`, `run_check`, `test_email`, `test_signal`, `test_webhook`, `webhook_dispatch`, `api_token_create`, `api_token_revoke`, `api_rate_limit_exceeded`, `auto_backup`.
+**Audit actions:** `login`, `login_failed`, `logout`, `create_user`, `update_user`, `suspend_user`, `activate_user`, `reset_password`, `change_password`, `change_password_failed`, `update_profile`, `create_target`, `update_target`, `delete_target`, `pause_target`, `unpause_target`, `set_alert_recipients`, `create_tag`, `delete_tag`, `rename_tag`, `update_settings`, `restore_backup`, `export_backup`, `export_full_backup`, `save_full_backup`, `download_saved_backup`, `delete_saved_backup`, `run_check`, `test_email`, `test_signal`, `test_webhook`, `webhook_dispatch`, `api_token_create`, `api_token_revoke`, `api_rate_limit_exceeded`, `auto_backup`, `unclean_restart`, `scheduler_stale`.
+
+System-generated entries (user `system`): `webhook_dispatch`, `auto_backup`, `unclean_restart` (written at startup after an unclean shutdown), `scheduler_stale` (every 60s while the scheduler is stale).
 
 **`webhook_dispatch`** is logged by the system (user=system) for all webhook events. Detail contains the event type: `test`, `firing`, `recovery`, `re-alert`, or `{type} — error: {message}` on failure.
 
-**Status values:** `success`, `failure`. All mutating actions log both success and failure (with detail). Login and change_password also log dedicated failure actions (`login_failed`, `change_password_failed`).
+**Status values:** `success`, `failure`. All mutating actions log success, and failures from business rules or the database (with detail). Most request-validation errors (malformed JSON, missing or invalid fields) return 400 without an audit entry. Login and change_password also log dedicated failure actions (`login_failed`, `change_password_failed`).
 
-**IP address:** All audit entries include the client's source IP. Behind a reverse proxy, `X-Real-IP` header is used when RemoteAddr is loopback.
+**IP address:** Entries attributed to a user or API token include the client's source IP. Behind a reverse proxy, `X-Real-IP` header is used when RemoteAddr is loopback. System-generated entries have an empty `ip_address`.
 
 ---
 
@@ -1353,7 +1378,7 @@ Content-Disposition: attachment; filename="bekci-config-20260115-100000.json"
 
 ### POST /api/backup/restore
 
-Accepts either multipart form upload (field name: `file`) or raw JSON body. **Destructive** -- wipes all config tables and replaces with backup data. Max body: 2MB.
+Accepts either multipart form upload (field name: `file`) or raw JSON body. **Destructive** -- wipes all config tables and replaces with backup data. Max body: 10MB.
 
 **Request (multipart):**
 ```
@@ -1567,7 +1592,7 @@ Admin-only details for **Settings > System Health**. Kept separate from `/api/sy
 
 ### GET /api/fail2ban/status
 
-Requires `fail2ban-client` available via `sudo` on the server. Returns status of all Fail2Ban jails.
+Requires `fail2ban-client` available via `sudo` on the server. Returns status of all Fail2Ban jails. All `fail2ban-client` calls in one request share a single 5s deadline. The 503/504 errors apply only to the initial jail-list call; a jail whose own status call fails or times out (or whose name is not `[A-Za-z0-9_-]+`) is left out of `jails`, and the response is still 200 with no error indication.
 
 **Response (200):**
 ```json
@@ -1588,8 +1613,8 @@ Requires `fail2ban-client` available via `sudo` on the server. Returns status of
 
 | Error | Code |
 |-------|------|
-| fail2ban not available | 503 |
-| Command timed out (5s) | 504 |
+| fail2ban not available (jail-list call failed) | 503 |
+| Jail-list call timed out (5s) | 504 |
 
 ### GET /api/fail2ban/bans
 
@@ -1644,11 +1669,12 @@ Cookie-auth admin endpoints that mint and revoke bearer tokens consumed by `/api
     "prefix": "bk_a1b2c3d4",
     "created_by": "admin-user-uuid",
     "created_at": "2026-04-24T09:00:00Z",
-    "last_used_at": "2026-04-24T09:12:45Z",
-    "revoked_at": null
+    "last_used_at": "2026-04-24T09:12:45Z"
   }
 ]
 ```
+
+`last_used_at` and `revoked_at` are omitted (not `null`) until set; a revoked token carries `revoked_at`.
 
 `prefix` is the first 11 characters of the plaintext (`"bk_"` + 8 hex); shown in the UI for identification. Hashed token values and plaintext are never returned here.
 
@@ -1659,7 +1685,7 @@ Cookie-auth admin endpoints that mint and revoke bearer tokens consumed by `/api
 { "name": "grafana-prod" }
 ```
 
-Name must be unique and 1–80 chars. Used only for identification in the admin UI.
+Name is trimmed and must be non-empty; longer names are truncated to 80 bytes (not rejected). It must be unique across all tokens, including revoked ones. Used only for identification in the admin UI.
 
 **Response (201):**
 ```json
@@ -1692,14 +1718,14 @@ Soft-delete: sets `revoked_at = now`. Re-revoking is a no-op. Authentication att
 
 Machine-facing endpoints for remote consumers (monitoring dashboards, runbook scripts, SIEM integrations). Separate URL namespace, separate auth model: `Authorization: Bearer bk_<...>` — no cookie session required.
 
-**Base:** `/api/v1/`. All endpoints in this namespace require a non-revoked bearer token from `/api/api-tokens` (admin-minted). Token-authenticated calls are logged at `slog` INFO with `token_name, path, client_ip`.
+**Base:** `/api/v1/`. All endpoints in this namespace require a non-revoked bearer token from `/api/api-tokens` (admin-minted). Each successful `GET /api/v1/hosts` lookup (HTTP 200) is logged at `slog` INFO (`v1.hosts query`) with `token, host, matched, ip`.
 
 **Design commitments:**
 - Versioned via URL. Breaking changes → `/api/v2/`; the `v1` surface stays stable.
 - Admin-managed credentials (no end-user login). Tokens are revocable immediately.
 - Response envelopes use arrays (`{"targets":[...]}`) even for single-match lookups so callers don't need conditional decode paths.
 
-**Rate limiting:** Flat per-token fixed-window, admin-tunable in Settings > General → **API Rate Limit**. Default `60` requests per minute per token. When the cap is hit, the server returns `429 Too Many Requests` with a `Retry-After` header and a JSON body carrying `retry_after_s` and the current `limit_per_min`. Each 429 is logged at WARN (`token_name, ip, path, limit_per_min`) and recorded as an `api_rate_limit_exceeded` entry in the audit log (actor `api-token:<name>`). No IP-based limit is applied.
+**Rate limiting:** Flat per-token fixed-window, admin-tunable in Settings > General → **API Rate Limit**. Default `60` requests per minute per token. When the cap is hit, the server returns `429 Too Many Requests` with a `Retry-After` header and a JSON body carrying `retry_after_s` and the current `limit_per_min`. Each 429 is logged at WARN (`token, ip, path, limit_per_min`) and recorded as an `api_rate_limit_exceeded` entry in the audit log (actor `api-token:<name>`). No IP-based limit is applied.
 
 ### GET /api/v1/hosts
 
@@ -1766,7 +1792,8 @@ Enabled only when `cors_origin` is configured (development). Allows methods: `GE
 
 ### Request Body Limits
 - General endpoints: 1MB max (`readJSON` helper)
-- Backup restore: 2MB max
+- Backup restore: 10MB max
+- `POST /api/settings/test-email`, `POST /api/backup/full` and `POST /api/backup/full/save` (admin-only) decode the body directly, without the `readJSON` limit
 
 ### Logging
 All HTTP requests are logged at DEBUG level with method, path, status code, and duration.
