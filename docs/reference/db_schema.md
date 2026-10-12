@@ -358,7 +358,7 @@ Append-only log of sent alerts. Purged daily by `PurgeOldAlertHistory(days)` usi
 
 ### target_alert_recipients
 
-Junction table: which users receive alerts for which targets.
+Junction table: which users receive email/Signal alerts for which targets. The webhook does not use it.
 
 | Column    | Type | Constraints                                   |
 |-----------|------|-----------------------------------------------|
@@ -517,7 +517,7 @@ Target --< TargetAlertRecipients >-- Users
                      AlertHistory (target_id, rule_id, recipient_id)
 ```
 
-When a rule transitions to `unhealthy`, the system looks up `target_alert_recipients` to determine who gets notified, then logs each notification in `alert_history`.
+When a rule changes state (or is re-alerted), the system looks up `target_alert_recipients` to determine who gets email/Signal notifications, then logs each notification in `alert_history`. The webhook logs one row per event with an empty `recipient_id`, whether or not the target has recipients.
 
 ---
 

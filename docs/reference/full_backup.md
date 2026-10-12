@@ -82,7 +82,7 @@ Auto-save on download + auto-prune oldest when `backup_max_copies` exceeded (def
 
 All three save paths (Save to server, the download auto-save, scheduled backups) go through one routine, `saveBackupCopy`. Saves and deletes are serialized by a single in-process lock, so concurrent operations never lose index entries. A save never overwrites an existing file: filenames have one-second resolution, so a second save within the same second fails ("backup failed", HTTP 500) instead of replacing the first. `index.json` is written to `index.json.tmp` and renamed into place, so a crash or a concurrent reader never sees a partial index. Pruned files are deleted only after the new index is saved; if the index write fails, the new archive is removed and the save reports failure, leaving the previous backups and index unchanged.
 
-Failures are reported, never logged as success: Save to server returns 500 and audits `save_full_backup` with status `failure`; a scheduled backup audits `auto_backup` `failure` and sends a system alert ("Bekci scheduled backup failed") to the configured system alert recipients; a download auto-save failure is logged only (the download itself has already succeeded).
+Failures are reported, never logged as success: Save to server returns 500 and audits `save_full_backup` with status `failure`; a scheduled backup audits `auto_backup` `failure` and sends a system alert ("Bekci scheduled backup failed") to the configured system alert recipients and, if enabled, the webhook (even when no recipients resolve); a download auto-save failure is logged only (the download itself has already succeeded).
 
 ### Frontend UI
 

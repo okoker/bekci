@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1121,6 +1122,27 @@ func configureWebhookAlertingWithBasicAuth(t *testing.T, s *store.Store, webhook
 	}
 }
 
+// recordWebhookEvents starts a webhook endpoint and returns its URL and a
+// function listing the event of every payload received so far.
+func recordWebhookEvents(t *testing.T) (string, func() []string) {
+	t.Helper()
+	var mu sync.Mutex
+	var events []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var p WebhookPayload
+		_ = json.NewDecoder(r.Body).Decode(&p)
+		mu.Lock()
+		events = append(events, p.Event)
+		mu.Unlock()
+	}))
+	t.Cleanup(srv.Close)
+	return srv.URL, func() []string {
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]string(nil), events...)
+	}
+}
+
 func TestDispatchWebhookFiring(t *testing.T) {
 	s := newTestStore(t)
 	target := createAlertTarget(t, s, "webhook-fire")
@@ -1495,5 +1517,60 @@ func TestDispatchWebhookRecoveryIncludesDowntime(t *testing.T) {
 	}
 	if payload.Duration == nil {
 		t.Fatal("expected duration to be set for recovery webhook")
+	}
+}
+
+// T-AL43: firing and recovery reach the webhook when the target has no user
+// recipients (SR-12). The webhook's own history row drives cooldown and re-alerts.
+func TestDispatchWebhookWithoutRecipients(t *testing.T) {
+	for _, tc := range []struct {
+		name               string
+		oldState, newState string
+		wantEvent          string
+	}{
+		{name: "firing", oldState: "healthy", newState: "unhealthy", wantEvent: "firing"},
+		{name: "recovery", oldState: "unhealthy", newState: "healthy", wantEvent: "recovery"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := newTestStore(t)
+			target := createAlertTarget(t, s, "webhook-only-"+tc.name)
+			url, events := recordWebhookEvents(t)
+			configureWebhookAlerting(t, s, url)
+
+			New(s).Dispatch(*target.RuleID, tc.oldState, tc.newState)
+
+			if got := events(); len(got) != 1 || got[0] != tc.wantEvent {
+				t.Fatalf("webhook events = %v, want [%s]", got, tc.wantEvent)
+			}
+			entries, total := listAlertHistory(t, s)
+			if total != 1 || entries[0].RecipientName != "Webhook" || entries[0].AlertType != tc.wantEvent {
+				t.Fatalf("alert history = %d %+v, want one Webhook %s entry", total, entries, tc.wantEvent)
+			}
+		})
+	}
+}
+
+// T-AL44: a still-firing target with no user recipients is re-alerted by webhook (SR-12).
+func TestCheckRealertsWebhookWithoutRecipients(t *testing.T) {
+	s := newTestStore(t)
+	target := createAlertTarget(t, s, "webhook-only-realert")
+	url, events := recordWebhookEvents(t)
+	configureWebhookAlerting(t, s, url)
+	if err := s.SetSettings(map[string]string{"alert_realert_s": "1"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpdateRuleState(*target.RuleID, "unhealthy"); err != nil {
+		t.Fatal(err)
+	}
+	// The firing webhook logs a row without a recipient; it starts the re-alert timer.
+	if err := s.LogAlert(target.ID, *target.RuleID, "", "firing", "[Webhook] webhook-only-realert firing"); err != nil {
+		t.Fatal(err)
+	}
+
+	time.Sleep(2 * time.Second)
+	New(s).CheckRealerts()
+
+	if got := events(); len(got) != 1 || got[0] != "re-alert" {
+		t.Fatalf("webhook events = %v, want [re-alert]", got)
 	}
 }

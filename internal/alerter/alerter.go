@@ -62,14 +62,10 @@ func (a *AlertService) Dispatch(ruleID, oldState, newState string) {
 	// Hydrate free-form tags for the webhook payload (other channels ignore Tags).
 	target.Tags, _ = a.store.ListTagsByTarget(targetID)
 
-	// Get recipients
+	// Get recipients (email and Signal only; the webhook needs none)
 	recipients, err := a.store.ListTargetRecipients(targetID)
 	if err != nil {
 		slog.Error("Alerter: failed to get recipients", "target_id", targetID, "error", err)
-		return
-	}
-	if len(recipients) == 0 {
-		slog.Debug("Alerter: no recipients for target", "target_id", targetID)
 		return
 	}
 
@@ -90,7 +86,7 @@ func (a *AlertService) Dispatch(ruleID, oldState, newState string) {
 	}
 
 	// Send emails
-	if (method == "email" || method == "email+signal") && fromEmail != "" {
+	if (method == "email" || method == "email+signal") && fromEmail != "" && len(recipients) > 0 {
 		subject, htmlBody := RenderEmailAlert(target.Name, target.Host, newState, nil, now, downSince)
 		provider, _ := a.store.GetSetting("email_provider")
 
@@ -133,7 +129,7 @@ func (a *AlertService) Dispatch(ruleID, oldState, newState string) {
 	}
 
 	// Signal
-	if method == "signal" || method == "email+signal" {
+	if (method == "signal" || method == "email+signal") && len(recipients) > 0 {
 		sigURL, _ := a.store.GetSetting("signal_api_url")
 		sigNumber, _ := a.store.GetSetting("signal_number")
 		sigUser, _ := a.store.GetSetting("signal_username")
@@ -253,13 +249,13 @@ func (a *AlertService) CheckRealerts() {
 		target.Tags, _ = a.store.ListTagsByTarget(fr.TargetID)
 
 		recipients, err := a.store.ListTargetRecipients(fr.TargetID)
-		if err != nil || len(recipients) == 0 {
+		if err != nil {
 			continue
 		}
 
 		now := time.Now()
 
-		if (method == "email" || method == "email+signal") && fromEmail != "" {
+		if (method == "email" || method == "email+signal") && fromEmail != "" && len(recipients) > 0 {
 			subject, htmlBody := RenderEmailAlert(target.Name, target.Host, "unhealthy", nil, now, nil)
 			if len(subject) > 8 {
 				subject = "[RE-ALERT] " + subject[8:] // replace [ALERT] with [RE-ALERT]
@@ -306,7 +302,7 @@ func (a *AlertService) CheckRealerts() {
 			}
 		}
 
-		if method == "signal" || method == "email+signal" {
+		if (method == "signal" || method == "email+signal") && len(recipients) > 0 {
 			sigURL, _ := a.store.GetSetting("signal_api_url")
 			sigNumber, _ := a.store.GetSetting("signal_number")
 			sigUser, _ := a.store.GetSetting("signal_username")

@@ -62,9 +62,9 @@ func SendSystemAlert(st *store.Store, subject, message string) {
 		}
 	}
 
+	// Email and Signal skip themselves without addresses; the webhook needs none.
 	if len(recipients) == 0 {
 		slog.Warn("System alert: no recipients configured", "subject", subject)
-		return
 	}
 
 	// Send via configured channels

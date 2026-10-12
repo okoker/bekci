@@ -619,6 +619,8 @@ For `tag`: deletes the catalog row; DDL-level `ON DELETE CASCADE` on `target_tag
 
 ## Alert Recipients
 
+Recipients receive the target's email and Signal alerts. The webhook is not per-recipient: it is sent for every alert event whether or not the target has recipients.
+
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | GET | `/api/targets/{id}/recipients` | operator+ | List alert recipients for target |
@@ -1122,7 +1124,7 @@ Both fields are empty strings when no webhook has been sent yet.
 
 ### Outbound Webhook Payload
 
-Bekci POSTs the following JSON to `webhook_url` on `firing`, `recovery`, `re-alert`, and `test` events. `Content-Type: application/json`. Auth is the configured Bearer/Basic header, TLS verification is on unless `webhook_skip_tls=true`, timeout is `webhook_timeout_s` (default 10s).
+Bekci POSTs the following JSON to `webhook_url` on `firing`, `recovery`, `re-alert`, and `test` events. Target events are sent whether or not the target has alert recipients (recipients only apply to email and Signal). `Content-Type: application/json`. Auth is the configured Bearer/Basic header, TLS verification is on unless `webhook_skip_tls=true`, timeout is `webhook_timeout_s` (default 10s).
 
 ```json
 {
@@ -1145,7 +1147,7 @@ Bekci POSTs the following JSON to `webhook_url` on `firing`, `recovery`, `re-ale
 - `tags` is an array of uppercase free-form labels attached to the target (from `tag_options` where `grp='tag'`). Always present; `[]` when the target has no tags. The `test` event sends `["TEST"]` as a sentinel.
 - `failing_checks` is `[]` for `recovery` and `test`; populated for `firing` and `re-alert` with every check whose last result isn't `up`.
 - `down_since` + `duration` are only included on `recovery`.
-- System alerts (unclean restart, failed scheduled backup) are also POSTed, with `event: "system_alert"`. That payload sets only `event`, `target` (`"Bekci"`) and `message` (alert subject and text).
+- System alerts (unclean restart, failed scheduled backup) are also POSTed, with `event: "system_alert"`. That payload sets only `event`, `target` (`"Bekci"`) and `message` (alert subject and text). It is sent even when no system alert recipients resolve.
 - Non-2xx response is treated as failure (recorded in `webhook_last_error`, audit-logged); no retries.
 
 ---

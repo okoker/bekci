@@ -87,3 +87,22 @@ func TestSendSystemAlertEmailProvider(t *testing.T) {
 		})
 	}
 }
+
+// T-AL45: system alerts reach the webhook when no user recipients resolve (SR-12).
+func TestSendSystemAlertWebhookWithoutRecipients(t *testing.T) {
+	st := newTestStore(t)
+	url, events := recordWebhookEvents(t)
+	configureWebhookAlerting(t, st, url)
+	if err := st.SetSettings(map[string]string{
+		"system_alert_admins": "false",
+		"system_alert_users":  "",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	SendSystemAlert(st, "Bekci restarted unexpectedly", "Test restart notification")
+
+	if got := events(); len(got) != 1 || got[0] != "system_alert" {
+		t.Fatalf("webhook events = %v, want [system_alert]", got)
+	}
+}
