@@ -722,6 +722,8 @@ Returns raw check results from the last 24 hours.
 
 The `config` field in target conditions is a JSON string with check-type-specific fields. All fields are optional — sensible defaults are applied. Config is parsed at runtime using helpers that return defaults for missing keys.
 
+The JSON string `"null"` uses the same defaults as `"{}"`. The scheduler initializes an empty config map before injecting SNMP credentials or saving a page-hash baseline.
+
 ### http
 
 | Field | Type | Default | Description |

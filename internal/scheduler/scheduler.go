@@ -280,6 +280,9 @@ func (s *Scheduler) runCheck(checkID string) {
 	if check.Type == "snmp_v2c" || check.Type == "snmp_v3" {
 		var cfg map[string]any
 		if err := json.Unmarshal([]byte(check.Config), &cfg); err == nil {
+			if cfg == nil {
+				cfg = make(map[string]any)
+			}
 			if check.Type == "snmp_v2c" {
 				if community := s.getCachedSetting("snmp_v2c_community"); community != "" {
 					cfg["community"] = community
@@ -309,6 +312,9 @@ func (s *Scheduler) runCheck(checkID string) {
 		if hash, ok := result.Metrics["hash"].(string); ok && hash != "" {
 			var cfg map[string]any
 			if err := json.Unmarshal([]byte(check.Config), &cfg); err == nil {
+				if cfg == nil {
+					cfg = make(map[string]any)
+				}
 				cfg["baseline_hash"] = hash
 				if updated, err := json.Marshal(cfg); err == nil {
 					if err := s.store.UpdateCheckConfig(checkID, string(updated)); err != nil {
