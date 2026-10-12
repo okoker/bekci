@@ -85,11 +85,14 @@ func SendSystemAlert(st *store.Store, subject, message string) {
 		if len(emails) > 0 && fromEmail != "" {
 			htmlBody := fmt.Sprintf("<h2>%s</h2><p>%s</p>", html.EscapeString(subject), html.EscapeString(message))
 			var err error
-			if provider == "smtp" {
+			if provider == "ms365" {
 				host, _ := st.GetSetting("smtp_host")
 				port, _ := st.GetSetting("smtp_port")
 				username, _ := st.GetSetting("smtp_username")
 				password, _ := st.GetSetting("smtp_password")
+				if port == "" {
+					port = "587"
+				}
 				err = SendEmailSMTP(host, port, username, password, fromEmail, emails, subject, htmlBody)
 			} else {
 				apiKey, _ := st.GetSetting("resend_api_key")

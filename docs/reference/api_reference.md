@@ -1202,11 +1202,11 @@ Update one or more settings. Only known keys are accepted. Sending masked values
 | `soc_public` | boolean string | `"true"` or `"false"` |
 | `api_rate_limit_per_min` | positive integer | 1 – 10000. Per-token flat rate limit on `/api/v1/*`. Change takes effect within 30s (invalidation is immediate on save — 30s is the worst case between existing and updated windows). |
 | `alert_method` | string | `""`, `"email"`, `"signal"`, or `"email+signal"` |
-| `email_provider` | string | `""`, `"resend"`, or `"ms365"` |
+| `email_provider` | string | `"ms365"` selects SMTP; `"resend"` or `""` selects Resend. Applies to target alerts, re-alerts, test emails, and system alerts. |
 | `resend_api_key` | string | any string (empty to clear; masked in GET: first 7 chars + `****`) |
 | `alert_from_email` | string | any string |
 | `smtp_host` | string | SMTP server hostname |
-| `smtp_port` | string | SMTP server port (e.g. `"587"`) |
+| `smtp_port` | string | SMTP server port; empty defaults to `"587"` for all email paths |
 | `smtp_username` | string | SMTP auth username |
 | `smtp_password` | string | SMTP auth password (masked in GET as `"••••••••"`) |
 | `alert_cooldown_s` | non-negative integer | >= 0 |
