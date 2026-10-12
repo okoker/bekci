@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/bekci/internal/alerter"
 	"github.com/bekci/internal/crypto"
 	"github.com/bekci/internal/store"
 )
@@ -220,41 +221,54 @@ func (s *Server) handleFullBackup(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(archiveData)))
 	w.Write(archiveData)
 
-	// Auto-save a local copy (non-blocking)
-	go s.autoSaveBackupCopy(archiveData, filename, encrypt)
+	// Auto-save a local copy (non-blocking); the download itself already succeeded
+	go func() {
+		if _, err := s.saveBackupCopy(archiveData, filename, encrypt); err != nil {
+			slog.Warn("Auto-save backup copy failed", "filename", filename, "error", err)
+		}
+	}()
 }
 
-// autoSaveBackupCopy saves a copy of a backup archive to s.backupDir,
-// enforcing the backup_max_copies setting. Designed to run in a goroutine.
-func (s *Server) autoSaveBackupCopy(data []byte, filename string, encrypted bool) {
-	// Read max copies setting
+// saveBackupCopy stores a backup archive in s.backupDir and prunes the oldest
+// copies beyond backup_max_copies. Used by Save to server, the download
+// auto-save and scheduled backups. It never overwrites an existing file, and on
+// error the directory and index are left as they were. Returns the truncated
+// SHA256 recorded in the index.
+func (s *Server) saveBackupCopy(data []byte, filename string, encrypted bool) (string, error) {
 	maxStr, _ := s.store.GetSetting("backup_max_copies")
 	maxCopies, _ := strconv.Atoi(maxStr)
 	if maxCopies <= 0 {
 		maxCopies = 5
 	}
 
-	// Ensure backup directory exists
+	s.backupMu.Lock()
+	defer s.backupMu.Unlock()
+
 	if err := os.MkdirAll(s.backupDir, 0700); err != nil {
-		slog.Warn("Auto-save backup: failed to create directory", "error", err)
-		return
+		return "", fmt.Errorf("creating backup directory: %w", err)
 	}
 
 	entries := loadBackupIndex(s.backupDir)
 
-	// Write file before pruning, so a failed write never costs an existing backup
+	// O_EXCL: a name that already exists (same-second save) fails instead of overwriting
 	destPath := filepath.Join(s.backupDir, filename)
-	if err := os.WriteFile(destPath, data, 0600); err != nil {
+	f, err := os.OpenFile(destPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		return "", fmt.Errorf("creating backup file: %w", err)
+	}
+	_, err = f.Write(data)
+	if closeErr := f.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
 		os.Remove(destPath)
-		slog.Warn("Auto-save backup: failed to write file", "error", err)
-		return
+		return "", fmt.Errorf("writing backup file: %w", err)
 	}
 
-	// Compute SHA256
+	// Compute SHA256 (store truncated to 16 hex chars — enough for integrity check)
 	hash := sha256.Sum256(data)
 	hashStr := hex.EncodeToString(hash[:])[:16]
 
-	// Update index
 	entries = append(entries, backupMeta{
 		Filename:  filename,
 		SHA256:    hashStr,
@@ -263,17 +277,25 @@ func (s *Server) autoSaveBackupCopy(data []byte, filename string, encrypted bool
 		Encrypted: encrypted,
 	})
 
-	// Enforce max copies — delete oldest beyond the limit
-	for len(entries) > maxCopies {
-		oldest := entries[0]
-		os.Remove(filepath.Join(s.backupDir, oldest.Filename))
-		entries = entries[1:]
+	// Drop the oldest copies beyond the limit from the index first and delete
+	// their files only once the new index is saved
+	var pruned []backupMeta
+	if len(entries) > maxCopies {
+		pruned = entries[:len(entries)-maxCopies]
+		entries = entries[len(entries)-maxCopies:]
 	}
 	if err := saveBackupIndex(s.backupDir, entries); err != nil {
-		slog.Warn("Auto-save backup: failed to update index", "error", err)
+		os.Remove(destPath)
+		return "", fmt.Errorf("updating backup index: %w", err)
+	}
+	for _, old := range pruned {
+		if err := os.Remove(filepath.Join(s.backupDir, old.Filename)); err != nil {
+			slog.Warn("Failed to prune old backup", "filename", old.Filename, "error", err)
+		}
 	}
 
-	slog.Info("Auto-saved backup copy", "filename", filename, "size", len(data))
+	slog.Info("Saved backup copy", "filename", filename, "size", len(data))
+	return hashStr, nil
 }
 
 // addFileToTar adds a file from disk into a tar archive with the given name.
@@ -344,12 +366,19 @@ func loadBackupIndex(backupDir string) []backupMeta {
 	return valid
 }
 
+// saveBackupIndex replaces index.json via a temp file and rename, so a crash or
+// a concurrent reader never sees a partial index. Writers hold s.backupMu.
 func saveBackupIndex(backupDir string, entries []backupMeta) error {
 	data, err := json.MarshalIndent(entries, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(backupDir, "index.json"), data, 0600)
+	path := filepath.Join(backupDir, "index.json")
+	if err := os.WriteFile(path+".tmp", data, 0600); err != nil {
+		os.Remove(path + ".tmp")
+		return err
+	}
+	return os.Rename(path+".tmp", path)
 }
 
 func (s *Server) handleSaveFullBackup(w http.ResponseWriter, r *http.Request) {
@@ -377,50 +406,12 @@ func (s *Server) handleSaveFullBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Ensure backup directory exists
-	if err := os.MkdirAll(s.backupDir, 0700); err != nil {
-		slog.Error("Failed to create backup directory", "error", err, "path", s.backupDir)
+	hashStr, err := s.saveBackupCopy(archiveData, filename, encrypt)
+	if err != nil {
+		slog.Error("Full backup save failed", "error", err, "path", s.backupDir)
+		s.audit(r, "save_full_backup", "backup", "", err.Error(), "failure")
 		writeError(w, http.StatusInternalServerError, "backup failed")
 		return
-	}
-
-	entries := loadBackupIndex(s.backupDir)
-	maxStr, _ := s.store.GetSetting("backup_max_copies")
-	maxCopies, _ := strconv.Atoi(maxStr)
-	if maxCopies <= 0 {
-		maxCopies = 5
-	}
-
-	// Write file before pruning, so a failed write never costs an existing backup
-	destPath := filepath.Join(s.backupDir, filename)
-	if err := os.WriteFile(destPath, archiveData, 0600); err != nil {
-		os.Remove(destPath)
-		slog.Error("Failed to write backup file", "error", err)
-		writeError(w, http.StatusInternalServerError, "backup failed")
-		return
-	}
-
-	// Compute SHA256 (store truncated to 16 hex chars — enough for integrity check)
-	hash := sha256.Sum256(archiveData)
-	hashStr := hex.EncodeToString(hash[:])[:16]
-
-	// Update index
-	entries = append(entries, backupMeta{
-		Filename:  filename,
-		SHA256:    hashStr,
-		Size:      int64(len(archiveData)),
-		CreatedAt: time.Now().UTC().Format(time.RFC3339),
-		Encrypted: encrypt,
-	})
-
-	// Enforce max copies — delete oldest beyond the limit
-	for len(entries) > maxCopies {
-		oldest := entries[0]
-		os.Remove(filepath.Join(s.backupDir, oldest.Filename))
-		entries = entries[1:]
-	}
-	if err := saveBackupIndex(s.backupDir, entries); err != nil {
-		slog.Warn("Failed to update backup index", "error", err)
 	}
 
 	s.audit(r, "save_full_backup", "backup", "", fmt.Sprintf("encrypted=%v size=%d file=%s", encrypt, len(archiveData), filename), "success")
@@ -509,6 +500,9 @@ func (s *Server) handleDeleteSavedBackup(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	s.backupMu.Lock()
+	defer s.backupMu.Unlock()
+
 	if err := os.Remove(fullPath); err != nil {
 		if os.IsNotExist(err) {
 			writeError(w, http.StatusNotFound, "backup not found")
@@ -592,8 +586,11 @@ func (s *Server) RunScheduledBackup() {
 		Status:       "success",
 	})
 
-	// Build backup (unencrypted)
+	// Build backup (unencrypted) and store it (respects max_copies)
 	archiveData, filename, err := s.buildFullBackupArchive(false, "")
+	if err == nil {
+		_, err = s.saveBackupCopy(archiveData, filename, false)
+	}
 	if err != nil {
 		slog.Error("Scheduled backup failed", "error", err)
 		s.store.CreateAuditEntry(&store.AuditEntry{
@@ -604,11 +601,12 @@ func (s *Server) RunScheduledBackup() {
 			Detail:       "Backup failed: " + err.Error(),
 			Status:       "failure",
 		})
+		alerter.SendSystemAlert(s.store,
+			"Bekci scheduled backup failed",
+			"The scheduled backup could not be completed. Check audit log for details.",
+		)
 		return
 	}
-
-	// Save using existing auto-save logic (respects max_copies)
-	s.autoSaveBackupCopy(archiveData, filename, false)
 
 	// Audit: completed
 	s.store.CreateAuditEntry(&store.AuditEntry{

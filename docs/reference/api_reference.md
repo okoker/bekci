@@ -1245,7 +1245,7 @@ Update one or more settings. Only known keys are accepted. Sending masked values
 | `webhook_timeout_s` | positive integer string | HTTP timeout for outbound webhook POST. Default 10s; UI accepts 1–120. Values <= 0 fall back to 10. |
 | `auto_backup_schedule` | string | `""`, `"off"`, `"weekly"`, `"10days"`, or `"monthly"`. Controls the hourly goroutine's scheduled backup cadence. |
 | `auto_backup_time` | string | HH:MM (24-hour, UTC) — the hour/minute on which the scheduled backup fires. |
-| `system_alert_admins` | boolean string | `"true"` or `"false"`. When true, every active admin receives system-level alerts (scheduler stale, unclean restart). Defaults to true on first boot. |
+| `system_alert_admins` | boolean string | `"true"` or `"false"`. When true, every active admin receives system-level alerts (scheduler stale, unclean restart, failed scheduled backup). Defaults to true on first boot. |
 | `system_alert_users` | string | Comma-separated list of user IDs (UUIDs) that additionally receive system-level alerts, independent of role. Empty string = no extra recipients. |
 
 **Response (200):**
@@ -1430,7 +1430,7 @@ Same as `POST /api/backup/full` but saves the archive to the server-side backup 
 | Error | Code |
 |-------|------|
 | Passphrase too short (<8 chars) | 400 |
-| Backup/encryption/write failure | 500 |
+| Backup/encryption/write/index failure, or a backup with the same filename already exists (two saves in the same second) | 500 |
 
 ### GET /api/backup/full/list
 

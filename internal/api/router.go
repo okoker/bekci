@@ -29,6 +29,7 @@ type Server struct {
 	dbPath         string
 	configPath     string
 	backupDir      string
+	backupMu       sync.Mutex // serializes changes to backupDir files and index.json
 	loginLimiter      *loginLimiter
 	usernameLimiter   *loginLimiter
 	socPublicCache    cachedSetting

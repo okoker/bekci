@@ -80,6 +80,10 @@ Directory auto-created on first save. Metadata tracked in `{backup_dir}/index.js
 
 Auto-save on download + auto-prune oldest when `backup_max_copies` exceeded (default 5). The new archive is written first and the oldest copies are pruned only after that write succeeds, so a failed save never removes an existing backup (a partial file from the failed write is deleted). This needs room for one extra archive while saving. Manual delete also available via the web UI.
 
+All three save paths (Save to server, the download auto-save, scheduled backups) go through one routine, `saveBackupCopy`. Saves and deletes are serialized by a single in-process lock, so concurrent operations never lose index entries. A save never overwrites an existing file: filenames have one-second resolution, so a second save within the same second fails ("backup failed", HTTP 500) instead of replacing the first. `index.json` is written to `index.json.tmp` and renamed into place, so a crash or a concurrent reader never sees a partial index. Pruned files are deleted only after the new index is saved; if the index write fails, the new archive is removed and the save reports failure, leaving the previous backups and index unchanged.
+
+Failures are reported, never logged as success: Save to server returns 500 and audits `save_full_backup` with status `failure`; a scheduled backup audits `auto_backup` `failure` and sends a system alert ("Bekci scheduled backup failed") to the configured system alert recipients; a download auto-save failure is logged only (the download itself has already succeeded).
+
 ### Frontend UI
 
 Located in Settings > Backup & Restore tab (admin only). The "Full Database Backup" collapsible card provides:
@@ -179,8 +183,8 @@ sudo systemctl start bekci
 | `internal/crypto/crypto_test.go` | Encrypt/decrypt round-trip, wrong passphrase, edge cases |
 | `internal/crypto/diceware_test.go` | Word count, uniqueness, defaults |
 | `internal/store/full_backup.go` | SQLite online backup API with VACUUM INTO fallback |
-| `internal/api/backup_handlers.go` | `handleFullBackup`, `handleGeneratePassphrase`, server-side save with retention (`handleSaveFullBackup`, `autoSaveBackupCopy`), saved-backup list/download/delete, `RunScheduledBackup` |
-| `internal/api/backup_retention_test.go` | Save keeps existing backups when the write fails; pruning keeps exactly the newest copies |
+| `internal/api/backup_handlers.go` | `handleFullBackup`, `handleGeneratePassphrase`, server-side save with retention (`handleSaveFullBackup`, `saveBackupCopy`), saved-backup list/download/delete, `RunScheduledBackup` |
+| `internal/api/backup_retention_test.go` | Save keeps existing backups when the write fails; pruning keeps exactly the newest copies; same-name save refused; concurrent saves/deletes keep the index; index write failure changes nothing; scheduled backup failure audited and alerted |
 | `cmd/bekci/restore.go` | CLI `restore-full` subcommand with interactive wizard; `replaceDatabase` removes stale side files before copying |
 | `cmd/bekci/restore_test.go` | Stale WAL discarded on restore, removal failure leaves DB untouched, fresh destination |
 

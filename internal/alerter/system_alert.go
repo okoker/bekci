@@ -11,7 +11,7 @@ import (
 )
 
 // SendSystemAlert sends an alert to system alert recipients (admins and/or specific users).
-// Used for unclean restart notifications. Sends via all configured channels (email, signal, webhook).
+// Used for unclean restart and failed scheduled backup notifications. Sends via all configured channels (email, signal, webhook).
 // Does not go through the normal Dispatch flow — no cooldowns, no rules.
 func SendSystemAlert(st *store.Store, subject, message string) {
 	defer func() {

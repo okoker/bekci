@@ -196,13 +196,13 @@ SearchView and SlaView are lazy-loaded (code-split). SlaView lazy-load saves ~25
 ### Self-Health Monitoring
 - **Scheduler dead man's switch**: 4th navbar dot (green/red), popover with age + check count, red banner on all pages when stale (auto-dismisses on recovery). Audit log entries every 60s while stale.
 - **Crash detection**: `.shutdown_clean` marker file written on graceful SIGTERM, consumed on startup. Missing marker = unclean restart → 4 red audit log entries + system alert to configured recipients.
-- **System alerts**: `system_alert_admins` (bool) + `system_alert_users` (CSV user IDs). Sent directly from main.go startup (bypasses scheduler). Uses configured alert channels (email/signal/webhook).
+- **System alerts**: `system_alert_admins` (bool) + `system_alert_users` (CSV user IDs). Sent directly, bypassing the scheduler: from main.go startup (unclean restart) and from `RunScheduledBackup` (failed scheduled backup). Uses configured alert channels (email/signal/webhook).
 
 ### Automated Backups
 - Hourly goroutine checks `auto_backup_schedule` (off/weekly/10days/monthly) + `auto_backup_time` (24h format)
 - Compares last backup timestamp from index.json against schedule interval
-- Calls `buildFullBackupArchive` (unencrypted) + `autoSaveBackupCopy` (respects `backup_max_copies`)
-- Audit log entries: "Starting scheduled backup" + "Backup completed: {filename}" or "Backup failed: {error}"
+- Calls `buildFullBackupArchive` (unencrypted) + `saveBackupCopy` (respects `backup_max_copies`; shared with Save to server and the download auto-save)
+- Audit log entries: "Starting scheduled backup" + "Backup completed: {filename}" or "Backup failed: {error}". "Backup completed" is written only after the archive and `index.json` are saved; any build or save error audits a failure and sends a system alert ("Bekci scheduled backup failed")
 - Backup files stored at 0600 (owner-only permissions)
 
 ### Data Architecture (A-011)
