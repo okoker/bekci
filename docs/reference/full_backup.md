@@ -127,7 +127,7 @@ The archive path can also be provided interactively if omitted from args.
 8. Prompt destination paths (DB + config)
 9. Show summary of all changes
 10. "Proceed? (y/N)" — default NO
-11. Copy DB file → set 0600 permissions
+11. Remove the destination's old `-wal` / `-shm` / `-journal` side files (abort, leaving the DB untouched, if one cannot be removed) → copy DB file over the destination → set 0600 permissions
 12. Write config file (bundled or wizard) → set 0600 permissions
 13. Print: "Start service with: sudo systemctl start bekci"
 ```
@@ -150,6 +150,7 @@ When declining the bundled config, the wizard prompts for each field with the bu
 - Does NOT auto-start the service — user must manually run `systemctl start bekci`
 - Does NOT modify JWT secret — sessions table is restored; existing sessions from backup may remain valid
 - Default confirmation is NO — must explicitly type `y`
+- Removes the old database's leftover WAL/journal side files before copying. An unclean stop (crash, `kill -9`, OOM, power loss) leaves committed pages in `bekci.db-wal`; SQLite would replay them onto the restored file on next start, silently mixing old pages into the snapshot or corrupting it. A normal `systemctl stop` closes the database cleanly and leaves none. The existing database file is overwritten in place, so it keeps its owner.
 - Archive extraction sanitizes filenames (only base names, no path traversal)
 - Copy size limited by tar header (prevents decompression bombs)
 
@@ -178,8 +179,10 @@ sudo systemctl start bekci
 | `internal/crypto/crypto_test.go` | Encrypt/decrypt round-trip, wrong passphrase, edge cases |
 | `internal/crypto/diceware_test.go` | Word count, uniqueness, defaults |
 | `internal/store/full_backup.go` | SQLite online backup API with VACUUM INTO fallback |
-| `internal/api/backup_handlers.go` | `handleFullBackup`, `handleGeneratePassphrase` handlers |
-| `cmd/bekci/restore.go` | CLI `restore-full` subcommand with interactive wizard |
+| `internal/api/backup_handlers.go` | `handleFullBackup`, `handleGeneratePassphrase`, server-side save with retention (`handleSaveFullBackup`, `autoSaveBackupCopy`), saved-backup list/download/delete, `RunScheduledBackup` |
+| `internal/api/backup_retention_test.go` | Save keeps existing backups when the write fails; pruning keeps exactly the newest copies |
+| `cmd/bekci/restore.go` | CLI `restore-full` subcommand with interactive wizard; `replaceDatabase` removes stale side files before copying |
+| `cmd/bekci/restore_test.go` | Stale WAL discarded on restore, removal failure leaves DB untouched, fresh destination |
 
 ## Encryption Details
 

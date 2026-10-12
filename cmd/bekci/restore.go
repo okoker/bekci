@@ -160,8 +160,8 @@ func runRestoreFull() {
 	fmt.Println()
 
 	// Copy database
-	if err := copyFile(dbPath, destDBPath); err != nil {
-		fmt.Printf("Error copying database: %v\n", err)
+	if err := replaceDatabase(dbPath, destDBPath); err != nil {
+		fmt.Printf("Error restoring database: %v\n", err)
 		os.Exit(1)
 	}
 	os.Chmod(destDBPath, 0600)
@@ -310,6 +310,19 @@ func extractTarGz(data []byte, destDir string) error {
 		f.Close()
 	}
 	return nil
+}
+
+// replaceDatabase copies the restored database over dst. The old database's
+// WAL/journal side files are removed first: SQLite would otherwise replay them
+// onto the restored file on next open, mixing stale pages into the snapshot.
+// If one cannot be removed, dst is left untouched.
+func replaceDatabase(src, dst string) error {
+	for _, suffix := range []string{"-wal", "-shm", "-journal"} {
+		if err := os.Remove(dst + suffix); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	return copyFile(src, dst)
 }
 
 func copyFile(src, dst string) error {
