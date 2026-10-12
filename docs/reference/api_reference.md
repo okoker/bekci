@@ -1032,6 +1032,8 @@ Response formats are identical to their Dashboard counterparts.
 
 Sends a test email. Requires the alerter service to be configured.
 
+All SMTP email paths replace CR and LF in the subject with spaces, then apply UTF-8 MIME header encoding. Existing/restored target names remain deliverable without injecting headers or changing the body. Target-name validation and stored values are unchanged.
+
 **Request:** Optional body to override recipient:
 ```json
 { "email": "override@example.com" }

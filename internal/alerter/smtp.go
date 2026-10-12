@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log/slog"
+	"mime"
 	"net"
 	"net/smtp"
 	"strings"
@@ -96,9 +97,7 @@ func SendEmailSMTP(host, port, username, password, from string, to []string, sub
 		return fmt.Errorf("smtp DATA: %w", err)
 	}
 
-	headers := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=utf-8\r\n\r\n",
-		from, strings.Join(to, ", "), subject)
-	if _, err := w.Write([]byte(headers + htmlBody)); err != nil {
+	if _, err := w.Write([]byte(buildSMTPMessage(from, to, subject, htmlBody))); err != nil {
 		return fmt.Errorf("smtp write body: %w", err)
 	}
 	if err := w.Close(); err != nil {
@@ -108,4 +107,13 @@ func SendEmailSMTP(host, port, username, password, from string, to []string, sub
 	client.Quit()
 	slog.Debug("SMTP: email sent", "to", strings.Join(to, ", "))
 	return nil
+}
+
+func buildSMTPMessage(from string, to []string, subject, htmlBody string) string {
+	// Keep stored or caller-supplied subjects from introducing headers or a body.
+	subject = strings.NewReplacer("\r", " ", "\n", " ").Replace(subject)
+	subject = mime.QEncoding.Encode("utf-8", subject)
+	headers := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=utf-8\r\n\r\n",
+		from, strings.Join(to, ", "), subject)
+	return headers + htmlBody
 }
