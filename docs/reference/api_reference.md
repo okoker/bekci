@@ -838,7 +838,7 @@ Metrics: `days_left`, `issuer`, `subject`, `not_after`, `not_before`. Sends the 
 { "port": 161, "timeout_s": 5 }
 ```
 
-Credentials: the global `snmp_v2c_community` setting is injected into the config at run time (the scheduler re-reads SNMP settings at most every 15 minutes). A non-empty global value overrides any `community` key in the check's config; when the global value is empty, a per-check `community` key is used if present, else `"public"`. Check config is returned unmasked to every authenticated role by `GET /api/targets/{id}` and `GET /api/targets/{id}/checks`.
+Credentials: the global `snmp_v2c_community` setting is injected into the config at run time (the scheduler re-reads SNMP settings at most every 15 minutes). A non-empty global value overrides any `community` key in the check's config; when the global value is empty, a per-check `community` key is used if present, else `"public"`. Injected credentials exist only in memory for that run and are never saved to the check. The target form has no credential fields, so a check's stored config holds credentials only if an operator or admin adds them directly through the API; such values are not masked and are returned to every authenticated role by `GET /api/targets/{id}` and `GET /api/targets/{id}/checks`.
 
 Metrics: `sys_descr`, `sys_uptime_s`, `sys_contact`, `sys_name`, `cpu_avg_pct` (best-effort), `memory_total_kb` (best-effort). Status "up" if SNMP responds, "down" on timeout or auth failure.
 
