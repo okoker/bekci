@@ -83,7 +83,7 @@ func (s *Server) handleRestore(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate backup format
-	if data.Version != 1 {
+	if data.Version != 1 && data.Version != 2 {
 		writeError(w, http.StatusBadRequest, fmt.Sprintf("unsupported backup version: %d", data.Version))
 		return
 	}

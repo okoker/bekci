@@ -149,6 +149,8 @@ Admin-managed list of allowed tag values. Four groups: `project`, `location`, `c
 - For `tag`: values are uppercased + trimmed on create/rename (handler-side); deletion relies on the DDL-level FK cascade on `target_tags.tag_id` — no app-level sweep. Renames are free (no sweep) because targets reference tags by id via the join table.
 - SLA key derivation: `"sla_" + lowercase(replace(name, " ", "_"))` — e.g. "Physical Security" → `sla_physical_security`.
 
+**Config backup/restore:** exported with IDs, together with `target_tags`, since backup format version 2. Restore replaces both tables. A version 1 file has no catalog, so restoring one keeps the existing `tag_options` rows (`target_tags` are still cleared with the targets).
+
 ### api_tokens
 
 Bearer tokens used by remote machine consumers on `/api/v1/*`. Plaintext is never persisted — only the sha256 hex digest. A short, human-visible prefix (`bk_<8 hex>`) is kept so admins can identify a token in the UI after creation.

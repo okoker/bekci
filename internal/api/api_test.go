@@ -1220,6 +1220,29 @@ func TestViewerCannotListRecipients(t *testing.T) {
 	}
 }
 
+// Config restore accepts backup format versions 1 and 2 and rejects others.
+// The accepted files carry no admin, so they stop at the next check (no restore runs).
+func TestConfigRestoreFormatVersions(t *testing.T) {
+	ts, st := setupTestServer(t)
+	createUser(t, st, "restadmin", "testpassword12345", "admin")
+	client := loginAs(t, ts, "restadmin", "testpassword12345")
+
+	for _, tc := range []struct {
+		version int
+		want    string
+	}{
+		{1, "backup must contain at least one active admin user"},
+		{2, "backup must contain at least one active admin user"},
+		{3, "unsupported backup version: 3"},
+	} {
+		resp := doJSON(t, client, "POST", ts.URL+"/api/backup/restore", map[string]any{"version": tc.version, "users": []any{}})
+		body := parseJSON(t, resp)
+		if resp.StatusCode != 400 || body["error"] != tc.want {
+			t.Errorf("version %d: got %d %v, want 400 %q", tc.version, resp.StatusCode, body["error"], tc.want)
+		}
+	}
+}
+
 func putReq(t *testing.T, url string, body []byte) *http.Request {
 	t.Helper()
 	req, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(body))

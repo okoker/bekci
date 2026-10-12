@@ -6,7 +6,7 @@ Two backup types exist in Bekci:
 
 | Type | Scope | Format | Restore |
 |------|-------|--------|---------|
-| **Config Backup** | 9 config tables (users, settings, rules, targets, checks, rule_conditions, rule_states, recipients, pause_history) | JSON | Web UI upload |
+| **Config Backup** | 11 config tables (users, settings, rules, targets, checks, rule_conditions, rule_states, recipients, pause_history, tag_options, target_tags); format version 2 | JSON | Web UI upload |
 | **Full Backup** | Entire SQLite database (all tables + historical data) + config.yaml | tar.gz (optional AES-256-GCM, off by default; scheduled backups are never encrypted) | CLI only (`bekci restore-full`) |
 
 ## Full Backup

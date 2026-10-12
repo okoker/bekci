@@ -1349,7 +1349,7 @@ System-generated entries (user `system`): `webhook_dispatch`, `auto_backup`, `un
 
 ### GET /api/backup
 
-Returns a JSON file download containing all config data (users with hashed passwords, targets, checks, rules, settings, recipients). Does NOT include historical data (check_results, check_state, check_daily_rollups, audit_logs, alert_history).
+Returns a JSON file download containing all config data (users with hashed passwords, targets including notes/contacts/project/location, checks, rules, settings, recipients, pause history, the tag catalog `tag_options` and the target→tag links `target_tags`). Does NOT include historical data (check_results, check_state, check_daily_rollups, audit_logs, alert_history) or API tokens.
 
 **Response headers:**
 ```
@@ -1360,8 +1360,8 @@ Content-Disposition: attachment; filename="bekci-config-20260115-100000.json"
 **Response body:** BackupData JSON structure:
 ```json
 {
-  "version": 1,
-  "schema_version": 22,
+  "version": 2,
+  "schema_version": 27,
   "created_at": "2026-01-15T10:00:00Z",
   "app_version": "1.2.0",
   "users": [],
@@ -1372,13 +1372,17 @@ Content-Disposition: attachment; filename="bekci-config-20260115-100000.json"
   "rule_conditions": [],
   "rule_states": [],
   "recipients": [],
-  "pause_history": []
+  "pause_history": [],
+  "tag_options": [],
+  "target_tags": []
 }
 ```
 
+`version` is the backup file format: `2` since v3.4.5 (adds target notes/contacts/project/location, `tag_options`, `target_tags`); `1` files have none of them.
+
 ### POST /api/backup/restore
 
-Accepts either multipart form upload (field name: `file`) or raw JSON body. **Destructive** -- wipes all config tables and replaces with backup data. Max body: 10MB.
+Accepts either multipart form upload (field name: `file`) or raw JSON body. **Destructive** -- wipes all config tables and replaces with backup data. Max body: 10MB. A version 1 file has no tag catalog, so restoring one keeps the server's existing `tag_options`; its targets come back without notes/contacts/project/location or tags. API tokens are neither exported nor deleted.
 
 **Request (multipart):**
 ```
@@ -1389,7 +1393,7 @@ Field: file = <backup.json>
 **Request (raw JSON):** Same BackupData structure as returned by GET /api/backup.
 
 **Validation:**
-- `version` must be `1`
+- `version` must be `1` or `2`
 - `schema_version` must not exceed current server schema
 - Must contain at least one active admin user
 

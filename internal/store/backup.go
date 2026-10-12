@@ -7,6 +7,8 @@ import (
 )
 
 // BackupData is the top-level structure for a Bekci config backup.
+// Version 2 added target notes/contacts/project/location, tag_options and
+// target_tags; version 1 files have none of them.
 type BackupData struct {
 	Version        int                  `json:"version"`
 	SchemaVersion  int                  `json:"schema_version"`
@@ -21,6 +23,14 @@ type BackupData struct {
 	RuleStates     []RuleState          `json:"rule_states"`
 	Recipients     []BackupRecipient    `json:"recipients"`
 	PauseHistory   []BackupPauseHistory `json:"pause_history"`
+	TagOptions     []TagOption          `json:"tag_options"`
+	TargetTags     []BackupTargetTag    `json:"target_tags"`
+}
+
+// BackupTargetTag captures a target→tag_options mapping.
+type BackupTargetTag struct {
+	TargetID string `json:"target_id"`
+	TagID    int    `json:"tag_id"`
 }
 
 // BackupPauseHistory mirrors target_pause_history table for backup.
@@ -75,6 +85,10 @@ type BackupTarget struct {
 	Category           string     `json:"category"`
 	RuleID             *string    `json:"rule_id"`
 	PausedAt           *time.Time `json:"paused_at"`
+	Notes              *string    `json:"notes"`
+	Contacts           *string    `json:"contacts"`
+	Project            *string    `json:"project"`
+	Location           *string    `json:"location"`
 	CreatedAt          time.Time  `json:"created_at"`
 	UpdatedAt          time.Time  `json:"updated_at"`
 }
@@ -102,7 +116,7 @@ func (s *Store) ExportBackup(appVersion string) (*BackupData, error) {
 	defer tx.Rollback()
 
 	data := &BackupData{
-		Version:    1,
+		Version:    2,
 		CreatedAt:  time.Now().UTC().Format(time.RFC3339),
 		AppVersion: appVersion,
 		Settings:   make(map[string]string),
@@ -169,7 +183,7 @@ func (s *Store) ExportBackup(appVersion string) (*BackupData, error) {
 	}
 
 	// Targets
-	tRows, err := tx.Query(`SELECT id, name, host, description, enabled, preferred_check_type, operator, category, rule_id, paused_at, created_at, updated_at FROM targets ORDER BY name ASC`)
+	tRows, err := tx.Query(`SELECT id, name, host, description, enabled, preferred_check_type, operator, category, rule_id, paused_at, notes, contacts, project, location, created_at, updated_at FROM targets ORDER BY name ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("exporting targets: %w", err)
 	}
@@ -177,9 +191,9 @@ func (s *Store) ExportBackup(appVersion string) (*BackupData, error) {
 	for tRows.Next() {
 		var t BackupTarget
 		var enabled int
-		var ruleID sql.NullString
+		var ruleID, notes, contacts, project, location sql.NullString
 		var pausedAt sql.NullTime
-		if err := tRows.Scan(&t.ID, &t.Name, &t.Host, &t.Description, &enabled, &t.PreferredCheckType, &t.Operator, &t.Category, &ruleID, &pausedAt, &t.CreatedAt, &t.UpdatedAt); err != nil {
+		if err := tRows.Scan(&t.ID, &t.Name, &t.Host, &t.Description, &enabled, &t.PreferredCheckType, &t.Operator, &t.Category, &ruleID, &pausedAt, &notes, &contacts, &project, &location, &t.CreatedAt, &t.UpdatedAt); err != nil {
 			return nil, err
 		}
 		t.Enabled = enabled == 1
@@ -188,6 +202,18 @@ func (s *Store) ExportBackup(appVersion string) (*BackupData, error) {
 		}
 		if pausedAt.Valid {
 			t.PausedAt = &pausedAt.Time
+		}
+		if notes.Valid {
+			t.Notes = &notes.String
+		}
+		if contacts.Valid {
+			t.Contacts = &contacts.String
+		}
+		if project.Valid {
+			t.Project = &project.String
+		}
+		if location.Valid {
+			t.Location = &location.String
 		}
 		data.Targets = append(data.Targets, t)
 	}
@@ -286,6 +312,40 @@ func (s *Store) ExportBackup(appVersion string) (*BackupData, error) {
 		return nil, err
 	}
 
+	// Tag catalog (category/project/location/tag dropdown values)
+	toRows, err := tx.Query(`SELECT id, grp, value FROM tag_options ORDER BY id ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("exporting tag_options: %w", err)
+	}
+	defer toRows.Close()
+	for toRows.Next() {
+		var o TagOption
+		if err := toRows.Scan(&o.ID, &o.Group, &o.Value); err != nil {
+			return nil, err
+		}
+		data.TagOptions = append(data.TagOptions, o)
+	}
+	if err := toRows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Target tags
+	ttRows, err := tx.Query(`SELECT target_id, tag_id FROM target_tags ORDER BY target_id, tag_id`)
+	if err != nil {
+		return nil, fmt.Errorf("exporting target_tags: %w", err)
+	}
+	defer ttRows.Close()
+	for ttRows.Next() {
+		var tt BackupTargetTag
+		if err := ttRows.Scan(&tt.TargetID, &tt.TagID); err != nil {
+			return nil, err
+		}
+		data.TargetTags = append(data.TargetTags, tt)
+	}
+	if err := ttRows.Err(); err != nil {
+		return nil, err
+	}
+
 	// Ensure nil slices become empty arrays in JSON
 	if data.Users == nil {
 		data.Users = []BackupUser{}
@@ -311,6 +371,12 @@ func (s *Store) ExportBackup(appVersion string) (*BackupData, error) {
 	if data.PauseHistory == nil {
 		data.PauseHistory = []BackupPauseHistory{}
 	}
+	if data.TagOptions == nil {
+		data.TagOptions = []TagOption{}
+	}
+	if data.TargetTags == nil {
+		data.TargetTags = []BackupTargetTag{}
+	}
 
 	// Read-only tx — rollback is fine (deferred above handles it too)
 	tx.Rollback()
@@ -319,6 +385,7 @@ func (s *Store) ExportBackup(appVersion string) (*BackupData, error) {
 }
 
 // RestoreBackup wipes all config tables and inserts data from backup in a single transaction.
+// A version 1 backup has no tag catalog, so the destination's tag_options are kept.
 func (s *Store) RestoreBackup(data *BackupData) error {
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -337,6 +404,7 @@ func (s *Store) RestoreBackup(data *BackupData) error {
 		"alert_history",
 		"target_alert_recipients",
 		"target_pause_history",
+		"target_tags",
 		"check_results",
 		"checks",
 		"targets",
@@ -344,6 +412,9 @@ func (s *Store) RestoreBackup(data *BackupData) error {
 		"sessions",
 		"users",
 		"settings",
+	}
+	if data.Version >= 2 {
+		deleteTables = append(deleteTables, "tag_options")
 	}
 	for _, table := range deleteTables {
 		if _, err := tx.Exec(fmt.Sprintf("DELETE FROM %s", table)); err != nil {
@@ -381,6 +452,20 @@ func (s *Store) RestoreBackup(data *BackupData) error {
 		}
 	}
 
+	// Tag catalog (IDs kept: target_tags refers to them)
+	if len(data.TagOptions) > 0 {
+		stmt, err := tx.Prepare(`INSERT INTO tag_options (id, grp, value) VALUES (?, ?, ?)`)
+		if err != nil {
+			return fmt.Errorf("prepare tag_options insert: %w", err)
+		}
+		defer stmt.Close()
+		for _, o := range data.TagOptions {
+			if _, err := stmt.Exec(o.ID, o.Group, o.Value); err != nil {
+				return fmt.Errorf("inserting tag_option %s/%s: %w", o.Group, o.Value, err)
+			}
+		}
+	}
+
 	// Rules
 	if len(data.Rules) > 0 {
 		stmt, err := tx.Prepare(`INSERT INTO rules (id, name, description, operator, severity, enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
@@ -401,7 +486,7 @@ func (s *Store) RestoreBackup(data *BackupData) error {
 
 	// Targets
 	if len(data.Targets) > 0 {
-		stmt, err := tx.Prepare(`INSERT INTO targets (id, name, host, description, enabled, preferred_check_type, operator, category, rule_id, paused_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+		stmt, err := tx.Prepare(`INSERT INTO targets (id, name, host, description, enabled, preferred_check_type, operator, category, rule_id, paused_at, notes, contacts, project, location, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 		if err != nil {
 			return fmt.Errorf("prepare targets insert: %w", err)
 		}
@@ -419,7 +504,7 @@ func (s *Store) RestoreBackup(data *BackupData) error {
 			if t.PausedAt != nil {
 				pausedAt = *t.PausedAt
 			}
-			if _, err := stmt.Exec(t.ID, t.Name, t.Host, t.Description, enabled, t.PreferredCheckType, t.Operator, t.Category, ruleID, pausedAt, t.CreatedAt, t.UpdatedAt); err != nil {
+			if _, err := stmt.Exec(t.ID, t.Name, t.Host, t.Description, enabled, t.PreferredCheckType, t.Operator, t.Category, ruleID, pausedAt, t.Notes, t.Contacts, t.Project, t.Location, t.CreatedAt, t.UpdatedAt); err != nil {
 				return fmt.Errorf("inserting target %s: %w", t.Name, err)
 			}
 		}
@@ -453,6 +538,20 @@ func (s *Store) RestoreBackup(data *BackupData) error {
 		for _, rec := range data.Recipients {
 			if _, err := stmt.Exec(rec.TargetID, rec.UserID); err != nil {
 				return fmt.Errorf("inserting recipient target=%s user=%s: %w", rec.TargetID, rec.UserID, err)
+			}
+		}
+	}
+
+	// Target tags (depends on targets + tag_options)
+	if len(data.TargetTags) > 0 {
+		stmt, err := tx.Prepare(`INSERT INTO target_tags (target_id, tag_id) VALUES (?, ?)`)
+		if err != nil {
+			return fmt.Errorf("prepare target_tags insert: %w", err)
+		}
+		defer stmt.Close()
+		for _, tt := range data.TargetTags {
+			if _, err := stmt.Exec(tt.TargetID, tt.TagID); err != nil {
+				return fmt.Errorf("inserting target_tag target=%s tag=%d: %w", tt.TargetID, tt.TagID, err)
 			}
 		}
 	}

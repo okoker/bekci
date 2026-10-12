@@ -1,6 +1,7 @@
 package store
 
 import (
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
@@ -991,6 +992,139 @@ func TestBackupExportRestore(t *testing.T) {
 	}
 	if restoredTarget.Name != "bak-tgt" {
 		t.Fatalf("restored target name = %q, want bak-tgt", restoredTarget.Name)
+	}
+}
+
+// tagCatalog returns every tag_options value, keyed by group, for comparing catalogs.
+func tagCatalog(t *testing.T, s *Store) map[string][]string {
+	t.Helper()
+	cat := map[string][]string{}
+	for _, grp := range []string{"category", "project", "location", "tag"} {
+		opts, err := s.ListTagOptions(grp)
+		if err != nil {
+			t.Fatal(err)
+		}
+		cat[grp] = []string{}
+		for _, o := range opts {
+			cat[grp] = append(cat[grp], o.Value)
+		}
+	}
+	return cat
+}
+
+func TestBackupRoundTripsTargetMetadataAndTags(t *testing.T) {
+	src := newTestStore(t)
+	if err := src.CreateUser(makeUser("meta-admin", "admin")); err != nil {
+		t.Fatal(err)
+	}
+	for _, o := range [][2]string{{"category", "Datacenter"}, {"project", "Alpha"}, {"location", "Istanbul"}, {"tag", "P1"}} {
+		if _, err := src.CreateTagOption(o[0], o[1]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tgt, conds := makeTarget("meta-tgt")
+	notes, contacts, project, location := "rack 4", "noc@example.com", "Alpha", "Istanbul"
+	tgt.Notes, tgt.Contacts, tgt.Project, tgt.Location = &notes, &contacts, &project, &location
+	tgt.Category = "Datacenter"
+	tgt.Tags = []string{"P1"}
+	if err := src.CreateTargetWithConditions(tgt, conds, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	backup, err := src.ExportBackup("test")
+	if err != nil {
+		t.Fatalf("ExportBackup: %v", err)
+	}
+	if backup.Version != 2 {
+		t.Errorf("backup version = %d, want 2", backup.Version)
+	}
+	wantCatalog := tagCatalog(t, src)
+
+	// An existing install whose catalog has an entry the snapshot lacks.
+	existing := newTestStore(t)
+	if _, err := existing.CreateTagOption("project", "StaleProject"); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, dst := range []struct {
+		name string
+		s    *Store
+	}{{"fresh", newTestStore(t)}, {"existing", existing}} {
+		if err := dst.s.RestoreBackup(backup); err != nil {
+			t.Fatalf("%s: RestoreBackup: %v", dst.name, err)
+		}
+		got, err := dst.s.GetTarget(tgt.ID)
+		if err != nil || got == nil {
+			t.Fatalf("%s: GetTarget: %v", dst.name, err)
+		}
+		gotMeta := fmt.Sprint(got.Notes != nil && *got.Notes == notes, got.Contacts != nil && *got.Contacts == contacts,
+			got.Project != nil && *got.Project == project, got.Location != nil && *got.Location == location)
+		if gotMeta != "true true true true" || got.Category != "Datacenter" {
+			t.Errorf("%s: notes/contacts/project/location restored = %s, category = %q", dst.name, gotMeta, got.Category)
+		}
+		tags, err := dst.s.ListTagsByTarget(tgt.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if fmt.Sprint(tags) != "[P1]" {
+			t.Errorf("%s: tags = %v, want [P1]", dst.name, tags)
+		}
+		if gotCatalog := tagCatalog(t, dst.s); fmt.Sprint(gotCatalog) != fmt.Sprint(wantCatalog) {
+			t.Errorf("%s: catalog = %v, want %v", dst.name, gotCatalog, wantCatalog)
+		}
+	}
+}
+
+// A version 1 file has no tag catalog, so restoring it must leave the
+// destination's catalog alone (wiping it would also drop the "Other" category).
+func TestRestoreV1BackupKeepsTagCatalog(t *testing.T) {
+	src := newTestStore(t)
+	if err := src.CreateUser(makeUser("v1-admin", "admin")); err != nil {
+		t.Fatal(err)
+	}
+	tgt, conds := makeTarget("v1-tgt")
+	if err := src.CreateTargetWithConditions(tgt, conds, ""); err != nil {
+		t.Fatal(err)
+	}
+	backup, err := src.ExportBackup("test")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Rewrite it as a version 1 file: no tag_options or target_tags keys.
+	raw, err := json.Marshal(backup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatal(err)
+	}
+	m["version"] = 1
+	delete(m, "tag_options")
+	delete(m, "target_tags")
+	raw, _ = json.Marshal(m)
+	var v1 BackupData
+	if err := json.Unmarshal(raw, &v1); err != nil {
+		t.Fatal(err)
+	}
+
+	dst := newTestStore(t)
+	for _, o := range [][2]string{{"category", "Datacenter"}, {"project", "Alpha"}, {"tag", "P1"}} {
+		if _, err := dst.CreateTagOption(o[0], o[1]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before := tagCatalog(t, dst)
+
+	if err := dst.RestoreBackup(&v1); err != nil {
+		t.Fatalf("RestoreBackup v1: %v", err)
+	}
+	if after := tagCatalog(t, dst); fmt.Sprint(after) != fmt.Sprint(before) {
+		t.Fatalf("catalog changed by v1 restore: got %v, want %v", after, before)
+	}
+	if got, err := dst.GetTarget(tgt.ID); err != nil || got == nil {
+		t.Fatalf("target not restored from v1 backup: %v", err)
 	}
 }
 
