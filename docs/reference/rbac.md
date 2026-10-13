@@ -58,7 +58,7 @@ Valid roles enforced at user creation and update: `admin`, `operator`, `viewer`.
 
 ```
 Request
-  -> gzipMiddleware (compress response if Accept-Encoding: gzip)
+  -> gzipMiddleware (gzip compressible Content-Types if Accept-Encoding: gzip)
     -> recoveryMiddleware (panic recovery, returns 500)
       -> loggingMiddleware (DEBUG: all requests; WARN: 5xx with IP + user_id)
         -> corsMiddleware (CORS headers if origin configured)

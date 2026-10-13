@@ -209,28 +209,86 @@ func (w *statusWriter) WriteHeader(status int) {
 	w.ResponseWriter.WriteHeader(status)
 }
 
-// gzipMiddleware compresses responses for clients that accept gzip.
+// gzipMiddleware compresses responses for clients that accept gzip. It decides
+// at the handler's first write, once the response headers are known, and only
+// compresses gzipTypes: an archive download (application/octet-stream) passes
+// through untouched with its own Content-Length.
 func gzipMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
 			next.ServeHTTP(w, r)
 			return
 		}
-		gz := gzip.NewWriter(w)
-		defer gz.Close()
-		w.Header().Set("Content-Encoding", "gzip")
-		w.Header().Del("Content-Length")
-		next.ServeHTTP(&gzipResponseWriter{ResponseWriter: w, Writer: gz}, r)
+		gw := &gzipResponseWriter{ResponseWriter: w}
+		defer gw.close()
+		next.ServeHTTP(gw, r)
 	})
 }
 
+// gzipTypes are the compressible Content-Type prefixes (as nginx gzip_types).
+var gzipTypes = []string{"text/", "application/json", "application/javascript", "application/xml", "image/svg+xml"}
+
 type gzipResponseWriter struct {
 	http.ResponseWriter
-	Writer *gzip.Writer
+	status  int
+	decided bool
+	gz      *gzip.Writer
+}
+
+func (g *gzipResponseWriter) WriteHeader(status int) {
+	if g.status == 0 {
+		g.status = status
+	}
 }
 
 func (g *gzipResponseWriter) Write(b []byte) (int, error) {
-	return g.Writer.Write(b)
+	if !g.decided {
+		if len(b) == 0 {
+			return 0, nil
+		}
+		g.decide(b)
+	}
+	if g.gz != nil {
+		return g.gz.Write(b)
+	}
+	return g.ResponseWriter.Write(b)
+}
+
+// decide sends the headers, compressed or not, before the first body bytes.
+func (g *gzipResponseWriter) decide(first []byte) {
+	g.decided = true
+	h := g.Header()
+	if h.Get("Content-Type") == "" {
+		h.Set("Content-Type", http.DetectContentType(first))
+	}
+	if g.status == 0 {
+		g.status = http.StatusOK
+	}
+	if h.Get("Content-Encoding") == "" && h.Get("Content-Range") == "" && compressible(h.Get("Content-Type")) {
+		h.Set("Content-Encoding", "gzip")
+		h.Del("Content-Length") // the declared length is of the uncompressed body
+		h.Del("Accept-Ranges")  // byte ranges would refer to the uncompressed body
+		g.gz = gzip.NewWriter(g.ResponseWriter)
+	}
+	g.ResponseWriter.WriteHeader(g.status)
+}
+
+// close finishes the gzip stream, or sends the status of a body-less response.
+func (g *gzipResponseWriter) close() {
+	if g.gz != nil {
+		g.gz.Close()
+	} else if !g.decided && g.status != 0 {
+		g.ResponseWriter.WriteHeader(g.status)
+	}
+}
+
+func compressible(contentType string) bool {
+	for _, prefix := range gzipTypes {
+		if strings.HasPrefix(contentType, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // corsMiddleware adds CORS headers only when a specific origin is configured.

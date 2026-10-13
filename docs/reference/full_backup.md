@@ -80,11 +80,11 @@ Env override: `BEKCI_BACKUP_DIR`.
 
 Directory auto-created on first save. Metadata tracked in `{backup_dir}/index.json` — SHA256 hash computed at save time to avoid re-hashing large files on list.
 
-Auto-save on download + auto-prune oldest when `backup_max_copies` exceeded (default 5). The new archive is written first and the oldest copies are pruned only after that write succeeds, so a failed save never removes an existing backup (a partial file from the failed write is deleted). This needs room for one extra archive while saving. Manual delete also available via the web UI.
+Auto-save on download + auto-prune oldest when `backup_max_copies` exceeded (default 5). The download copy is saved before the archive is sent, so it is already listed when the download arrives and is kept even if the download fails. The new archive is written first and the oldest copies are pruned only after that write succeeds, so a failed save never removes an existing backup (a partial file from the failed write is deleted). This needs room for one extra archive while saving. Manual delete also available via the web UI.
 
 All three save paths (Save to server, the download auto-save, scheduled backups) go through one routine, `saveBackupCopy`. Saves and deletes are serialized by a single in-process lock, so concurrent operations never lose index entries. A save never overwrites an existing file: filenames have one-second resolution, so a second save within the same second fails ("backup failed", HTTP 500) instead of replacing the first. `index.json` is written to `index.json.tmp` and renamed into place, so a crash or a concurrent reader never sees a partial index. Pruned files are deleted only after the new index is saved; if the index write fails, the new archive is removed and the save reports failure, leaving the previous backups and index unchanged.
 
-Failures are reported, never logged as success: Save to server returns 500 and audits `save_full_backup` with status `failure`; a scheduled backup audits `auto_backup` `failure` and sends a system alert ("Bekci scheduled backup failed") to the configured system alert recipients and, if enabled, the webhook (even when no recipients resolve); a download auto-save failure is logged only (the download itself has already succeeded).
+Failures are reported, never logged as success: Save to server returns 500 and audits `save_full_backup` with status `failure`; a scheduled backup audits `auto_backup` `failure` and sends a system alert ("Bekci scheduled backup failed") to the configured system alert recipients and, if enabled, the webhook (even when no recipients resolve); a download auto-save failure is logged only and the download still goes ahead.
 
 ### Frontend UI
 
@@ -95,15 +95,15 @@ Located in Settings > Backup & Restore tab (admin only). The "Full Database Back
 - **Warning banner** — "Save this passphrase — it cannot be recovered"
 - **Destination dropdown** — "Download" (streams to browser) or "Save to server" (saves to backup_dir)
 - **Action button** — label changes based on destination selection
-- **Saved Backups table** — lists server-side backups with filename, date, size, truncated SHA256 (click to copy), Download and Delete buttons. Max 5-6 rows visible, scrollable overflow. Delete requires confirmation popup.
+- **Saved Backups table** — lists server-side backups with filename, date, size, truncated SHA256 (click to copy), Download and Delete buttons. Max 5-6 rows visible, scrollable overflow. Delete requires confirmation popup. Reloaded after every download attempt, so the server copy of a download appears even when the download itself failed.
 
 ### Audit Trail
 
 | Action | Description |
 |--------|-------------|
-| `export_full_backup` | Direct download to browser |
+| `export_full_backup` | Direct download to browser. Written after the send; `failure` if the archive could not be written to the connection |
 | `save_full_backup` | Saved to server-side backup directory |
-| `download_saved_backup` | Downloaded a previously saved backup |
+| `download_saved_backup` | Downloaded a previously saved backup. Written after the send; `failure` if the stream broke |
 | `delete_saved_backup` | Deleted a saved backup from server |
 
 ---

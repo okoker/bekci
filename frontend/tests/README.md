@@ -15,3 +15,6 @@ responses; no backend service or credentials are needed and no live data changes
 the submission guard, corrections, existing invalid edits/clones and single-failure
 checks. Save stays clickable for invalid thresholds. Set `SR13_SCREENSHOT_PATH`
 to an absolute PNG path to capture the validation popup for visual review.
+
+`full-backup-download.test.mjs` covers the Full Database Backup card: after a failed or
+completed download, the Saved Backups list is reloaded so the server's copy appears.

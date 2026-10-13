@@ -6,7 +6,7 @@ All request/response bodies are JSON (`Content-Type: application/json`) unless n
 
 **Network access:** The cookie-authenticated `/api/*` endpoints are designed for the embedded Vue frontend — not for external consumption. Remote machine consumers use the bearer-token `/api/v1/*` endpoints ([Machine API (v1)](#machine-api-v1)). The server binds to `127.0.0.1` (localhost) by default, rejecting non-local connections. To allow remote access (e.g., inside a Docker container), set `BEKCI_HOST=0.0.0.0` or `server.host: "0.0.0.0"` in `config.yaml`.
 
-**Compression:** All API responses are gzip-compressed when the client sends `Accept-Encoding: gzip`. Handled by `gzipMiddleware` (stdlib `compress/gzip`), wrapping the outermost layer of the router chain.
+**Compression:** `gzipMiddleware` (stdlib `compress/gzip`, the outermost layer of the router chain) gzips a response when the client sends `Accept-Encoding: gzip` and the response's `Content-Type` is compressible: `text/*`, `application/json`, `application/javascript`, `application/xml` or `image/svg+xml` (the types prod's nginx compresses). It decides at the handler's first write, sniffing a missing `Content-Type` from the first bytes, and a compressed response drops `Content-Length` and `Accept-Ranges`. Everything else is sent unchanged with its own `Content-Length`: backup archives (`application/octet-stream`), images, and responses that already carry `Content-Encoding` or `Content-Range`.
 
 ## Authentication
 
@@ -1421,7 +1421,7 @@ Field: file = <backup.json>
 
 Downloads a complete database backup as a tar.gz archive containing the SQLite database file and config.yaml. Optionally encrypts the archive with AES-256-GCM (Argon2id KDF).
 
-> **Note:** Downloads also trigger an automatic server-side backup save (subject to `backup_max_copies` limit).
+> **Note:** Each download first saves a copy server-side (subject to `backup_max_copies`), then sends the archive, so the copy is already listed when the download arrives and is kept even if the download fails. If saving the copy fails, it is logged and the download still goes ahead.
 
 **Request:**
 ```json
@@ -1440,7 +1440,9 @@ Content-Disposition: attachment; filename="bekci-full-20260115-100000.tar.gz"
 Content-Length: <size>
 ```
 
-File extension: `.tar.gz` (plain) or `.tar.gz.enc` (encrypted).
+Never gzip-encoded, even when the client sends `Accept-Encoding: gzip`. File extension: `.tar.gz` (plain) or `.tar.gz.enc` (encrypted).
+
+**Audit:** `export_full_backup` is written after the send: `success` with `encrypted=… size=…`, or `failure` with the write error appended when the server cannot write the whole archive to the connection (with nginx in front, that is the hop to nginx). A build failure is audited as `failure` with the error.
 
 **Archive contents (tar.gz):**
 - `bekci.db` — full SQLite database snapshot (via online backup API)
@@ -1484,7 +1486,7 @@ Lists saved backups on the server with metadata (SHA256 hash, size, date, encryp
 
 Download a previously saved backup file. Filename must match `^bekci-full-\d{8}-\d{6}\.tar\.gz(\.enc)?$`.
 
-**Response:** Binary stream with `Content-Disposition: attachment`.
+**Response:** Binary stream (`application/octet-stream`, `Content-Length`, `Content-Disposition: attachment`), never gzip-encoded. Audited as `download_saved_backup` after the file is sent: `success`, or `failure` with the error when the stream breaks.
 
 | Error | Code |
 |-------|------|

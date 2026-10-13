@@ -214,19 +214,22 @@ func (s *Server) handleFullBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.audit(r, "export_full_backup", "backup", "", fmt.Sprintf("encrypted=%v size=%d", encrypt, len(archiveData)), "success")
+	// Keep a server copy before sending, so it is already listed when the download
+	// arrives and is kept even if the download does not get through
+	if _, err := s.saveBackupCopy(archiveData, filename, encrypt); err != nil {
+		slog.Warn("Auto-save backup copy failed", "filename", filename, "error", err)
+	}
 
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(archiveData)))
-	w.Write(archiveData)
-
-	// Auto-save a local copy (non-blocking); the download itself already succeeded
-	go func() {
-		if _, err := s.saveBackupCopy(archiveData, filename, encrypt); err != nil {
-			slog.Warn("Auto-save backup copy failed", "filename", filename, "error", err)
-		}
-	}()
+	detail := fmt.Sprintf("encrypted=%v size=%d", encrypt, len(archiveData))
+	if _, err := w.Write(archiveData); err != nil {
+		slog.Error("Failed to send full backup", "filename", filename, "error", err)
+		s.audit(r, "export_full_backup", "backup", "", detail+" error="+err.Error(), "failure")
+	} else {
+		s.audit(r, "export_full_backup", "backup", "", detail, "success")
+	}
 }
 
 // saveBackupCopy stores a backup archive in s.backupDir and prunes the oldest
@@ -463,14 +466,15 @@ func (s *Server) handleDownloadSavedBackup(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	s.audit(r, "download_saved_backup", "backup", "", filename, "success")
-
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", info.Size()))
 	if _, err := io.Copy(w, f); err != nil {
 		slog.Error("Failed to stream backup file", "filename", filename, "error", err)
+		s.audit(r, "download_saved_backup", "backup", "", filename+" error="+err.Error(), "failure")
+		return
 	}
+	s.audit(r, "download_saved_backup", "backup", "", filename, "success")
 }
 
 func (s *Server) handleDeleteSavedBackup(w http.ResponseWriter, r *http.Request) {

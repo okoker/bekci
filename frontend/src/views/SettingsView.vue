@@ -169,6 +169,8 @@ async function downloadFullBackup() {
     fullBackupError.value = e.response?.data?.error || 'Full backup failed'
   } finally {
     fullBackupLoading.value = false
+    // The server keeps a copy of each download, even one that failed to arrive
+    fetchSavedBackups()
   }
 }
 

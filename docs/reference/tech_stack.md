@@ -126,7 +126,7 @@ The public landing page (the "Sentinel" design) lives in `_website/` (`index.htm
 | WriteTimeout | 30s |
 | IdleTimeout | 60s |
 | Default port | 65000 |
-| Gzip | stdlib `compress/gzip` middleware, wraps outermost in router chain. Compressed when client sends Accept-Encoding: gzip. |
+| Gzip | stdlib `compress/gzip` middleware, wraps outermost in router chain. Decides at the handler's first write: compresses `text/*`, JSON, JavaScript, XML and SVG when the client sends Accept-Encoding: gzip; archives (`application/octet-stream`), images and already-encoded responses pass through with their own Content-Length. |
 | Health cache | `/api/system/health` — net/disk/cpu cached 120s TTL (`sync.Mutex`), scheduler status always fresh (atomic read). |
 
 ---
@@ -168,7 +168,7 @@ Measured from the build in `cmd/bekci/frontend_dist/assets/` at v3.4.5 on 13/10/
 
 | Asset | Size (raw) | Size (gzipped) |
 |-------|-----------|----------------|
-| index-*.js | 313.74 kB | 100.23 kB |
+| index-*.js | 313.75 kB | 100.24 kB |
 | index-*.css | 49.71 kB | 9.06 kB |
 | SearchView-*.js | 15.16 kB | 5.21 kB |
 | SearchView-*.css | 5.43 kB | 1.53 kB |
