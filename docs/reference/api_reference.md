@@ -750,6 +750,8 @@ The `config` field in target conditions is a JSON string with check-type-specifi
 
 The JSON string `"null"` uses the same defaults as `"{}"`. The scheduler initializes an empty config map before injecting SNMP credentials or saving a page-hash baseline.
 
+`timeout_s` below 1 (0, negative, or a fraction such as 0.5) or above 9223372036 (the largest whole-second duration Go can hold) is ignored when the check runs, and the check type's default timeout applies. Any value from 1 to 9223372036 is used as configured (a fraction is cut to whole seconds). The API does not reject these values and the stored config is not changed. The target editor limits the HTTP and TCP timeouts to 1–60 seconds and the ping timeout to 1–30; its SNMP timeout field has no limits, and DNS, page-hash and TLS checks have no timeout field.
+
 ### http
 
 | Field | Type | Default | Description |

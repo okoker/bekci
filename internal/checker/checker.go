@@ -2,8 +2,12 @@ package checker
 
 import (
 	"encoding/json"
+	"math"
 	"time"
 )
+
+// maxTimeoutS is the largest whole-second timeout time.Duration can hold.
+const maxTimeoutS = float64(math.MaxInt64 / int64(time.Second))
 
 // Result returned by every check type.
 type Result struct {
@@ -19,6 +23,7 @@ func Run(checkType, host string, configJSON string) *Result {
 	if configJSON != "" && configJSON != "{}" {
 		_ = json.Unmarshal([]byte(configJSON), &config)
 	}
+	dropInvalidTimeout(config)
 
 	start := time.Now()
 	var r *Result
@@ -55,6 +60,15 @@ func Run(checkType, host string, configJSON string) *Result {
 		r.Metrics = map[string]any{}
 	}
 	return r
+}
+
+// dropInvalidTimeout removes a timeout_s below 1 (0 means "no deadline" to
+// net/http and panics pro-bing) or too large for time.Duration, so the check
+// uses its default. Valid values are left exactly as configured.
+func dropInvalidTimeout(config map[string]any) {
+	if t, ok := config["timeout_s"].(float64); ok && (t < 1 || t > maxTimeoutS) {
+		delete(config, "timeout_s")
+	}
 }
 
 // helper to get a string config value with a default.

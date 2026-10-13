@@ -400,6 +400,82 @@ func TestSNMPDispatcherRouting(t *testing.T) {
 	}
 }
 
+// SR-21: a timeout_s below 1 or too large for time.Duration falls back to the
+// check's default. DNS shows it without hanging: a zero or overflowed
+// (negative) deadline fails the lookup at once.
+func TestRunTimeoutOutOfRangeUsesDefault(t *testing.T) {
+	ns := startDNSServer(t, func(q dnsmessage.Question) ([]dnsmessage.Resource, dnsmessage.RCode) {
+		if q.Type != dnsmessage.TypeA {
+			return nil, dnsmessage.RCodeSuccess
+		}
+		return []dnsmessage.Resource{
+			{
+				Header: dnsmessage.ResourceHeader{
+					Name:  q.Name,
+					Type:  dnsmessage.TypeA,
+					Class: dnsmessage.ClassINET,
+					TTL:   60,
+				},
+				Body: &dnsmessage.AResource{A: [4]byte{127, 0, 0, 9}},
+			},
+		}, dnsmessage.RCodeSuccess
+	})
+
+	for _, timeout := range []float64{0, -5, 0.5, 9223372037, 1e10} {
+		cfg, _ := json.Marshal(map[string]any{
+			"query":       "example.test",
+			"record_type": "A",
+			"nameserver":  ns,
+			"timeout_s":   timeout,
+		})
+		r := Run("dns", "ignored", string(cfg))
+		if r.Status != "up" {
+			t.Errorf("timeout_s=%v: expected status up, got %s (message: %s)", timeout, r.Status, r.Message)
+		}
+	}
+}
+
+// SR-21: pro-bing panics in time.NewTicker on a Timeout that is not positive,
+// on a goroutine of its own, which took the whole process down. 9223372036 is
+// the largest whole-second value time.Duration holds and is kept as is.
+func TestPingTimeoutOutOfRangeDoesNotPanic(t *testing.T) {
+	if r := Run("ping", "127.0.0.1", `{"count":1,"timeout_s":1}`); r.Status != "up" {
+		t.Skipf("loopback ping not available in this environment: %s", r.Message)
+	}
+
+	for _, timeout := range []float64{0, -1, 0.5, 9223372036, 9223372037} {
+		cfg, _ := json.Marshal(map[string]any{"count": 1, "timeout_s": timeout})
+		r := Run("ping", "127.0.0.1", string(cfg))
+		if r.Status != "up" {
+			t.Errorf("timeout_s=%v: expected status up, got %s (message: %s)", timeout, r.Status, r.Message)
+		}
+	}
+}
+
+// SR-21: only invalid timeouts are dropped; every value a check can really use
+// stays exactly as configured, so no working check changes behaviour.
+func TestDropInvalidTimeoutKeepsValidValues(t *testing.T) {
+	for _, v := range []any{1.0, 1.5, 30.0, 61.0, 3600.0, 9223372036.0, "5", ""} {
+		config := map[string]any{"timeout_s": v}
+		dropInvalidTimeout(config)
+		if got, ok := config["timeout_s"]; !ok || got != v {
+			t.Errorf("timeout_s=%#v: expected it kept, got %#v (present=%v)", v, got, ok)
+		}
+	}
+	for _, v := range []float64{0, -1, 0.999, 9223372036.5, 9223372037, 1e30} {
+		config := map[string]any{"timeout_s": v, "port": 0.0}
+		dropInvalidTimeout(config)
+		if _, ok := config["timeout_s"]; ok {
+			t.Errorf("timeout_s=%v: expected it removed", v)
+		}
+		if config["port"] != 0.0 {
+			t.Errorf("timeout_s=%v: other keys must be untouched, port became %#v", v, config["port"])
+		}
+	}
+	dropInvalidTimeout(map[string]any{})
+	dropInvalidTimeout(nil) // a "null" config decodes to a nil map
+}
+
 func jsonPort(s string) int {
 	var p int
 	fmt.Sscanf(s, "%d", &p)
