@@ -104,7 +104,7 @@ Located in Settings > Backup & Restore tab (admin only). The "Full Database Back
 | `export_full_backup` | Direct download to browser. Written after the send; `failure` if the archive could not be written to the connection |
 | `save_full_backup` | Saved to server-side backup directory |
 | `download_saved_backup` | Downloaded a previously saved backup. Written after the send; `failure` if the stream broke |
-| `delete_saved_backup` | Deleted a saved backup from server |
+| `delete_saved_backup` | Deleted a saved backup from server; `failure` if the file does not exist or cannot be removed |
 
 ---
 

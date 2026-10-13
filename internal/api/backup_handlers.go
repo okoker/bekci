@@ -509,10 +509,12 @@ func (s *Server) handleDeleteSavedBackup(w http.ResponseWriter, r *http.Request)
 
 	if err := os.Remove(fullPath); err != nil {
 		if os.IsNotExist(err) {
+			s.audit(r, "delete_saved_backup", "backup", "", filename+" not found", "failure")
 			writeError(w, http.StatusNotFound, "backup not found")
 			return
 		}
 		slog.Error("Failed to delete backup", "error", err)
+		s.audit(r, "delete_saved_backup", "backup", "", filename+" error="+err.Error(), "failure")
 		writeError(w, http.StatusInternalServerError, "delete failed")
 		return
 	}

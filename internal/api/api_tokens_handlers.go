@@ -43,9 +43,11 @@ func (s *Server) handleCreateAPIToken(w http.ResponseWriter, r *http.Request) {
 	tok, plaintext, err := s.store.CreateAPIToken(req.Name, creator)
 	if err != nil {
 		if strings.Contains(err.Error(), "already exists") {
+			s.audit(r, "api_token_create", "api_token", "", "name="+req.Name+" duplicate", "failure")
 			writeError(w, http.StatusConflict, err.Error())
 			return
 		}
+		s.audit(r, "api_token_create", "api_token", "", "name="+req.Name+" failed", "failure")
 		writeError(w, http.StatusInternalServerError, "failed to create api token")
 		return
 	}
@@ -67,9 +69,11 @@ func (s *Server) handleRevokeAPIToken(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := s.store.RevokeAPIToken(id); err != nil {
 		if strings.Contains(err.Error(), "not found") {
+			s.audit(r, "api_token_revoke", "api_token", id, "not found", "failure")
 			writeError(w, http.StatusNotFound, "token not found")
 			return
 		}
+		s.audit(r, "api_token_revoke", "api_token", id, "failed", "failure")
 		writeError(w, http.StatusInternalServerError, "failed to revoke api token")
 		return
 	}

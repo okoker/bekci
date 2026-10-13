@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -43,9 +44,11 @@ func (s *Server) handleCreateTag(w http.ResponseWriter, r *http.Request) {
 	tag, err := s.store.CreateTagOption(req.Group, req.Value)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
+			s.audit(r, "create_tag", "tag", "", "group="+req.Group+" value="+req.Value+" duplicate", "failure")
 			writeError(w, http.StatusConflict, "tag value already exists")
 			return
 		}
+		s.audit(r, "create_tag", "tag", "", "group="+req.Group+" value="+req.Value+" failed", "failure")
 		writeError(w, http.StatusInternalServerError, "failed to create tag")
 		return
 	}
@@ -62,6 +65,7 @@ func (s *Server) handleDeleteTag(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := s.store.DeleteTagOption(id); err != nil {
 		if catErr, ok := err.(*store.CategoryInUseError); ok {
+			s.audit(r, "delete_tag", "tag", idStr, fmt.Sprintf("category in use by %d targets", len(catErr.Targets)), "failure")
 			writeJSON(w, http.StatusConflict, map[string]any{
 				"error":   catErr.Error(),
 				"targets": catErr.Targets,
@@ -69,13 +73,16 @@ func (s *Server) handleDeleteTag(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if strings.Contains(err.Error(), "not found") {
+			s.audit(r, "delete_tag", "tag", idStr, "not found", "failure")
 			writeError(w, http.StatusNotFound, "tag not found")
 			return
 		}
 		if strings.Contains(err.Error(), "cannot delete") {
+			s.audit(r, "delete_tag", "tag", idStr, err.Error(), "failure")
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
+		s.audit(r, "delete_tag", "tag", idStr, "failed", "failure")
 		writeError(w, http.StatusInternalServerError, "failed to delete tag")
 		return
 	}
@@ -104,17 +111,21 @@ func (s *Server) handleRenameTag(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := s.store.RenameTagOption(id, req.Value); err != nil {
 		if strings.Contains(err.Error(), "not found") {
+			s.audit(r, "rename_tag", "tag", idStr, "not found", "failure")
 			writeError(w, http.StatusNotFound, "tag not found")
 			return
 		}
 		if strings.Contains(err.Error(), "already exists") {
+			s.audit(r, "rename_tag", "tag", idStr, "new_value="+req.Value+" duplicate", "failure")
 			writeError(w, http.StatusConflict, err.Error())
 			return
 		}
 		if strings.Contains(err.Error(), "cannot rename") {
+			s.audit(r, "rename_tag", "tag", idStr, err.Error(), "failure")
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
+		s.audit(r, "rename_tag", "tag", idStr, "new_value="+req.Value+" failed", "failure")
 		writeError(w, http.StatusInternalServerError, "failed to rename tag")
 		return
 	}
