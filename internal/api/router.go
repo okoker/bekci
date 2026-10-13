@@ -3,6 +3,7 @@ package api
 import (
 	"io/fs"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -219,6 +220,13 @@ func (s *Server) spaHandler() http.Handler {
 	fileServer := http.FileServer(http.FS(s.spa))
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// An /api path that reached here matched no route (unknown path or wrong
+		// method). API clients get a JSON 404, never index.html with 200.
+		if r.URL.Path == "/api" || strings.HasPrefix(r.URL.Path, "/api/") {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
+
 		// Try to serve static file
 		path := r.URL.Path
 		if path == "/" {

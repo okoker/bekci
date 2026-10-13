@@ -25,6 +25,8 @@ Two authentication modes co-exist:
 { "error": "error message" }
 ```
 
+**Unmatched API paths**: a request under `/api` that matches no route (unknown path, or a method the path does not support) returns `404` with `{ "error": "not found" }`, before any authentication. There is no 405. Paths outside `/api` serve the frontend: static files, else `index.html` for client-side routes.
+
 **Rate limiting**: Login endpoint is rate-limited per IP **and** per username (two independent limiters) -- 5 attempts per 5-minute window, 15-minute lockout after threshold. Blocked if either limiter triggers.
 
 ---
