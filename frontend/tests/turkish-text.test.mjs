@@ -76,3 +76,18 @@ test('the tag input finds Turkish and English tags typed in lowercase', async t 
   assert.deepEqual(await modal.locator('.chip-label').allTextContents(), ['ŞİŞLİ', 'IT'])
   assert.equal(await modal.locator('.chip-hint').count(), 0)
 })
+
+// The Settings save sends every category's SLA key. The key comes from the
+// server (sla_key): the browser lowercases "İ" to "i" + U+0307, so deriving it
+// here produced "sla_i̇sg", which the server rejected as an unknown setting.
+test('Settings save uses the server SLA key for a category with İ', async t => {
+  const { page } = await newPage(t, {
+    tags: { category: [{ id: 1, value: 'Other', sla_key: 'sla_other' }, { id: 2, value: 'İSG', sla_key: 'sla_isg' }] },
+    '/api/settings': { session_timeout_hours: '24' },
+  })
+  await page.goto(`${baseURL}settings`)
+  const put = page.waitForRequest(r => r.method() === 'PUT' && new URL(r.url()).pathname === '/api/settings')
+  await page.getByRole('button', { name: 'Save', exact: true }).first().click()
+  const slaKeys = Object.keys((await put).postDataJSON()).filter(k => k.startsWith('sla_')).sort()
+  assert.deepEqual(slaKeys, ['sla_isg', 'sla_other'])
+})

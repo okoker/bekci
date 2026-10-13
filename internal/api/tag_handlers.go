@@ -20,6 +20,20 @@ func (s *Server) handleListTags(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to list tags")
 		return
 	}
+	if group == "category" {
+		// Clients use the server's key instead of deriving it: lowercasing
+		// "İ" differs between Go and JavaScript.
+		type categoryOption struct {
+			store.TagOption
+			SLAKey string `json:"sla_key"`
+		}
+		cats := make([]categoryOption, len(tags))
+		for i, t := range tags {
+			cats[i] = categoryOption{t, store.CategoryToSLAKey(t.Value)}
+		}
+		writeJSON(w, http.StatusOK, cats)
+		return
+	}
 	writeJSON(w, http.StatusOK, tags)
 }
 

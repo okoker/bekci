@@ -89,3 +89,44 @@ func TestFreeTagsTurkishCasingAndMatching(t *testing.T) {
 		t.Errorf("tag catalog after renames = %s, want %s", got, want)
 	}
 }
+
+// The category list carries each category's SLA settings key, so the browser
+// does not derive it: JavaScript lowercases "İ" to "i" + U+0307 where Go gives
+// "i", and the Settings save was rejected as an unknown key once a category
+// name contained İ.
+func TestCategoryListCarriesSLAKey(t *testing.T) {
+	ts, st := setupTestServer(t)
+	createUser(t, st, "admin", "adminpass1234", "admin")
+	client := loginAs(t, ts, "admin", "adminpass1234")
+
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/tags", map[string]string{"group": "category", "value": "İSG"})
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create category: status %d", resp.StatusCode)
+	}
+
+	keys := map[string]any{}
+	resp = doJSON(t, client, http.MethodGet, ts.URL+"/api/tags?group=category", nil)
+	for _, c := range parseJSONArray(t, resp) {
+		keys[c["value"].(string)] = c["sla_key"]
+	}
+	if keys["İSG"] != "sla_isg" || keys["Other"] != "sla_other" {
+		t.Fatalf("sla_key for İSG = %v, Other = %v; want sla_isg, sla_other", keys["İSG"], keys["Other"])
+	}
+
+	resp = doJSON(t, client, http.MethodPut, ts.URL+"/api/settings", map[string]string{"sla_isg": "99.5"})
+	body := parseJSON(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("save sla_isg: status %d (%v), want 200", resp.StatusCode, body["error"])
+	}
+
+	// Other groups are unchanged: no sla_key.
+	createdTag := doJSON(t, client, http.MethodPost, ts.URL+"/api/tags", map[string]string{"group": "location", "value": "DC-1"})
+	createdTag.Body.Close()
+	resp = doJSON(t, client, http.MethodGet, ts.URL+"/api/tags?group=location", nil)
+	for _, l := range parseJSONArray(t, resp) {
+		if _, ok := l["sla_key"]; ok {
+			t.Errorf("location %v has an sla_key", l["value"])
+		}
+	}
+}

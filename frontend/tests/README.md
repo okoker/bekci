@@ -17,7 +17,8 @@ checks. Save stays clickable for invalid thresholds. Set `SR13_SCREENSHOT_PATH`
 to an absolute PNG path to capture the validation popup for visual review.
 
 `turkish-text.test.mjs` covers the tag input matching free tags whichever of i/ı/İ/I is
-typed (`şişli` finds `ŞİŞLİ`, `it` finds `IT`).
+typed (`şişli` finds `ŞİŞLİ`, `it` finds `IT`), and the Settings save using the server's SLA key
+for a category named with `İ`.
 
 `full-backup-download.test.mjs` covers the Full Database Backup card: after a failed or
 completed download, the Saved Backups list is reloaded so the server's copy appears.

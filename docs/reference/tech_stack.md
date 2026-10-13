@@ -164,11 +164,11 @@ The public landing page (the "Sentinel" design) lives in `_website/` (`index.htm
 Versions above are the `package.json` ranges. `package-lock.json` resolves vue 3.5.28 and @vitejs/plugin-vue 6.0.4; every other package resolves to the version shown.
 
 ### Frontend Build Output
-Measured from the build in `cmd/bekci/frontend_dist/assets/` on 13/10/2026 (Turkish tag matching, after v3.4.6) (raw bytes; gzip -9; kB = 1000 bytes). Figures change with every frontend build.
+Measured from the build in `cmd/bekci/frontend_dist/assets/` on 13/10/2026 (server SLA keys, after v3.4.6) (raw bytes; gzip -9; kB = 1000 bytes). Figures change with every frontend build.
 
 | Asset | Size (raw) | Size (gzipped) |
 |-------|-----------|----------------|
-| index-*.js | 313.78 kB | 100.29 kB |
+| index-*.js | 313.72 kB | 100.25 kB |
 | index-*.css | 49.71 kB | 9.06 kB |
 | SearchView-*.js | 15.16 kB | 5.21 kB |
 | SearchView-*.css | 5.43 kB | 1.53 kB |

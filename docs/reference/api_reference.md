@@ -548,6 +548,8 @@ Unpauses the target and immediately triggers RunNow on all its checks.
 ]
 ```
 
+For `group=category` each entry also has `sla_key`, the category's settings key (e.g. `{ "id": 5, "group": "category", "value": "İSG", "sla_key": "sla_isg" }`). Use it instead of deriving the key: lowercasing `İ` differs between languages (JavaScript gives `i` + U+0307, the server `i`).
+
 | Error | Code |
 |-------|------|
 | Missing/invalid group | 400 |
@@ -1276,7 +1278,7 @@ To keep a secret unchanged, omit the key or send back the exact value returned b
 | `snmp_v3_auth_passphrase` | string | SNMP v3 auth passphrase (masked in GET as `"••••••••"`) |
 | `snmp_v3_privacy_protocol` | string | `"DES"` or `"AES"` |
 | `snmp_v3_privacy_passphrase` | string | SNMP v3 privacy passphrase (masked in GET as `"••••••••"`) |
-| `sla_<category>` | float string | 0–100 (0 = disabled). One key per category in `tag_options` (`grp='category'`): `sla_` + the lowercased name with spaces replaced by `_` (seeded: `sla_network`, `sla_security`, `sla_physical_security`, `sla_key_services`, `sla_other`). A key with no matching category is rejected as unknown. Creating a category writes no key; until one is saved, the category uses 99.9 (dashboard, SLA page, and the Settings form's initial value). |
+| `sla_<category>` | float string | 0–100 (0 = disabled). One key per category in `tag_options` (`grp='category'`): `sla_` + the lowercased name (Go `strings.ToLower`, so `İ` → `i`) with spaces replaced by `_`, returned as `sla_key` by `GET /api/tags?group=category` (seeded: `sla_network`, `sla_security`, `sla_physical_security`, `sla_key_services`, `sla_other`). A key with no matching category is rejected as unknown. Creating a category writes no key; until one is saved, the category uses 99.9 (dashboard, SLA page, and the Settings form's initial value). |
 | `backup_max_copies` | positive integer | >= 1 (max saved backups on server) |
 | `webhook_timeout_s` | positive integer string | >= 1; no upper bound in the API (the UI input is marked 1–120). HTTP timeout for outbound webhook POST. At send time a missing, non-integer or <= 0 stored value falls back to 10s. |
 | `auto_backup_schedule` | string | `""`, `"off"`, `"weekly"`, `"10days"`, or `"monthly"` (`""`/`"off"` = disabled). An hourly check runs an unencrypted scheduled backup during the `auto_backup_time` hour once at least 7, 10 or 30 whole days (`monthly` = 30 days, not a calendar month) have passed since the newest entry in the server-side backup index, or when the index is empty. Every saved backup counts as an entry: scheduled, Save to server, and download auto-saves. |

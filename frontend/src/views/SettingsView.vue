@@ -31,10 +31,6 @@ const labels = {
 
 const slaKeys = ref([])
 
-function deriveSLAKey(name) {
-  return 'sla_' + name.toLowerCase().replace(/ /g, '_')
-}
-
 async function loadSLAKeys() {
   try {
     const { data } = await api.get('/tags?group=category')
@@ -43,7 +39,8 @@ async function loadSLAKeys() {
       if (b.value === 'Other') return -1
       return a.value.localeCompare(b.value)
     })
-    slaKeys.value = data.map(c => ({ key: deriveSLAKey(c.value), label: c.value }))
+    // The key comes from the server: lowercasing "İ" differs between JavaScript and Go
+    slaKeys.value = data.map(c => ({ key: c.sla_key, label: c.value }))
   } catch { /* ignore */ }
 }
 
