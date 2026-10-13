@@ -168,7 +168,7 @@ Measured from the build in `cmd/bekci/frontend_dist/assets/` at v3.4.5 on 13/10/
 
 | Asset | Size (raw) | Size (gzipped) |
 |-------|-----------|----------------|
-| index-*.js | 314.08 kB | 100.28 kB |
+| index-*.js | 313.74 kB | 100.23 kB |
 | index-*.css | 49.71 kB | 9.06 kB |
 | SearchView-*.js | 15.16 kB | 5.21 kB |
 | SearchView-*.css | 5.43 kB | 1.53 kB |

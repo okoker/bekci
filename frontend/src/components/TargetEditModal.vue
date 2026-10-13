@@ -124,12 +124,17 @@ function minFailWindow(cond) {
 
 function failWindowError(cond) {
   const minimum = minFailWindow(cond)
-  return minimum > maxFailWindow
-    ? `This failure threshold needs a ${minimum}-second window. Maximum is 1800 seconds (30 minutes). Reduce Fail Count or Interval.`
-    : ''
+  if (minimum <= maxFailWindow) return ''
+  const duration = minimum % 60 === 0
+    ? `${minimum / 60}-minute`
+    : `${Math.floor(minimum / 60)}-minute ${minimum % 60}-second`
+  return `These settings require a ${duration} failure window. The maximum allowed is 30 minutes. Reduce the Fail Count or shorten the check Interval.`
 }
 
 const hasFailWindowError = computed(() => form.value.conditions.some(cond => failWindowError(cond)))
+
+// Set on mount/update so native form validation shows this message on Save.
+const vCustomValidity = (el, { value }) => el.setCustomValidity(value)
 
 function onFailCountChange(cond) {
   if (cond.fail_count > 1) onIntervalChange(cond)
@@ -447,8 +452,6 @@ watch(() => props.show, async (val) => {
                   <div class="form-group">
                     <label>Interval (seconds)</label>
                     <input type="number" v-model.number="cond.interval_s" min="10" max="86400" style="max-width: 120px;"
-                      :aria-invalid="!!failWindowError(cond)"
-                      :aria-describedby="failWindowError(cond) ? `failure-window-error-${group.groupIdx}-${cIdx}` : undefined"
                       @change="onIntervalChange(cond)" />
                   </div>
 
@@ -615,20 +618,17 @@ watch(() => props.show, async (val) => {
                     <div class="form-group">
                       <label>Fail Count</label>
                       <input type="number" v-model.number="cond.fail_count" min="1" max="100"
-                        :aria-invalid="!!failWindowError(cond)"
-                        :aria-describedby="failWindowError(cond) ? `failure-window-error-${group.groupIdx}-${cIdx}` : undefined"
                         @change="onFailCountChange(cond)" />
                     </div>
                     <div class="form-group">
                       <label>Time Window</label>
                       <input type="number" v-model.number="cond.fail_window"
+                        v-custom-validity="failWindowError(cond)"
                         :min="minFailWindow(cond)" :max="maxFailWindow"
                         :disabled="cond.fail_count <= 1"
                         :title="cond.fail_count <= 1 ? 'Set Fail Count > 1 to enable window' : 'Time window for consecutive failures'" />
                     </div>
                   </div>
-                  <p v-if="failWindowError(cond)" class="error-msg" role="alert"
-                    :id="`failure-window-error-${group.groupIdx}-${cIdx}`">{{ failWindowError(cond) }}</p>
                 </div>
               </template>
 
@@ -654,7 +654,7 @@ watch(() => props.show, async (val) => {
         </div>
 
         <div class="form-actions">
-          <button type="submit" class="btn btn-primary" :disabled="form.conditions.length === 0 || hasFailWindowError">Save</button>
+          <button type="submit" class="btn btn-primary" :disabled="form.conditions.length === 0">Save</button>
           <button type="button" class="btn" @click="close">Cancel</button>
         </div>
       </form>

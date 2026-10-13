@@ -71,6 +71,8 @@ async function editor(t, mode = 'new') {
     await input('Category').selectOption('Other')
     await modal.getByRole('button', { name: '+ Add Group or Condition', exact: true }).click()
     await input('Check Name').fill('Ping')
+  } else {
+    await input('Fail Count').waitFor({ state: 'visible' })
   }
   const set = async (label, value) => {
     await input(label).fill(String(value))
@@ -79,17 +81,42 @@ async function editor(t, mode = 'new') {
   return { page, modal, input, set, writes, save: modal.getByRole('button', { name: 'Save', exact: true }) }
 }
 
-test('shows inline feedback and blocks Save before submission', async t => {
+test('Save stays enabled and shows the descriptive browser validation message', async t => {
   const e = await editor(t)
   await e.set('Interval (seconds)', 300)
-  await e.set('Fail Count', 10)
-  const alert = e.modal.locator('.condition-card [role="alert"]')
-  await alert.waitFor({ state: 'visible' })
-  assert.match(await alert.textContent(), /1800|30 minutes/)
-  assert.match(await alert.textContent(), /[Rr]educe/)
-  assert.equal(await e.save.isDisabled(), true)
+  await e.set('Fail Count', 8)
+  assert.equal(await e.input('Time Window').evaluate(input => input.validationMessage),
+    'These settings require a 40-minute failure window. The maximum allowed is 30 minutes. Reduce the Fail Count or shorten the check Interval.')
+  assert.equal(await e.save.isEnabled(), true)
+  assert.equal(await e.modal.locator('.condition-card [role="alert"]').count(), 0)
+  await e.save.click()
+  const validity = await e.input('Time Window').evaluate(input => ({
+    message: input.validationMessage, customError: input.validity.customError,
+    focused: input === document.activeElement,
+  }))
+  assert.equal(validity.message, 'These settings require a 40-minute failure window. The maximum allowed is 30 minutes. Reduce the Fail Count or shorten the check Interval.')
+  assert.equal(validity.customError, true)
+  assert.equal(validity.focused, true)
   assert.equal(e.writes.length, 0)
-  if (process.env.SR13_SCREENSHOT_PATH) await e.page.screenshot({ path: process.env.SR13_SCREENSHOT_PATH, fullPage: true })
+  if (process.env.SR13_SCREENSHOT_PATH) {
+    // Let Chrome's native validation popup finish fading in for visual review.
+    await e.page.waitForTimeout(300)
+    await e.page.screenshot({ path: process.env.SR13_SCREENSHOT_PATH, fullPage: true })
+  }
+})
+
+test('browser validation message updates for thresholds with partial minutes', async t => {
+  const e = await editor(t)
+  await e.set('Interval (seconds)', 901)
+  await e.set('Fail Count', 2)
+  assert.equal(await e.save.isEnabled(), true)
+  await e.save.click()
+  assert.equal(await e.input('Time Window').evaluate(input => input.validationMessage),
+    'These settings require a 30-minute 2-second failure window. The maximum allowed is 30 minutes. Reduce the Fail Count or shorten the check Interval.')
+  await e.set('Interval (seconds)', 1200)
+  await e.save.click()
+  assert.match(await e.input('Time Window').evaluate(input => input.validationMessage), /40-minute/)
+  assert.equal(e.writes.length, 0)
 })
 
 test('submission guard prevents requests even when native validation is bypassed', async t => {
@@ -107,9 +134,11 @@ for (const [label, value] of [['Fail Count', 6], ['Interval (seconds)', 180]]) {
     const e = await editor(t)
     await e.set('Interval (seconds)', 300)
     await e.set('Fail Count', 10)
+    await e.save.click()
     await e.set(label, value)
     assert.equal(await e.modal.locator('.condition-card [role="alert"]').count(), 0)
     assert.equal(await e.save.isEnabled(), true)
+    assert.equal(await e.input('Time Window').evaluate(input => input.validationMessage), '')
     assert.equal(await e.modal.locator('form').evaluate(form => form.checkValidity()), true)
     const sent = e.page.waitForRequest(request => request.method() === 'POST' && new URL(request.url()).pathname === '/api/targets')
     await e.save.click()
@@ -120,13 +149,19 @@ for (const [label, value] of [['Fail Count', 6], ['Interval (seconds)', 180]]) {
 }
 
 for (const mode of ['edit', 'clone']) {
-  test(`${mode} immediately flags a previously saved impossible threshold`, async t => {
+  test(`${mode} shows the custom popup on Save for a previously saved impossible threshold`, async t => {
     const e = await editor(t, mode)
-    await e.modal.locator('.condition-card [role="alert"]').waitFor({ state: 'visible' })
-    assert.equal(await e.save.isDisabled(), true)
+    if (mode === 'clone') await e.input('Host').fill('clone.example.invalid')
+    assert.equal(await e.save.isEnabled(), true)
+    assert.equal(await e.modal.locator('.condition-card [role="alert"]').count(), 0)
+    await e.save.click()
+    assert.match(await e.input('Time Window').evaluate(input => input.validationMessage), /50-minute failure window/)
+    assert.equal(await e.input('Time Window').evaluate(input => input === document.activeElement), true)
+    assert.equal(e.writes.length, 0)
     await e.set('Fail Count', 6)
     assert.equal(await e.modal.locator('.condition-card [role="alert"]').count(), 0)
     assert.equal(await e.save.isEnabled(), true)
+    assert.equal(await e.input('Time Window').evaluate(input => input.validationMessage), '')
   })
 }
 
@@ -134,10 +169,12 @@ test('switching back to one failure permits a long interval and resets the windo
   const e = await editor(t)
   await e.set('Interval (seconds)', 3600)
   await e.set('Fail Count', 2)
+  await e.save.click()
   await e.set('Fail Count', 1)
   assert.equal(await e.modal.locator('.condition-card [role="alert"]').count(), 0)
   assert.equal(await e.input('Time Window').isDisabled(), true)
   assert.equal(await e.input('Time Window').inputValue(), '0')
+  assert.equal(await e.input('Time Window').evaluate(input => input.validity.customError), false)
   assert.equal(await e.save.isEnabled(), true)
   assert.equal(await e.modal.locator('form').evaluate(form => form.checkValidity()), true)
   const sent = e.page.waitForRequest(request => request.method() === 'POST' && new URL(request.url()).pathname === '/api/targets')
