@@ -167,11 +167,6 @@ func (a *AlertService) Dispatch(ruleID, oldState, newState string) {
 	if webhookEnabled == "true" {
 		webhookURL, _ := a.store.GetSetting("webhook_url")
 		if webhookURL != "" {
-			auth := a.getWebhookAuth()
-			skipTLSStr, _ := a.store.GetSetting("webhook_skip_tls")
-			skipTLS := skipTLSStr == "true"
-			timeoutS := a.getWebhookTimeout()
-
 			failingChecks := a.getFailingChecks(targetID, newState)
 			payload := WebhookPayload{
 				Event:         alertType,
@@ -192,20 +187,7 @@ func (a *AlertService) Dispatch(ruleID, oldState, newState string) {
 				payload.Duration = &dur
 			}
 
-			if err := SendWebhook(webhookURL, auth, skipTLS, timeoutS, payload); err != nil {
-				slog.Error("Alerter: webhook failed", "target", target.Name, "error", err)
-				a.store.SetSettings(map[string]string{
-					"webhook_last_error": now.UTC().Format(time.RFC3339) + " — " + err.Error(),
-				})
-				a.auditWebhook("webhook_dispatch", target.Name, alertType+" — error: "+err.Error(), "failure")
-			} else {
-				slog.Info("Alerter: webhook sent", "target", target.Name, "type", alertType)
-				a.store.SetSettings(map[string]string{
-					"webhook_last_error":   "",
-					"webhook_last_success": now.UTC().Format(time.RFC3339),
-				})
-				a.auditWebhook("webhook_dispatch", target.Name, alertType, "success")
-			}
+			_ = a.deliverWebhook(webhookURL, payload, target.Name, alertType)
 			summary := "[Webhook] " + target.Name + " " + alertType
 			if err := a.store.LogAlert(targetID, ruleID, "", alertType, summary); err != nil {
 				slog.Error("Alerter: failed to log webhook alert", "error", err)
@@ -340,11 +322,6 @@ func (a *AlertService) CheckRealerts() {
 		if webhookEnabled == "true" {
 			webhookURL, _ := a.store.GetSetting("webhook_url")
 			if webhookURL != "" {
-				auth := a.getWebhookAuth()
-				skipTLSStr, _ := a.store.GetSetting("webhook_skip_tls")
-				skipTLS := skipTLSStr == "true"
-				timeoutS := a.getWebhookTimeout()
-
 				failingChecks := a.getFailingChecks(fr.TargetID, "unhealthy")
 				payload := WebhookPayload{
 					Event:         "re-alert",
@@ -357,20 +334,7 @@ func (a *AlertService) CheckRealerts() {
 					Timestamp:     now.UTC().Format(time.RFC3339),
 				}
 
-				if err := SendWebhook(webhookURL, auth, skipTLS, timeoutS, payload); err != nil {
-					slog.Error("Alerter: webhook re-alert failed", "target", target.Name, "error", err)
-					a.store.SetSettings(map[string]string{
-						"webhook_last_error": now.UTC().Format(time.RFC3339) + " — " + err.Error(),
-					})
-					a.auditWebhook("webhook_dispatch", target.Name, "re-alert — error: "+err.Error(), "failure")
-				} else {
-					slog.Info("Alerter: webhook re-alert sent", "target", target.Name)
-					a.store.SetSettings(map[string]string{
-						"webhook_last_error":   "",
-						"webhook_last_success": now.UTC().Format(time.RFC3339),
-					})
-					a.auditWebhook("webhook_dispatch", target.Name, "re-alert", "success")
-				}
+				_ = a.deliverWebhook(webhookURL, payload, target.Name, "re-alert")
 				summary := "[Webhook RE-ALERT] " + target.Name
 				if err := a.store.LogAlert(fr.TargetID, fr.RuleID, "", "re-alert", summary); err != nil {
 					slog.Error("Alerter: failed to log webhook re-alert", "error", err)
@@ -391,6 +355,31 @@ func (a *AlertService) auditWebhook(action, target, detail, status string) {
 		Detail:       detail,
 		Status:       status,
 	})
+}
+
+// deliverWebhook POSTs payload to url with the configured auth, TLS and timeout,
+// then records the outcome for every kind of delivery alike: webhook_last_success
+// or webhook_last_error (shown in Settings) and a webhook_dispatch audit entry.
+// label names the delivery ("firing", "re-alert", "test", "system_alert", …).
+func (a *AlertService) deliverWebhook(url string, payload WebhookPayload, auditTarget, label string) error {
+	skipTLS, _ := a.store.GetSetting("webhook_skip_tls")
+	err := SendWebhook(url, a.getWebhookAuth(), skipTLS == "true", a.getWebhookTimeout(), payload)
+	now := time.Now().UTC().Format(time.RFC3339)
+	if err != nil {
+		slog.Error("Alerter: webhook failed", "target", auditTarget, "type", label, "error", err)
+		a.store.SetSettings(map[string]string{
+			"webhook_last_error": now + " — " + err.Error(),
+		})
+		a.auditWebhook("webhook_dispatch", auditTarget, label+" — error: "+err.Error(), "failure")
+		return err
+	}
+	slog.Info("Alerter: webhook sent", "target", auditTarget, "type", label)
+	a.store.SetSettings(map[string]string{
+		"webhook_last_error":   "",
+		"webhook_last_success": now,
+	})
+	a.auditWebhook("webhook_dispatch", auditTarget, label, "success")
+	return nil
 }
 
 // getWebhookAuth reads webhook authentication settings from the store.
@@ -526,11 +515,6 @@ func (a *AlertService) SendTestWebhook() error {
 		return ErrWebhookNotConfigured
 	}
 
-	auth := a.getWebhookAuth()
-	skipTLSStr, _ := a.store.GetSetting("webhook_skip_tls")
-	skipTLS := skipTLSStr == "true"
-	timeoutS := a.getWebhookTimeout()
-
 	payload := WebhookPayload{
 		Event:         "test",
 		Target:        "Bekci Test",
@@ -542,10 +526,5 @@ func (a *AlertService) SendTestWebhook() error {
 		Timestamp:     time.Now().UTC().Format(time.RFC3339),
 	}
 
-	if err := SendWebhook(url, auth, skipTLS, timeoutS, payload); err != nil {
-		a.auditWebhook("webhook_dispatch", "Bekci Test", "test — error: "+err.Error(), "failure")
-		return err
-	}
-	a.auditWebhook("webhook_dispatch", "Bekci Test", "test", "success")
-	return nil
+	return a.deliverWebhook(url, payload, "Bekci Test", "test")
 }

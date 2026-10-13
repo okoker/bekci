@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"html"
 	"log/slog"
-	"strconv"
 	"strings"
+	"time"
 
 	"github.com/bekci/internal/store"
 )
@@ -133,33 +133,18 @@ func SendSystemAlert(st *store.Store, subject, message string) {
 	// Webhook
 	if webhookEnabled == "true" {
 		webhookURL, _ := st.GetSetting("webhook_url")
-		authType, _ := st.GetSetting("webhook_auth_type")
-		skipTLS, _ := st.GetSetting("webhook_skip_tls")
-
 		if webhookURL != "" {
-			auth := WebhookAuth{Type: authType}
-			if authType == "bearer" {
-				auth.BearerToken, _ = st.GetSetting("webhook_bearer_token")
-			} else if authType == "basic" {
-				auth.BasicUsername, _ = st.GetSetting("webhook_basic_username")
-				auth.BasicPassword, _ = st.GetSetting("webhook_basic_password")
-			}
+			// No target: address and category stay empty, the arrays are
+			// empty rather than null, as in every other webhook event.
 			payload := WebhookPayload{
-				Event:   "system_alert",
-				Target:  "Bekci",
-				Message: fmt.Sprintf("%s — %s", subject, message),
+				Event:         "system_alert",
+				Target:        "Bekci",
+				Tags:          []string{},
+				Message:       fmt.Sprintf("%s — %s", subject, message),
+				FailingChecks: []FailingCheck{},
+				Timestamp:     time.Now().UTC().Format(time.RFC3339),
 			}
-			timeoutStr, _ := st.GetSetting("webhook_timeout_s")
-			timeoutS := 10
-			if n, err := strconv.Atoi(timeoutStr); err == nil && n > 0 {
-				timeoutS = n
-			}
-			err := SendWebhook(webhookURL, auth, skipTLS == "true", timeoutS, payload)
-			if err != nil {
-				slog.Error("System alert: webhook send failed", "error", err)
-			} else {
-				slog.Info("System alert: webhook sent", "url", webhookURL)
-			}
+			_ = New(st).deliverWebhook(webhookURL, payload, "Bekci", "system_alert")
 		}
 	}
 }

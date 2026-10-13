@@ -1120,7 +1120,7 @@ Sends a test webhook payload to the configured webhook URL. Uses the configured 
 
 ### GET /api/settings/webhook-status
 
-Returns the last webhook delivery error and success timestamps.
+Returns the last webhook delivery error and success timestamps. Every delivery updates them: `firing`, `recovery`, `re-alert`, the Settings test webhook and system alerts.
 
 **Response (200):**
 ```json
@@ -1134,11 +1134,11 @@ Both fields are empty strings when no webhook has been sent yet.
 
 ### Outbound Webhook Payload
 
-Bekci POSTs the following JSON to `webhook_url` on `firing`, `recovery`, `re-alert`, and `test` events. Target events are sent whether or not the target has alert recipients (recipients only apply to email and Signal). `Content-Type: application/json`. Auth is the configured Bearer/Basic header, TLS verification is on unless `webhook_skip_tls=true`, timeout is `webhook_timeout_s` (default 10s).
+Bekci POSTs the following JSON to `webhook_url` on `firing`, `recovery`, `re-alert`, `test` and `system_alert` events. Target events are sent whether or not the target has alert recipients (recipients only apply to email and Signal). `Content-Type: application/json`. Auth is the configured Bearer/Basic header, TLS verification is on unless `webhook_skip_tls=true`, timeout is `webhook_timeout_s` (default 10s).
 
 ```json
 {
-  "event": "firing | recovery | re-alert | test",
+  "event": "firing | recovery | re-alert | test | system_alert",
   "target": "Web Server",
   "target_address": "192.168.1.10",
   "category": "Network",
@@ -1157,8 +1157,8 @@ Bekci POSTs the following JSON to `webhook_url` on `firing`, `recovery`, `re-ale
 - `tags` is an array of uppercase free-form labels attached to the target (from `tag_options` where `grp='tag'`). Always present; `[]` when the target has no tags. The `test` event sends `["TEST"]` as a sentinel.
 - `failing_checks` is `[]` for `recovery` and `test`; populated for `firing` and `re-alert` with every check whose last result isn't `up`.
 - `down_since` + `duration` are only included on `recovery`.
-- System alerts (unclean restart, failed scheduled backup) are also POSTed, with `event: "system_alert"`. That payload sets only `event`, `target` (`"Bekci"`) and `message` (alert subject and text). It is sent even when no system alert recipients resolve.
-- Non-2xx response is treated as failure (recorded in `webhook_last_error`, audit-logged); no retries.
+- System alerts (unclean restart, failed scheduled backup) are POSTed with `event: "system_alert"`, `target: "Bekci"`, `message` (alert subject and text) and `timestamp`; `tags` and `failing_checks` are `[]`, `target_address` and `category` are `""`, and there is no `down_since`/`duration`. It is sent even when no system alert recipients resolve.
+- Every delivery, test and system alerts included, records its outcome: `webhook_last_success` or `webhook_last_error` (`<RFC3339> — <error>`), and a `webhook_dispatch` audit entry whose resource is the target name, `Bekci Test` or `Bekci`. A non-2xx response is a failure; no retries.
 
 ---
 
@@ -1338,7 +1338,7 @@ To keep a secret unchanged, omit the key or send back the exact value returned b
 
 System-generated entries (user `system`): `webhook_dispatch`, `auto_backup`, `unclean_restart` (written at startup after an unclean shutdown), `scheduler_stale` (every 60s while the scheduler is stale).
 
-**`webhook_dispatch`** is logged by the system (user=system) for all webhook events. Detail contains the event type: `test`, `firing`, `recovery`, `re-alert`, or `{type} — error: {message}` on failure.
+**`webhook_dispatch`** is logged by the system (user=system) for all webhook events. Detail contains the event type: `test`, `firing`, `recovery`, `re-alert`, `system_alert`, or `{type} — error: {message}` on failure.
 
 **Status values:** `success`, `failure`. All mutating actions log success, and failures from business rules or the database (with detail). Most request-validation errors (malformed JSON, missing or invalid fields) return 400 without an audit entry. Login and change_password also log dedicated failure actions (`login_failed`, `change_password_failed`).
 
