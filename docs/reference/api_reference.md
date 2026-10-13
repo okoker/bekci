@@ -1703,7 +1703,7 @@ Cookie-auth admin endpoints that mint and revoke bearer tokens consumed by `/api
 { "name": "grafana-prod" }
 ```
 
-Name is trimmed and must be non-empty; longer names are truncated to 80 bytes (not rejected). It must be unique across all tokens, including revoked ones. Used only for identification in the admin UI.
+Name is trimmed and must be non-empty; longer names are truncated to 80 characters (not rejected). It must be unique across all tokens, including revoked ones. Used only for identification in the admin UI.
 
 **Response (201):**
 ```json

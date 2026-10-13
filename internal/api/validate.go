@@ -7,10 +7,15 @@ import (
 	"strings"
 )
 
-// maxLen truncates s to n characters.
+// maxLen truncates s to n characters (not bytes), so multi-byte text is
+// never cut early or split mid-character.
 func maxLen(s string, n int) string {
-	if len(s) > n {
-		return s[:n]
+	count := 0
+	for i := range s {
+		if count == n {
+			return s[:i]
+		}
+		count++
 	}
 	return s
 }
