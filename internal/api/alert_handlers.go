@@ -45,8 +45,14 @@ func (s *Server) handleSetRecipients(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate all user IDs exist
+	// Validate all user IDs exist and none is listed twice
+	seen := make(map[string]bool, len(req.UserIDs))
 	for _, uid := range req.UserIDs {
+		if seen[uid] {
+			writeError(w, http.StatusBadRequest, "duplicate user ID: "+uid)
+			return
+		}
+		seen[uid] = true
 		u, err := s.store.GetUserByID(uid)
 		if err != nil || u == nil {
 			writeError(w, http.StatusBadRequest, "invalid user ID: "+uid)

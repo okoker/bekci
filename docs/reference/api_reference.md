@@ -676,6 +676,7 @@ Replaces all recipients for the target.
 |-------|------|
 | Invalid request body | 400 |
 | Unknown user ID | 400 |
+| Same user ID listed twice | 400 |
 | Target not found | 404 |
 
 ---
