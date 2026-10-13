@@ -915,7 +915,9 @@ Returns enabled targets with their checks, last status, response time, and 90-da
 - Disabled targets (`enabled=false`) are excluded from the response.
 - Paused targets have `state: "paused"`, `paused: true`, and `paused_at` set to an ISO 8601 timestamp. `paused_at` is omitted (not `null`) for targets that are not paused.
 - `tags` is always an array (`[]` when the target has no tags).
-- `sla_status` is `""` (empty) and `sla_target` is `0` when the category's SLA threshold is 0 (disabled) or not configured. `sla_status` is also `""` when no check results exist yet for the preferred check.
+- `sla_status` is `""` (empty) and `sla_target` is `0` when the category's SLA threshold is 0 (disabled), or the target has no category from the catalog. A catalog category with no saved `sla_<category>` setting uses 99.9.
+- `sla_status` is also `""` while the preferred check (the first check if none has the preferred type) has no results; another check's data never stands in for it.
+- `uptime_90d_pct` is `-1` for a check with no results in the last 90 days.
 
 ### GET /api/dashboard/history/{checkId}
 
@@ -988,7 +990,7 @@ Returns all categories with per-target daily uptime arrays for the preferred che
 ```
 
 **Notes:**
-- `sla_threshold` is `0` when the category has no SLA configured (disabled)
+- `sla_threshold` is `0` when the category's SLA is disabled; a category with no saved `sla_<category>` setting gets 99.9
 - `targets` is `[]` (empty array) for categories with no targets
 - `daily_uptime` contains only days with data in `check_daily_rollups` (frontend pads to 90 days)
 - Uses the target's preferred check type; falls back to first check if no match
@@ -1273,7 +1275,7 @@ To keep a secret unchanged, omit the key or send back the exact value returned b
 | `snmp_v3_auth_passphrase` | string | SNMP v3 auth passphrase (masked in GET as `"••••••••"`) |
 | `snmp_v3_privacy_protocol` | string | `"DES"` or `"AES"` |
 | `snmp_v3_privacy_passphrase` | string | SNMP v3 privacy passphrase (masked in GET as `"••••••••"`) |
-| `sla_<category>` | float string | 0–100 (0 = disabled). One key per category in `tag_options` (`grp='category'`): `sla_` + the lowercased name with spaces replaced by `_` (seeded: `sla_network`, `sla_security`, `sla_physical_security`, `sla_key_services`, `sla_other`). A key with no matching category is rejected as unknown. |
+| `sla_<category>` | float string | 0–100 (0 = disabled). One key per category in `tag_options` (`grp='category'`): `sla_` + the lowercased name with spaces replaced by `_` (seeded: `sla_network`, `sla_security`, `sla_physical_security`, `sla_key_services`, `sla_other`). A key with no matching category is rejected as unknown. Creating a category writes no key; until one is saved, the category uses 99.9 (dashboard, SLA page, and the Settings form's initial value). |
 | `backup_max_copies` | positive integer | >= 1 (max saved backups on server) |
 | `webhook_timeout_s` | positive integer string | >= 1; no upper bound in the API (the UI input is marked 1–120). HTTP timeout for outbound webhook POST. At send time a missing, non-integer or <= 0 stored value falls back to 10s. |
 | `auto_backup_schedule` | string | `""`, `"off"`, `"weekly"`, `"10days"`, or `"monthly"` (`""`/`"off"` = disabled). An hourly check runs an unencrypted scheduled backup during the `auto_backup_time` hour once at least 7, 10 or 30 whole days (`monthly` = 30 days, not a calendar month) have passed since the newest entry in the server-side backup index, or when the index is empty. Every saved backup counts as an entry: scheduled, Save to server, and download auto-saves. |

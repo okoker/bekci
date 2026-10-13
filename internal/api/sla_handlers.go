@@ -57,15 +57,7 @@ func (s *Server) handleSLAHistory(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to load settings")
 		return
 	}
-	slaThresholds := make(map[string]float64)
-	for _, cat := range cats {
-		key := store.CategoryToSLAKey(cat.Value)
-		if v, ok := allSettings[key]; ok {
-			if f, err := strconv.ParseFloat(strings.TrimSpace(v), 64); err == nil {
-				slaThresholds[cat.Value] = f
-			}
-		}
-	}
+	slaThresholds := categorySLAThresholds(cats, allSettings)
 
 	// Group targets by category (skip disabled targets)
 	catTargets := make(map[string][]slaTarget)
@@ -145,6 +137,28 @@ func (s *Server) handleSLAHistory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// defaultSLAThreshold applies to a category with no saved sla_<category>
+// setting, e.g. one created after install. 0 still disables a category.
+const defaultSLAThreshold = 99.9
+
+// categorySLAThresholds maps each category to its SLA threshold from settings.
+// A category without a saved setting gets defaultSLAThreshold; a saved value
+// that does not parse is left out, so that category has no SLA.
+func categorySLAThresholds(cats []store.TagOption, settings map[string]string) map[string]float64 {
+	thresholds := make(map[string]float64, len(cats))
+	for _, cat := range cats {
+		v, ok := settings[store.CategoryToSLAKey(cat.Value)]
+		if !ok {
+			thresholds[cat.Value] = defaultSLAThreshold
+			continue
+		}
+		if f, err := strconv.ParseFloat(strings.TrimSpace(v), 64); err == nil {
+			thresholds[cat.Value] = f
+		}
+	}
+	return thresholds
 }
 
 func orEmptyTargets(t []slaTarget) []slaTarget {

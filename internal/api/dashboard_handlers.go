@@ -3,8 +3,6 @@ package api
 import (
 	"fmt"
 	"net/http"
-	"strconv"
-	"strings"
 
 	"github.com/bekci/internal/store"
 )
@@ -48,15 +46,7 @@ func (s *Server) buildDashboardTargets() ([]dashboardTarget, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to load settings: %w", err)
 	}
-	slaThresholds := make(map[string]float64)
-	for _, cat := range cats {
-		key := store.CategoryToSLAKey(cat.Value)
-		if v, ok := allSettings[key]; ok {
-			if f, err := strconv.ParseFloat(strings.TrimSpace(v), 64); err == nil {
-				slaThresholds[cat.Value] = f
-			}
-		}
-	}
+	slaThresholds := categorySLAThresholds(cats, allSettings)
 
 	// Batch: all rule states, checks, and results in 3 queries (replaces N+1 pattern)
 	ruleStates, err := s.store.ListAllRuleStates()
@@ -119,6 +109,7 @@ func (s *Server) buildDashboardTargets() ([]dashboardTarget, error) {
 				Type:      c.Type,
 				Enabled:   c.Enabled,
 				IntervalS: c.IntervalS,
+				Uptime90d: -1, // no results yet, as GetBatchLastResultAndUptime reports it
 			}
 
 			if summary, ok := checkSummaries[c.ID]; ok {
@@ -137,19 +128,21 @@ func (s *Server) buildDashboardTargets() ([]dashboardTarget, error) {
 		// Compute SLA status from preferred check's 90d uptime vs category threshold
 		if threshold, ok := slaThresholds[t.Category]; ok && threshold > 0 {
 			dt.SLATarget = threshold
-			// Find preferred check's uptime
-			var prefUptime float64 = -1
-			for _, c := range dt.Checks {
-				if c.Type == t.PreferredCheckType {
-					prefUptime = c.Uptime90d
+			// The preferred check decides (the first check if none has that
+			// type). Until it has results its uptime is -1 and the status stays
+			// empty; another check's data never stands in for it.
+			var pref *dashboardCheck
+			for i := range dt.Checks {
+				if dt.Checks[i].Type == t.PreferredCheckType {
+					pref = &dt.Checks[i]
 					break
 				}
 			}
-			if prefUptime < 0 && len(dt.Checks) > 0 {
-				prefUptime = dt.Checks[0].Uptime90d
+			if pref == nil && len(dt.Checks) > 0 {
+				pref = &dt.Checks[0]
 			}
-			if prefUptime >= 0 {
-				if prefUptime >= threshold {
+			if pref != nil && pref.Uptime90d >= 0 {
+				if pref.Uptime90d >= threshold {
 					dt.SLAStatus = "healthy"
 				} else {
 					dt.SLAStatus = "unhealthy"

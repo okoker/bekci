@@ -56,9 +56,9 @@ const generalKeys = new Set(Object.keys(labels))
 async function loadSettings() {
   try {
     const { data } = await api.get('/settings')
-    // Default SLA keys to "0" if missing so inputs aren't blank
+    // A category with no saved SLA key uses the server default (99.9)
     for (const s of slaKeys.value) {
-      if (!(s.key in data)) data[s.key] = '99.5'
+      if (!(s.key in data)) data[s.key] = '99.9'
     }
     // Default backup_max_copies if not yet saved
     if (!('backup_max_copies' in data)) data['backup_max_copies'] = '5'
