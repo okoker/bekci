@@ -9,6 +9,8 @@ Two backup types exist in Bekci:
 | **Config Backup** | 11 config tables (users, settings, rules, targets, checks, rule_conditions, rule_states, recipients, pause_history, tag_options, target_tags); format version 2 | JSON | Web UI upload |
 | **Full Backup** | Entire SQLite database (all tables + historical data) + config.yaml | tar.gz (optional AES-256-GCM, off by default; scheduled backups are never encrypted) | CLI only (`bekci restore-full`) |
 
+Both restore paths preserve stored failure counts and windows without applying the [target create/update validation](api_reference.md#post-apitargets). Restoring or starting the service does not repair impossible thresholds or shorten windows larger than 1800 seconds. The engine uses the restored values; an invalid multi-failure combination must be corrected before the target can next be saved through the API/editor.
+
 ## Full Backup
 
 ### How it works

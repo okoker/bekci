@@ -371,6 +371,8 @@ If `group_operator` is omitted, it defaults to the top-level `operator` value fo
 
 The target editor shows an inline error as Fail Count or Interval changes and blocks submission while any condition exceeds the limit. Existing invalid conditions also show the error when edited or cloned; saved configurations are not automatically rewritten.
 
+**Existing and restored rules:** This validation runs when a target is created or updated, not at startup or during rule evaluation. Config and full restores retain the saved failure counts/windows. Existing impossible thresholds can therefore continue missing alerts until corrected; the engine also honors stored windows larger than 1800 seconds. Saving a target validates every submitted condition, even when only its name or other metadata changed. For a valid multi-failure combination, a previously larger window is clamped to 1800 on save. The API leaves `fail_window` unchanged when the normalized `fail_count` is 1; the editor resets it to 0 when switching Fail Count to 1.
+
 **Response (201):** Full TargetDetail object (see GET /api/targets/{id}).
 
 | Error | Code |
@@ -423,7 +425,7 @@ Returns full target detail with conditions, state, and recipient IDs.
       "comparator": "eq",
       "value": "down",
       "fail_count": 3,
-      "fail_window": 600,
+      "fail_window": 900,
       "condition_group": 0,
       "group_operator": "AND"
     }

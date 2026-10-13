@@ -288,6 +288,8 @@ Hidden rules auto-managed by the target CRUD layer. One rule per target (1:1 via
 
 Each condition links a rule to a check with evaluation criteria. Conditions are grouped by `condition_group`; within a group, `group_operator` (AND/OR) decides how conditions combine. Groups are always OR'd together by the engine.
 
+`fail_window` is in seconds; 0 selects the latest result only. Its multi-failure bounds are enforced by the [target create/update API](api_reference.md#post-apitargets), not by a database constraint: after count/interval normalization, `fail_count > 1` requires `fail_count × interval_s <= 1800`. There is no migration that rewrites existing values. Restores preserve saved values, and the engine evaluates them as stored, including positive windows greater than 1800 seconds.
+
 | Column          | Type    | Constraints                                   |
 |-----------------|---------|-----------------------------------------------|
 | id              | TEXT    | **PK**                                        |
