@@ -459,24 +459,43 @@ func (s *Store) UpdateTargetWithConditions(id, name, host, description string, e
 }
 
 // replaceTargetTagsTx clears all tag links for a target and re-inserts the
-// provided set. Tag values are uppercased + trimmed to match the canonical
-// form stored in tag_options. Unknown tag values (not in the catalog) are
-// silently skipped — the API layer is responsible for validating/rejecting.
+// provided set. Tag values are matched to tag_options by TagMatchKey, so any
+// casing of i/ı/İ/I finds the stored tag. Unknown tag values (not in the
+// catalog) are silently skipped — the API layer is responsible for
+// validating/rejecting.
 func replaceTargetTagsTx(tx *sql.Tx, targetID string, tags []string) error {
 	if _, err := tx.Exec(`DELETE FROM target_tags WHERE target_id = ?`, targetID); err != nil {
 		return err
 	}
-	seen := map[string]bool{}
+	if len(tags) == 0 {
+		return nil
+	}
+	rows, err := tx.Query(`SELECT id, value FROM tag_options WHERE grp = 'tag'`)
+	if err != nil {
+		return err
+	}
+	byKey := map[string]int{}
+	for rows.Next() {
+		var id int
+		var v string
+		if err := rows.Scan(&id, &v); err != nil {
+			rows.Close()
+			return err
+		}
+		byKey[TagMatchKey(v)] = id
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
 	for _, raw := range tags {
-		v := strings.ToUpper(strings.TrimSpace(raw))
-		if v == "" || seen[v] {
+		id, ok := byKey[TagMatchKey(raw)]
+		if !ok {
 			continue
 		}
-		seen[v] = true
 		if _, err := tx.Exec(
-			`INSERT OR IGNORE INTO target_tags (target_id, tag_id)
-			 SELECT ?, id FROM tag_options WHERE grp = 'tag' AND value = ?`,
-			targetID, v); err != nil {
+			`INSERT OR IGNORE INTO target_tags (target_id, tag_id) VALUES (?, ?)`,
+			targetID, id); err != nil {
 			return err
 		}
 	}

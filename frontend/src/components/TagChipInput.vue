@@ -16,22 +16,27 @@ const focused = ref(false)
 
 const optionValues = computed(() => props.options.map(o => o.value))
 
+// Tags are matched without caring which of i, ı, İ, I was typed, the only
+// letters where Turkish and English casing differ: "şişli" finds ŞİŞLİ, "it"
+// finds IT. Same rule as the server's store.TagMatchKey.
+const matchKey = v => String(v || '').trim().toUpperCase().replace(/İ/g, 'I')
+
 const selected = computed(() => props.modelValue || [])
 
 const suggestions = computed(() => {
-  const q = input.value.trim().toUpperCase()
+  const q = matchKey(input.value)
   const selSet = new Set(selected.value)
   return optionValues.value
     .filter(v => !selSet.has(v))
-    .filter(v => q === '' || v.toUpperCase().includes(q))
+    .filter(v => q === '' || matchKey(v).includes(q))
     .slice(0, 10)
 })
 
 function addChip(raw) {
-  const v = String(raw || '').trim().toUpperCase()
+  const v = String(raw || '').trim().toLocaleUpperCase('tr-TR')
   if (!v) return
   // Only accept values that exist in the catalog — admin-managed only.
-  const known = optionValues.value.find(o => o.toUpperCase() === v)
+  const known = optionValues.value.find(o => matchKey(o) === matchKey(v))
   if (!known) {
     // Surface a transient hint without throwing.
     hint.value = `No tag "${v}" — ask an admin to add it in Settings > Tags.`

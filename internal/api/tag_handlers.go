@@ -43,7 +43,7 @@ func (s *Server) handleCreateTag(w http.ResponseWriter, r *http.Request) {
 	}
 	tag, err := s.store.CreateTagOption(req.Group, req.Value)
 	if err != nil {
-		if strings.Contains(err.Error(), "UNIQUE") {
+		if strings.Contains(err.Error(), "UNIQUE") || strings.Contains(err.Error(), "already exists") {
 			s.audit(r, "create_tag", "tag", "", "group="+req.Group+" value="+req.Value+" duplicate", "failure")
 			writeError(w, http.StatusConflict, "tag value already exists")
 			return

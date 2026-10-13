@@ -33,9 +33,9 @@ func normalizeFailWindow(failCount, failWindow, intervalS int) (int, error) {
 	return failWindow, nil
 }
 
-// normalizeAndValidateTags uppercases + trims each incoming value, dedups,
-// and ensures every remaining value exists in the tag catalog (grp='tag').
-// Returns the cleaned list or the first unknown value.
+// normalizeAndValidateTags resolves each incoming value to its catalog entry
+// (grp='tag') by store.TagMatchKey, so any casing of i/ı/İ/I matches, and
+// dedups. Returns the catalog values or the first unknown value.
 func (s *Server) normalizeAndValidateTags(raw []string) (cleaned []string, unknown string, err error) {
 	if len(raw) == 0 {
 		return []string{}, "", nil
@@ -44,22 +44,26 @@ func (s *Server) normalizeAndValidateTags(raw []string) (cleaned []string, unkno
 	if err != nil {
 		return nil, "", err
 	}
-	valid := make(map[string]bool, len(catalog))
+	byKey := make(map[string]string, len(catalog))
 	for _, c := range catalog {
-		valid[c.Value] = true
+		byKey[store.TagMatchKey(c.Value)] = c.Value
 	}
 	seen := make(map[string]bool, len(raw))
 	cleaned = make([]string, 0, len(raw))
 	for _, v := range raw {
-		norm := strings.ToUpper(strings.TrimSpace(v))
-		if norm == "" || seen[norm] {
+		key := store.TagMatchKey(v)
+		if key == "" {
 			continue
 		}
-		seen[norm] = true
-		if !valid[norm] {
-			return nil, norm, nil
+		value, ok := byKey[key]
+		if !ok {
+			return nil, store.NormalizeTag(v), nil
 		}
-		cleaned = append(cleaned, norm)
+		if seen[value] {
+			continue
+		}
+		seen[value] = true
+		cleaned = append(cleaned, value)
 	}
 	return cleaned, "", nil
 }

@@ -342,7 +342,7 @@ Creates target, checks, rule, and rule conditions in one transaction. Creator is
   "contacts": "string (optional)",
   "project": "string (optional, must exist in tag_options)",
   "location": "string (optional, must exist in tag_options)",
-  "tags": ["string (optional, each must exist in tag_options where grp='tag'; uppercased on the server before lookup; unknown → 400)"],
+  "tags": ["string (optional, each must exist in tag_options where grp='tag'; matched ignoring which of i/ı/İ/I was typed, e.g. `şişli` finds `ŞİŞLİ` and `it` finds `IT`; stored as the catalog value; unknown → 400)"],
   "conditions": [
     {
       "check_type": "http | tcp | ping | dns | page_hash | tls_cert | snmp_v2c | snmp_v3 (required)",
@@ -568,18 +568,18 @@ Unpauses the target and immediately triggers RunNow on all its checks.
 ```
 
 **Notes:**
-- For `group: "tag"`, the server uppercases + trims `value` before insert (e.g. ` p1 ` → `P1`). The response shows the canonical form.
-- `(group, value)` must be unique.
+- For `group: "tag"`, the server trims `value` and uppercases it with Turkish rules before insert (` p1 ` → `P1`, `şişli` → `ŞİŞLİ`). English words typed in lowercase get `İ` too (`linux` → `LİNUX`); type them in capitals. The response shows the canonical form.
+- `(group, value)` must be unique. For `tag`, a value that differs from an existing tag only in i/ı/İ/I (`İT` next to `IT`) also counts as a duplicate.
 
 | Error | Code |
 |-------|------|
 | Missing/invalid group | 400 |
 | Empty value | 400 |
-| Duplicate value in group | 409 |
+| Duplicate value in group (for `tag`, also an i/ı/İ/I look-alike) | 409 |
 
 ### PUT /api/tags/{id}
 
-Renames a tag option. For categories: cascades to `targets.category` and renames the SLA settings key. "Other" category cannot be renamed. For `tag` group: value is uppercased before save; no cascade needed (targets reference tags by id via `target_tags`).
+Renames a tag option. For categories: cascades to `targets.category` and renames the SLA settings key. "Other" category cannot be renamed. For `tag` group: value is uppercased with Turkish rules before save (as on create), and renaming onto another tag's i/ı/İ/I look-alike is a duplicate; renaming a tag to its own look-alike (`KRİTİK` → `kritik`) is allowed. No cascade needed (targets reference tags by id via `target_tags`).
 
 **Request:**
 ```json
@@ -595,7 +595,7 @@ Renames a tag option. For categories: cascades to `targets.category` and renames
 |-------|------|
 | Tag not found | 404 |
 | Empty value | 400 |
-| Duplicate name | 409 |
+| Duplicate name (for `tag`, also an i/ı/İ/I look-alike of another tag) | 409 |
 | Cannot rename "Other" | 400 |
 
 ### DELETE /api/tags/{id}

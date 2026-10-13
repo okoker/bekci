@@ -3,6 +3,7 @@ package store
 import (
 	"fmt"
 	"strings"
+	"unicode"
 )
 
 type TagOption struct {
@@ -18,6 +19,44 @@ type CategoryInUseError struct {
 
 func (e *CategoryInUseError) Error() string {
 	return fmt.Sprintf("category has %d assigned targets", len(e.Targets))
+}
+
+// NormalizeTag is the stored form of a free tag: trimmed and uppercased with
+// Turkish rules (i → İ, ı → I), so "şişli" is stored as "ŞİŞLİ". English words
+// typed in lowercase get İ too ("linux" → "LİNUX"); typed in capitals they are
+// kept as they are.
+func NormalizeTag(v string) string {
+	return strings.ToUpperSpecial(unicode.TurkishCase, strings.TrimSpace(v))
+}
+
+// TagMatchKey compares free tags without caring which of i, ı, İ, I was
+// typed, the only letters where Turkish and English casing differ: "şişli",
+// "ŞİŞLİ" and "ŞIŞLI" share a key, as do "it" and "IT".
+func TagMatchKey(v string) string {
+	return strings.ReplaceAll(strings.ToUpper(strings.TrimSpace(v)), "İ", "I")
+}
+
+// freeTagLookAlike reports whether a free tag other than excludeID has the
+// same TagMatchKey as value. Such pairs ("IT" and "İT") are refused, so a
+// match key always names one tag.
+func (s *Store) freeTagLookAlike(value string, excludeID int) (bool, error) {
+	rows, err := s.db.Query(`SELECT id, value FROM tag_options WHERE grp = 'tag' AND id != ?`, excludeID)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+	key := TagMatchKey(value)
+	for rows.Next() {
+		var id int
+		var v string
+		if err := rows.Scan(&id, &v); err != nil {
+			return false, err
+		}
+		if TagMatchKey(v) == key {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
 }
 
 // CategoryToSLAKey derives the settings key for a category name.
@@ -49,11 +88,17 @@ func (s *Store) ListTagOptions(group string) ([]TagOption, error) {
 }
 
 // CreateTagOption adds a new tag value to a group. Values for the free-form
-// 'tag' group are uppercased before insert so "P1", "p1", and " P1 " all
-// collapse to the same canonical entry.
+// 'tag' group are normalized (NormalizeTag) before insert so "P1", "p1", and
+// " P1 " all collapse to the same canonical entry, and a look-alike of an
+// existing tag is refused.
 func (s *Store) CreateTagOption(group, value string) (*TagOption, error) {
 	if group == "tag" {
-		value = strings.ToUpper(strings.TrimSpace(value))
+		value = NormalizeTag(value)
+		if dup, err := s.freeTagLookAlike(value, 0); err != nil {
+			return nil, err
+		} else if dup {
+			return nil, fmt.Errorf("a tag with this name already exists")
+		}
 	}
 	res, err := s.db.Exec(`INSERT INTO tag_options (grp, value) VALUES (?, ?)`, group, value)
 	if err != nil {
@@ -126,7 +171,12 @@ func (s *Store) RenameTagOption(id int, newValue string) error {
 	}
 
 	if grp == "tag" {
-		newValue = strings.ToUpper(strings.TrimSpace(newValue))
+		newValue = NormalizeTag(newValue)
+		if dup, err := s.freeTagLookAlike(newValue, id); err != nil {
+			return err
+		} else if dup {
+			return fmt.Errorf("a tag with this name already exists")
+		}
 	}
 
 	if _, err := s.db.Exec(`UPDATE tag_options SET value = ? WHERE id = ?`, newValue, id); err != nil {
