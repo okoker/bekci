@@ -151,6 +151,7 @@ The public landing page (the "Sentinel" design) lives in `_website/` (`index.htm
 | vue | ^3.5.25 | UI framework (Composition API, `<script setup>`) |
 | vite | ^7.3.3 | Build tool + dev server |
 | @vitejs/plugin-vue | ^6.0.2 | Vue 3 SFC support for Vite |
+| playwright-core | 1.59.1 | Development-only browser regressions with Node's test runner and installed Chrome (`npm run test:ui`) |
 | vue-router | ^4.6.4 | Client-side routing (11 routes, SearchView + SlaView lazy-loaded) |
 | pinia | ^3.0.4 | State management |
 | axios | ^1.16.0 | HTTP client (withCredentials for cookie auth) |
@@ -163,11 +164,11 @@ The public landing page (the "Sentinel" design) lives in `_website/` (`index.htm
 Versions above are the `package.json` ranges. `package-lock.json` resolves vue 3.5.28 and @vitejs/plugin-vue 6.0.4; every other package resolves to the version shown.
 
 ### Frontend Build Output
-Measured from the committed build in `cmd/bekci/frontend_dist/assets/` at v3.4.5 on 12/10/2026 (raw bytes; gzip -9; kB = 1000 bytes). Figures change with every frontend build.
+Measured from the build in `cmd/bekci/frontend_dist/assets/` at v3.4.5 on 13/10/2026 (raw bytes; gzip -9; kB = 1000 bytes). Figures change with every frontend build.
 
 | Asset | Size (raw) | Size (gzipped) |
 |-------|-----------|----------------|
-| index-*.js | 313.45 kB | 100.06 kB |
+| index-*.js | 314.08 kB | 100.28 kB |
 | index-*.css | 49.71 kB | 9.06 kB |
 | SearchView-*.js | 15.16 kB | 5.21 kB |
 | SearchView-*.css | 5.43 kB | 1.53 kB |

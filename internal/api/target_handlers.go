@@ -11,11 +11,14 @@ import (
 
 // normalizeFailWindow auto-sets fail_window when fail_count > 1 and validates bounds.
 // Minimum window = failCount * intervalS (must fit enough checks to reach the threshold).
-func normalizeFailWindow(failCount, failWindow, intervalS int) int {
+func normalizeFailWindow(failCount, failWindow, intervalS int) (int, error) {
 	if failCount <= 1 {
-		return failWindow // no change needed for single-check mode
+		return failWindow, nil // no change needed for single-check mode
 	}
 	minWindow := failCount * intervalS
+	if minWindow > 1800 {
+		return 0, fmt.Errorf("fail_count × interval_s requires a %d-second window; maximum is 1800 seconds (30 minutes). Reduce fail_count or interval_s", minWindow)
+	}
 	// If fail_count > 1 but no fail_window, default to failCount * intervalS
 	if failWindow <= 0 {
 		failWindow = minWindow
@@ -27,7 +30,7 @@ func normalizeFailWindow(failCount, failWindow, intervalS int) int {
 	if failWindow > 1800 {
 		failWindow = 1800
 	}
-	return failWindow
+	return failWindow, nil
 }
 
 // normalizeAndValidateTags uppercases + trims each incoming value, dedups,
@@ -200,7 +203,11 @@ func (s *Server) handleCreateTarget(w http.ResponseWriter, r *http.Request) {
 		if failCount > 100 {
 			failCount = 100
 		}
-		failWindow := normalizeFailWindow(failCount, c.FailWindow, c.IntervalS)
+		failWindow, err := normalizeFailWindow(failCount, c.FailWindow, c.IntervalS)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("check %q: %v", c.CheckName, err))
+			return
+		}
 		conds = append(conds, store.TargetCondition{
 			CheckID:        c.CheckID,
 			CheckType:      c.CheckType,
@@ -410,7 +417,11 @@ func (s *Server) handleUpdateTarget(w http.ResponseWriter, r *http.Request) {
 		if failCount > 100 {
 			failCount = 100
 		}
-		failWindow := normalizeFailWindow(failCount, c.FailWindow, c.IntervalS)
+		failWindow, err := normalizeFailWindow(failCount, c.FailWindow, c.IntervalS)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("check %q: %v", c.CheckName, err))
+			return
+		}
 		conds = append(conds, store.TargetCondition{
 			CheckID:        c.CheckID,
 			CheckType:      c.CheckType,

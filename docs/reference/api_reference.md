@@ -367,7 +367,9 @@ If `group_operator` is omitted, it defaults to the top-level `operator` value fo
 - `fail_window > 0`: Counts consecutive matching results from newest (streak mode). Must reach `fail_count` consecutive failures to trigger the condition.
 - `fail_window = 0`: Single result check ("Once" mode). Triggers on a single matching result; `fail_count` is ignored.
 
-**Normalization:** When `fail_count` > 1, API auto-sets `fail_window` = `fail_count` × `interval_s` if it is 0 or omitted, and clamps any value to min=`fail_count` × `interval_s`, max=1800
+**Normalization and validation (create and update):** The API first normalizes `fail_count` to 1–100 and `interval_s` to 10–86400 seconds. When the resulting `fail_count` > 1, `fail_count` × `interval_s` must be at most 1800 seconds (30 minutes). A larger product returns **400** identifying the check and asking the caller to reduce `fail_count` or `interval_s`; nothing is saved. Exactly 1800 is allowed. For valid combinations, `fail_window` defaults to this product if 0 or omitted, and is clamped between the product and 1800. Single-failure conditions are exempt from the product limit; a check running once an hour with `fail_count=1` and `fail_window=0` is valid.
+
+The target editor shows an inline error as Fail Count or Interval changes and blocks submission while any condition exceeds the limit. Existing invalid conditions also show the error when edited or cloned; saved configurations are not automatically rewritten.
 
 **Response (201):** Full TargetDetail object (see GET /api/targets/{id}).
 
@@ -380,6 +382,7 @@ If `group_operator` is omitted, it defaults to the top-level `operator` value fo
 | Invalid check_type | 400 |
 | Invalid preferred_check_type | 400 |
 | Missing check_name | 400 |
+| Multi-failure threshold requires a window longer than 1800 seconds | 400 |
 | Invalid group_operator | 400 |
 | Invalid project tag | 400 |
 | Invalid location tag | 400 |
@@ -469,6 +472,7 @@ Conditions can include `check_id` to update existing checks:
 | Missing name/host | 400 |
 | No conditions provided | 400 |
 | Invalid operator/category/check_type | 400 |
+| Multi-failure threshold requires a window longer than 1800 seconds (no changes saved) | 400 |
 | Target not found | 404 |
 | Duplicate target name | 409 |
 

@@ -113,23 +113,32 @@ function removeGroup(groupIdx) {
   form.value.conditions = form.value.conditions.filter(c => c.condition_group !== groupIdx)
 }
 
+const maxFailWindow = 1800
+
+function minFailWindow(cond) {
+  // Match the submitted defaults and the API's count/interval bounds.
+  const count = Math.min(100, Math.max(1, Number(cond.fail_count) || 1))
+  const interval = Math.min(86400, Math.max(10, Number(cond.interval_s) || 60))
+  return count > 1 ? count * interval : 0
+}
+
+function failWindowError(cond) {
+  const minimum = minFailWindow(cond)
+  return minimum > maxFailWindow
+    ? `This failure threshold needs a ${minimum}-second window. Maximum is 1800 seconds (30 minutes). Reduce Fail Count or Interval.`
+    : ''
+}
+
+const hasFailWindowError = computed(() => form.value.conditions.some(cond => failWindowError(cond)))
+
 function onFailCountChange(cond) {
-  if (cond.fail_count > 1) {
-    const minWindow = cond.fail_count * cond.interval_s
-    if (!cond.fail_window || cond.fail_window < minWindow) {
-      cond.fail_window = minWindow
-    }
-  } else {
-    cond.fail_window = 0
-  }
+  if (cond.fail_count > 1) onIntervalChange(cond)
+  else cond.fail_window = 0
 }
 
 function onIntervalChange(cond) {
   if (cond.fail_count > 1) {
-    const minWindow = cond.fail_count * cond.interval_s
-    if (cond.fail_window < minWindow) {
-      cond.fail_window = minWindow
-    }
+    cond.fail_window = Math.min(maxFailWindow, Math.max(minFailWindow(cond), Number(cond.fail_window) || 0))
   }
 }
 
@@ -240,6 +249,7 @@ async function loadTargetDetail(id) {
 // Save
 async function saveTarget() {
   formError.value = ''
+  if (hasFailWindowError.value) return
   try {
     const payload = {
       name: form.value.name,
@@ -436,7 +446,10 @@ watch(() => props.show, async (val) => {
                   </div>
                   <div class="form-group">
                     <label>Interval (seconds)</label>
-                    <input type="number" v-model.number="cond.interval_s" min="10" style="max-width: 120px;" @change="onIntervalChange(cond)" />
+                    <input type="number" v-model.number="cond.interval_s" min="10" max="86400" style="max-width: 120px;"
+                      :aria-invalid="!!failWindowError(cond)"
+                      :aria-describedby="failWindowError(cond) ? `failure-window-error-${group.groupIdx}-${cIdx}` : undefined"
+                      @change="onIntervalChange(cond)" />
                   </div>
 
                   <!-- Type-specific config -->
@@ -601,17 +614,21 @@ watch(() => props.show, async (val) => {
                     </div>
                     <div class="form-group">
                       <label>Fail Count</label>
-                      <input type="number" v-model.number="cond.fail_count" min="1"
+                      <input type="number" v-model.number="cond.fail_count" min="1" max="100"
+                        :aria-invalid="!!failWindowError(cond)"
+                        :aria-describedby="failWindowError(cond) ? `failure-window-error-${group.groupIdx}-${cIdx}` : undefined"
                         @change="onFailCountChange(cond)" />
                     </div>
                     <div class="form-group">
                       <label>Time Window</label>
                       <input type="number" v-model.number="cond.fail_window"
-                        :min="cond.fail_count * cond.interval_s" max="1800"
+                        :min="minFailWindow(cond)" :max="maxFailWindow"
                         :disabled="cond.fail_count <= 1"
                         :title="cond.fail_count <= 1 ? 'Set Fail Count > 1 to enable window' : 'Time window for consecutive failures'" />
                     </div>
                   </div>
+                  <p v-if="failWindowError(cond)" class="error-msg" role="alert"
+                    :id="`failure-window-error-${group.groupIdx}-${cIdx}`">{{ failWindowError(cond) }}</p>
                 </div>
               </template>
 
@@ -637,7 +654,7 @@ watch(() => props.show, async (val) => {
         </div>
 
         <div class="form-actions">
-          <button type="submit" class="btn btn-primary" :disabled="form.conditions.length === 0">Save</button>
+          <button type="submit" class="btn btn-primary" :disabled="form.conditions.length === 0 || hasFailWindowError">Save</button>
           <button type="button" class="btn" @click="close">Cancel</button>
         </div>
       </form>
