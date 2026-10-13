@@ -40,10 +40,11 @@ Valid roles enforced at user creation and update: `admin`, `operator`, `viewer`.
 
 ### Token Validation (`auth.Service.ValidateToken`)
 
-1. Parse JWT, verify HS256 signature
+1. Parse JWT, verify the signature; only HS256 is accepted (HS384/HS512 or any other `alg` is rejected before the key is used), and the `exp` claim is required and must be in the future
 2. Check session exists in DB (catches logged-out tokens)
-3. Check session not expired (server-side expiry check independent of JWT `exp`)
-4. If expired: delete session from DB, reject
+3. Check the session belongs to the token's `sub` (session `user_id` = `sub`)
+4. Check session not expired (server-side expiry check independent of JWT `exp`)
+5. If expired: delete session from DB, reject
 
 ### Request Auth (`requireAuth` middleware)
 

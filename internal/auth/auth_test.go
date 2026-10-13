@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 
 	"github.com/bekci/internal/store"
@@ -120,6 +121,69 @@ func TestValidateTokenExpiredSession(t *testing.T) {
 	_, err = svc.ValidateToken(token)
 	if err == nil {
 		t.Fatal("expected error for deleted session, got nil")
+	}
+}
+
+// Review item D-25: only tokens shaped like the ones CreateToken issues are
+// accepted — HS256, an exp claim, and a sub that owns the session.
+func TestValidateTokenRejectsTokensNotIssuedByCreateToken(t *testing.T) {
+	st := newTestStore(t)
+	svc := New(st, "testsecret")
+
+	user := createTestUser(t, st, "shapeuser", "pass123", "admin")
+	other := createTestUser(t, st, "otheruser", "pass123", "viewer")
+
+	sessionID := uuid.New().String()
+	if err := st.CreateSession(&store.Session{
+		ID:        sessionID,
+		UserID:    user.ID,
+		ExpiresAt: time.Now().Add(time.Hour),
+		IPAddress: "127.0.0.1",
+		CreatedAt: time.Now(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	sign := func(method jwt.SigningMethod, sub string, exp *jwt.NumericDate) string {
+		t.Helper()
+		claims := Claims{
+			SessionID: sessionID,
+			Role:      "admin",
+			RegisteredClaims: jwt.RegisteredClaims{
+				Subject:   sub,
+				ExpiresAt: exp,
+				IssuedAt:  jwt.NewNumericDate(time.Now()),
+			},
+		}
+		s, err := jwt.NewWithClaims(method, claims).SignedString([]byte("testsecret"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+	inAnHour := jwt.NewNumericDate(time.Now().Add(time.Hour))
+
+	cases := []struct {
+		name   string
+		token  string
+		wantOK bool
+	}{
+		{"HS256 with exp and the session's user", sign(jwt.SigningMethodHS256, user.ID, inAnHour), true},
+		{"HS384 with the right secret", sign(jwt.SigningMethodHS384, user.ID, inAnHour), false},
+		{"HS512 with the right secret", sign(jwt.SigningMethodHS512, user.ID, inAnHour), false},
+		{"no exp claim", sign(jwt.SigningMethodHS256, user.ID, nil), false},
+		{"sub is another user than the session's", sign(jwt.SigningMethodHS256, other.ID, inAnHour), false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := svc.ValidateToken(tc.token)
+			if tc.wantOK && err != nil {
+				t.Fatalf("expected token to be accepted, got %v", err)
+			}
+			if !tc.wantOK && err == nil {
+				t.Fatal("expected token to be rejected, got nil error")
+			}
+		})
 	}
 }
 

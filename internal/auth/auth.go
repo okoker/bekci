@@ -54,14 +54,13 @@ func (svc *Service) CreateToken(userID, sessionID, role string, duration time.Du
 	return token.SignedString(svc.jwtSecret)
 }
 
-// ValidateToken parses and validates a JWT, checks the session exists and is not expired.
+// ValidateToken parses and validates a JWT, checks the session exists, is not
+// expired and belongs to the token's subject. Only tokens shaped like those
+// CreateToken issues are accepted: HS256 with an exp claim.
 func (svc *Service) ValidateToken(tokenString string) (*Claims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(t *jwt.Token) (any, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
-		}
 		return svc.jwtSecret, nil
-	})
+	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}), jwt.WithExpirationRequired())
 	if err != nil {
 		return nil, fmt.Errorf("invalid token: %w", err)
 	}
@@ -78,6 +77,9 @@ func (svc *Service) ValidateToken(tokenString string) (*Claims, error) {
 	}
 	if sess == nil {
 		return nil, fmt.Errorf("session not found (logged out)")
+	}
+	if sess.UserID != claims.Subject {
+		return nil, fmt.Errorf("session does not belong to token subject")
 	}
 	if time.Now().After(sess.ExpiresAt) {
 		svc.store.DeleteSession(sess.ID)
