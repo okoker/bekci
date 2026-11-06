@@ -5,10 +5,8 @@ const props = defineProps({
   modelValue: { type: Array, default: () => [] },
   options: { type: Array, default: () => [] },
   placeholder: { type: String, default: 'Add tag…' },
-  allowPin: { type: Boolean, default: false },
-  pinned: { type: Array, default: () => [] },
 })
-const emit = defineEmits(['update:modelValue', 'update:pinned'])
+const emit = defineEmits(['update:modelValue'])
 
 const input = ref('')
 const inputEl = ref(null)
@@ -51,17 +49,6 @@ function addChip(raw) {
 
 function removeChip(v) {
   emit('update:modelValue', selected.value.filter(x => x !== v))
-  if (props.allowPin) {
-    emit('update:pinned', props.pinned.filter(x => x !== v))
-  }
-}
-
-function togglePin(v) {
-  if (!props.allowPin) return
-  const set = new Set(props.pinned)
-  if (set.has(v)) set.delete(v)
-  else set.add(v)
-  emit('update:pinned', Array.from(set))
 }
 
 function onKeydown(e) {
@@ -88,8 +75,7 @@ function onBlur() {
 <template>
   <div class="tag-chip-input" :class="{ focused }">
     <div class="chip-row">
-      <span v-for="v in selected" :key="v" class="chip" :class="{ pinned: pinned.includes(v) }">
-        <button v-if="allowPin" class="chip-pin" @click="togglePin(v)" :title="pinned.includes(v) ? 'Unpin' : 'Pin to top'" type="button">📌</button>
+      <span v-for="v in selected" :key="v" class="chip">
         <span class="chip-label">{{ v }}</span>
         <button class="chip-x" @click="removeChip(v)" type="button" title="Remove">&times;</button>
       </span>
@@ -147,12 +133,8 @@ function onBlur() {
   font-size: 0.8rem;
   font-weight: 500;
 }
-.chip.pinned {
-  background: #fef3c7;
-  color: #92400e;
-}
 .chip-label { user-select: none; }
-.chip-x, .chip-pin {
+.chip-x {
   background: transparent;
   border: none;
   cursor: pointer;
@@ -162,8 +144,6 @@ function onBlur() {
   line-height: 1;
 }
 .chip-x:hover { color: #dc2626; }
-.chip-pin { font-size: 0.7rem; opacity: 0.6; }
-.chip-pin:hover { opacity: 1; }
 .chip-text {
   border: none;
   outline: none;

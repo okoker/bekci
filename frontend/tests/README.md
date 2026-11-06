@@ -52,3 +52,7 @@ leave out hosts without data (-1), instead of averaging the daily percentages.
 off for a new check, ticking it shows its hint and Save sends `expect_closed: true` with the
 default rule (Status equals down); a saved check with the option opens ticked, and unticking it
 saves `expect_closed: false`.
+
+`targets-tag-filter.test.mjs` covers the Targets filter bar: a Tags chip has only its Remove button
+(no pin), and tags, Location and Project combine so each one narrows the list; removing a chip
+widens it again.

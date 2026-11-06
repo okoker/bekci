@@ -24,7 +24,6 @@ const projectsRaw = ref([])
 const locationsRaw = ref([])
 const tagOptions = ref([])
 const activeTags = ref([])
-const pinnedTags = ref([])
 const categories = computed(() => {
   const sorted = [...categoriesRaw.value].sort((a, b) => {
     if (a === 'Other') return 1
@@ -68,15 +67,6 @@ const filteredTargets = computed(() => {
       const tt = t.tags || []
       return activeTags.value.every(tag => tt.includes(tag))
     })
-  }
-  // Stable pin-to-promote: rows matching the most pinned tags float to top,
-  // rows with zero matches keep their original order.
-  if (pinnedTags.value.length > 0) {
-    const pins = pinnedTags.value
-    list = [...list]
-      .map((t, i) => ({ t, i, score: (t.tags || []).reduce((n, v) => n + (pins.includes(v) ? 1 : 0), 0) }))
-      .sort((a, b) => b.score - a.score || a.i - b.i)
-      .map(x => x.t)
   }
   return list
 })
@@ -342,9 +332,7 @@ onMounted(async () => {
       <label class="filter-label">Tags:</label>
       <TagChipInput
         v-model="activeTags"
-        v-model:pinned="pinnedTags"
         :options="tagOptions"
-        :allow-pin="true"
         placeholder="Filter by tag…"
       />
     </div>
