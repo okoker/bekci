@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -88,6 +89,55 @@ func TestTCPCheckSuccess(t *testing.T) {
 	r := Run("tcp", "127.0.0.1", string(cfg))
 	if r.Status != "up" {
 		t.Fatalf("expected status up, got %s (message: %s)", r.Status, r.Message)
+	}
+}
+
+// Backlog A-063: a port that must stay closed. With expect_closed, any failed
+// connection (refused, timed out, unreachable) is the healthy result and a
+// successful connect is the problem; without it nothing changes.
+func TestTCPCheckExpectClosed(t *testing.T) {
+	open, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer open.Close()
+	_, openPort, _ := net.SplitHostPort(open.Addr().String())
+
+	shut, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, closedPort, _ := net.SplitHostPort(shut.Addr().String())
+	shut.Close() // nothing listens there now: connecting is refused
+
+	cases := []struct {
+		name, host, port string
+		extra            map[string]any
+		want, inMessage  string
+	}{
+		{"open port, expected closed", "127.0.0.1", openPort, map[string]any{"expect_closed": true}, "down", "should be closed"},
+		{"refused, expected closed", "127.0.0.1", closedPort, map[string]any{"expect_closed": true}, "up", "refused"},
+		// TEST-NET-1 (RFC 5737) never answers: a timeout or an unreachable network, both count as closed
+		{"no answer, expected closed", "192.0.2.1", "3389", map[string]any{"expect_closed": true, "timeout_s": 1}, "up", "closed as expected"},
+		{"refused, not set", "127.0.0.1", closedPort, nil, "down", "refused"},
+		{"open port, false", "127.0.0.1", openPort, map[string]any{"expect_closed": false}, "up", "OK"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			conf := map[string]any{"port": jsonPort(c.port)}
+			maps.Copy(conf, c.extra)
+			cfg, _ := json.Marshal(conf)
+			r := Run("tcp", c.host, string(cfg))
+			if r.Status != c.want {
+				t.Fatalf("status %s, want %s (message: %s)", r.Status, c.want, r.Message)
+			}
+			if !strings.Contains(r.Message, c.inMessage) {
+				t.Fatalf("message %q, want it to contain %q", r.Message, c.inMessage)
+			}
+			if r.Metrics["addr"] != net.JoinHostPort(c.host, c.port) {
+				t.Fatalf("metrics addr %v, want %s", r.Metrics["addr"], net.JoinHostPort(c.host, c.port))
+			}
+		})
 	}
 }
 

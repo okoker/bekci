@@ -47,3 +47,8 @@ before whole hours shows as the hour the server runs it in (`04:30` → `04:00`,
 `sla-uptime.test.mjs` covers the SLA page's Not Meeting SLA, category and All cards: they use each
 host's `uptime_90d_pct` from the server (the Dashboard's pooled figure), one value per host, and
 leave out hosts without data (-1), instead of averaging the daily percentages.
+
+`tcp-expect-closed.test.mjs` covers the target editor's TCP check: "Port must stay closed" is
+off for a new check, ticking it shows its hint and Save sends `expect_closed: true` with the
+default rule (Status equals down); a saved check with the option opens ticked, and unticking it
+saves `expect_closed: false`.

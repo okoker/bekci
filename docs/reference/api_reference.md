@@ -779,12 +779,16 @@ Metrics: `status_code`, `url`. Status "down" if response code != `expect_status`
 |-------|------|---------|-------------|
 | `port` | int | `80` | Destination port |
 | `timeout_s` | int | `5` | Connection timeout (seconds) |
+| `expect_closed` | bool | `false` | The port must stay closed: the result is turned around |
 
 ```json
 { "port": 443, "timeout_s": 10 }
+{ "port": 3389, "timeout_s": 5, "expect_closed": true }
 ```
 
-Metrics: `addr`. Simple connect-then-close test.
+Metrics: `addr`. Simple connect-then-close test. Status "up" when the connection succeeds, "down" when it fails (refused, timed out, unreachable, or the host name does not resolve).
+
+With `expect_closed: true` it is the other way round: any failed connection is "up" (message `Port closed as expected: <error>`), a successful one is "down" (message `TCP connect to <addr> succeeded, but this port should be closed`). Uptime and SLA then count a closed port as uptime, and the default condition `status` equals `down` alerts when the port opens. A timeout also counts as closed, so a host that is switched off reads "up" on this check; pair it with a ping check if that matters. The target editor shows the option as "Port must stay closed"; new TCP checks from the editor store `expect_closed: false`.
 
 ### ping
 

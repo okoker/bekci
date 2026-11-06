@@ -43,7 +43,7 @@ function getEmptyForm() {
 function getDefaultConfig(type_) {
   switch (type_) {
     case 'http': return { scheme: 'https', port: 0, endpoint: '/', expect_status: 200, skip_tls_verify: false, timeout_s: 10 }
-    case 'tcp': return { port: 80, timeout_s: 5 }
+    case 'tcp': return { port: 80, timeout_s: 5, expect_closed: false }
     case 'ping': return { count: 3, timeout_s: 5 }
     case 'dns': return { query: '', record_type: 'A', expect_value: '', nameserver: '' }
     case 'page_hash': return { scheme: 'https', endpoint: '/', baseline_hash: '', timeout_s: 10 }
@@ -502,6 +502,10 @@ watch(() => props.show, async (val) => {
                         <input type="number" v-model.number="cond.config.timeout_s" min="1" max="60" />
                       </div>
                     </div>
+                    <div class="form-group checkbox-group">
+                      <label class="checkbox-label"><input type="checkbox" v-model="cond.config.expect_closed" /> Port must stay closed</label>
+                    </div>
+                    <p v-if="cond.config.expect_closed" class="text-muted input-hint">Up while the port is closed or does not answer, down when it accepts a connection. The usual Status equals down then alerts when the port opens.</p>
                   </template>
 
                   <template v-if="cond.check_type === 'ping'">
