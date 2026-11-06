@@ -306,7 +306,7 @@ Returns summary list (no full conditions, includes condition count and state).
     "rule_id": "uuid",
     "notes": "Main web server notes",
     "contacts": "ops@example.com",
-    "project": "DIAS",
+    "project": "ACME",
     "location": "DC-1",
     "tags": ["DEVOPS", "IT", "P1"],
     "created_at": "2026-01-15T10:00:00Z",
@@ -412,7 +412,7 @@ Returns full target detail with conditions, state, and recipient IDs.
   "rule_id": "uuid",
   "notes": "Main web server",
   "contacts": "ops@example.com",
-  "project": "DIAS",
+  "project": "ACME",
   "location": "DC-1",
   "tags": ["DEVOPS", "IT", "P1"],
   "created_at": "2026-01-15T10:00:00Z",
@@ -547,7 +547,7 @@ Unpauses the target and immediately triggers RunNow on all its checks.
 **Response (200):**
 ```json
 [
-  { "id": 1, "group": "project", "value": "DIAS" },
+  { "id": 1, "group": "project", "value": "ACME" },
   { "id": 2, "group": "project", "value": "SCADA" }
 ]
 ```
@@ -1598,7 +1598,7 @@ Admin-only details for **Settings > System Health**. Kept separate from `/api/sy
   "ram": { "total_gb": 7.76, "used_gb": 0.72, "used_pct": 9.3 },
   "cpu": { "load1": 0.03, "load5": 0.01, "load15": 0, "num_cpu": 2 },
   "uptime": { "system_sec": 9258214, "process_sec": 1820 },
-  "server_ip": "10.0.9.20",
+  "server_ip": "192.0.2.20",
   "version": "3.4.2",
   "build": { "commit": "19b66d6", "time": "2026-10-07T01:00:00Z" },
   "go_version": "go1.27.1",
@@ -1772,8 +1772,8 @@ Return a point-in-time snapshot of any target(s) whose `host` field matches the 
     {
       "target_id": "uuid",
       "name": "Web Server",
-      "host": "10.0.9.20",
-      "project": "DIAS",
+      "host": "192.0.2.20",
+      "project": "ACME",
       "location": "DC-1",
       "contacts": "ops@example.com",
       "notes": "primary prod; owner alice",
@@ -1801,7 +1801,7 @@ Return a point-in-time snapshot of any target(s) whose `host` field matches the 
 **Examples:**
 ```
 curl -H "Authorization: Bearer bk_<token>" \
-  "http://bekci.internal:65000/api/v1/hosts?host=10.0.9.20"
+  "http://bekci.internal:65000/api/v1/hosts?host=192.0.2.20"
 ```
 
 | Error | Code |

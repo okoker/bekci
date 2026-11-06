@@ -8,7 +8,7 @@
 | Database | SQLite 3 via go-sqlite3 (CGO required), WAL mode, `SetMaxOpenConns(1)`, schema v27 (fresh installs create v27 from the baseline; existing v22+ databases, and v21 via a bridge, migrate incrementally) |
 | Frontend | Vue 3, Vite 7, Vue Router 4, Pinia 3, Axios, Chart.js + vue-chartjs |
 | Auth | JWT HS256 (golang-jwt/v5) in HttpOnly cookie (`token`), bcrypt cost 12 |
-| Reverse Proxy | Nginx 1.18 (prod only) — SSL termination, security headers, gzip |
+| Reverse Proxy | Nginx (prod only) — SSL termination, security headers, gzip |
 | Email | Resend API (default) or Microsoft 365 SMTP (`email_provider` = `ms365`; STARTTLS required, LOGIN auth, port 587 default) |
 | Signal | Signal Messenger via signal-cli REST API |
 | Webhook | Generic JSON POST to any HTTP endpoint (SOAR, Slack, etc.), Bearer or Basic auth |
@@ -23,9 +23,9 @@
 
 | | **Local Dev (Docker)** | **Production** |
 |---|---|---|
-| **Host** | Docker Desktop on macOS | `ssh cl@dias-bekci` (10.0.9.20) |
-| **URL** | `http://localhost:65000` | `https://dias-bekci` (nginx on 443) |
-| **OS** | Alpine 3.23 (container) | Ubuntu 22.04.5 LTS (kernel 5.15) |
+| **Host** | Docker Desktop on macOS | `ssh <deploy-user>@<prod-host>` |
+| **URL** | `http://localhost:65000` | `https://<prod-host>` (nginx on 443) |
+| **OS** | Alpine 3.23 (container) | Ubuntu LTS |
 | **Go** | 1.27-alpine (build stage) | 1.27.2 (`/usr/local/go`; 1.27.1 kept at `/usr/local/go1.27.1`) |
 | **Node** | 22-alpine (build stage) | None (frontend pre-built in repo) |
 | **DB path** | `/data/bekci.db` (Docker volume `bekci-data`) | `/var/lib/bekci/bekci.db` |
@@ -33,8 +33,10 @@
 | **Config** | Env vars in `docker-compose.yml` | `/etc/bekci/config.yaml` + `/etc/bekci/env` |
 | **Service** | Docker (`restart: unless-stopped`) | systemd (`bekci.service`, user `bekci:bekci`) |
 | **NET_RAW** | `cap_add: [NET_RAW]` in compose | `AmbientCapabilities=CAP_NET_RAW` in systemd unit |
-| **Reverse proxy** | None (direct access) | Nginx 1.18 on port 443 |
+| **Reverse proxy** | None (direct access) | Nginx on port 443 |
 | **Default creds** | admin / admin1234 (code default on first boot; user changes post-boot) | admin / admin1234 (code default on first boot; user changes post-boot) |
+
+> **Production details**: this repo is public, so the production host name, address, login and exact server versions are not recorded here; they are in the gitignored `docs/PRODUCTION.md`.
 
 > **Note**: Bare-metal Go development on macOS is possible (`make dev`, `make run`) but Docker is the primary local dev/test method. Frontend dev uses Vite HMR via `cd frontend && npm run dev` (proxies `/api` to localhost:65000).
 
@@ -54,7 +56,6 @@ Nginx handles SSL termination, security headers, and compression in front of the
 | SSL protocols | TLSv1.2, TLSv1.3 |
 | Gzip | On — JSON, JS, CSS, XML; level 5; min 1000 bytes |
 | Proxy target | `http://127.0.0.1:65000` |
-| OpenSSL | 3.0.2 |
 
 **Security headers** (set by nginx, not Go):
 - `X-Frame-Options: SAMEORIGIN`
@@ -99,8 +100,8 @@ make test         # go test -v ./...
 
 ### Production (bare-metal)
 ```bash
-ssh cl@dias-bekci
-cd /home/cl/bekci-src && git pull
+ssh <deploy-user>@<prod-host>
+cd ~/bekci-src && git pull
 export PATH=/usr/local/go/bin:$PATH
 CGO_ENABLED=1 go build -ldflags '-X main.version=X.Y.Z' -o bin/bekci ./cmd/bekci
 sudo systemctl stop bekci && sudo cp bin/bekci /opt/bekci/bekci && sudo systemctl start bekci
