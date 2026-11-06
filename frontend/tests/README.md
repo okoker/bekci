@@ -34,3 +34,6 @@ save, the open Targets row badges the new primary check.
 `wrong-password.test.mjs` covers Profile › Change Password with a wrong current password: the
 server's 401 is shown on the page, which stays on Profile; any other 401 still goes to the login
 page. It also checks that the Audit Log gives `login_failed` the failure badge colour.
+
+`tag-delete.test.mjs` covers Settings › Tags: deleting a free tag, project, location or category
+asks "Really delete this?", and only an accepted confirm sends the delete.

@@ -934,7 +934,7 @@ async function addTag(group) {
 
 async function deleteTag(id) {
   categoryDeleteError.value = null
-  if (!confirm('Are you sure you want to delete this category?')) return
+  if (!confirm('Really delete this?')) return
   try {
     await api.delete(`/tags/${id}`)
     await loadTags()
