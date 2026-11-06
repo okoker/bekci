@@ -33,3 +33,6 @@ frontend/dist/
 # Private
 __user_private/
 _security_reviews/
+# Architecture pages that name the production host: kept local only (see docs/PRODUCTION.md)
+docs/reference/tech_stack_workflow.html
+docs/reference/tech_stack_architecture-light.html
