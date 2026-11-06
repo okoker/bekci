@@ -22,3 +22,6 @@ for a category named with `İ`.
 
 `full-backup-download.test.mjs` covers the Full Database Backup card: after a failed or
 completed download, the Saved Backups list is reloaded so the server's copy appears.
+
+`alert-method.test.mjs` covers Settings > Alerting > Alert Method "Disabled" (stored as
+`""`): it loads as Disabled, saves as `""`, and still shows Disabled after the save.

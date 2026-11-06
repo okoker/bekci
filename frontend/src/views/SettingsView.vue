@@ -609,7 +609,8 @@ function loadAlertSettings() {
   // Pull alerting keys from the shared settings ref
   const s = settings.value
   alertForm.value = {
-    alert_method: s.alert_method || 'email',
+    // "" is a real choice (Disabled), not a missing value: `||` turned it into Email
+    alert_method: s.alert_method ?? '',
     email_provider: s.email_provider || 'resend',
     resend_api_key: s.resend_api_key || '',
     alert_from_email: s.alert_from_email || '',
