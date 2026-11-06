@@ -71,3 +71,62 @@ func TestCheckListsOrderEqualNamesByID(t *testing.T) {
 		t.Errorf("ListAllChecks: %v, want id order %v", got, want)
 	}
 }
+
+// T-S35: after an update, preferred_check_type names one of the target's checks
+// (backlog A-060): the requested type if a check of that type remains after the
+// save, else the first condition's check type. An existing check counts with its
+// stored type, not the check_type the request sends for it (a check's type
+// never changes on update).
+func TestUpdatePreferredCheckTypeNamesATargetCheck(t *testing.T) {
+	cond := func(checkType, checkID string) TargetCondition {
+		return TargetCondition{CheckID: checkID, CheckType: checkType, CheckName: checkType + "-check", Config: "{}",
+			IntervalS: 60, Field: "status", Comparator: "eq", Value: "down", FailCount: 1, GroupOperator: "AND"}
+	}
+	for _, tc := range []struct {
+		name      string
+		update    func(dnsID, httpID string) []TargetCondition
+		requested string
+		want      string
+	}{
+		{"preferred check removed: first condition's type",
+			func(dnsID, httpID string) []TargetCondition { return []TargetCondition{cond("dns", dnsID)} }, "http", "dns"},
+		{"existing check sent with another check_type keeps its own type",
+			func(dnsID, httpID string) []TargetCondition { return []TargetCondition{cond("http", dnsID)} }, "http", "dns"},
+		{"another existing type requested",
+			func(dnsID, httpID string) []TargetCondition {
+				return []TargetCondition{cond("dns", dnsID), cond("http", httpID)}
+			}, "dns", "dns"},
+		{"nothing requested: first condition's type",
+			func(dnsID, httpID string) []TargetCondition {
+				return []TargetCondition{cond("dns", dnsID), cond("http", httpID)}
+			}, "", "dns"},
+		{"type of a check added in the same save",
+			func(dnsID, httpID string) []TargetCondition {
+				return []TargetCondition{cond("dns", dnsID), cond("tcp", "")}
+			}, "tcp", "tcp"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := newTestStore(t)
+			tgt := &Target{Name: "pref", Host: "pref.example.com", Enabled: true, Operator: "AND", Category: "Other",
+				PreferredCheckType: "http"}
+			conds := []TargetCondition{cond("dns", ""), cond("http", "")}
+			if err := s.CreateTargetWithConditions(tgt, conds, ""); err != nil {
+				t.Fatal(err)
+			}
+			if tgt.PreferredCheckType != "http" {
+				t.Fatalf("precondition: created with preference %q, want http", tgt.PreferredCheckType)
+			}
+			if err := s.UpdateTargetWithConditions(tgt.ID, tgt.Name, tgt.Host, "", true, "AND", "Other", tc.requested,
+				nil, nil, nil, nil, nil, tc.update(conds[0].CheckID, conds[1].CheckID)); err != nil {
+				t.Fatal(err)
+			}
+			got, err := s.GetTarget(tgt.ID)
+			if err != nil || got == nil {
+				t.Fatalf("target after update: %v", err)
+			}
+			if got.PreferredCheckType != tc.want {
+				t.Errorf("preferred_check_type = %q, want %q", got.PreferredCheckType, tc.want)
+			}
+		})
+	}
+}

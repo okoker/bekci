@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -210,16 +211,11 @@ func (s *Store) CreateTargetWithConditions(t *Target, conds []TargetCondition, c
 		return err
 	}
 
-	// Use caller-specified preferred type if it matches a condition, else first condition's type
-	preferredType := conds[0].CheckType
-	if t.PreferredCheckType != "" {
-		for _, c := range conds {
-			if c.CheckType == t.PreferredCheckType {
-				preferredType = t.PreferredCheckType
-				break
-			}
-		}
+	types := make([]string, len(conds))
+	for i, c := range conds {
+		types[i] = c.CheckType
 	}
+	preferredType := preferredCheckType(t.PreferredCheckType, types)
 
 	// Create checks + conditions
 	for i, c := range conds {
@@ -294,34 +290,21 @@ func (s *Store) UpdateTargetWithConditions(id, name, host, description string, e
 
 	// Get current target for rule_id
 	var ruleID sql.NullString
-	var currentPreferred string
-	err = tx.QueryRow(`SELECT rule_id, preferred_check_type FROM targets WHERE id = ?`, id).Scan(&ruleID, &currentPreferred)
+	err = tx.QueryRow(`SELECT rule_id FROM targets WHERE id = ?`, id).Scan(&ruleID)
 	if err != nil {
 		return fmt.Errorf("target not found")
 	}
 
 	now := time.Now()
-	preferredType := currentPreferred
-	if preferredCheck != "" && len(conds) > 0 {
-		// Use caller-specified preferred type if it matches a condition
-		for _, c := range conds {
-			if c.CheckType == preferredCheck {
-				preferredType = preferredCheck
-				break
-			}
-		}
-	} else if len(conds) > 0 {
-		preferredType = conds[0].CheckType
-	}
 
-	// Update target fields
+	// Update target fields (preferred_check_type is set after the checks are saved)
 	_, err = tx.Exec(`
 		UPDATE targets SET name = ?, host = ?, description = ?, enabled = ?,
-			preferred_check_type = ?, operator = ?, category = ?,
+			operator = ?, category = ?,
 			notes = ?, contacts = ?, project = ?, location = ?,
 			updated_at = ?
 		WHERE id = ?
-	`, name, host, description, en, preferredType, operator, category, notes, contacts, project, location, now, id)
+	`, name, host, description, en, operator, category, notes, contacts, project, location, now, id)
 	if err != nil {
 		return err
 	}
@@ -459,7 +442,51 @@ func (s *Store) UpdateTargetWithConditions(id, name, host, description string, e
 		}
 	}
 
+	// Match the preference against the stored check types: an existing check
+	// keeps its type whatever check_type the request sends for it.
+	types, err := conditionCheckTypesTx(tx, rid)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`UPDATE targets SET preferred_check_type = ? WHERE id = ?`, preferredCheckType(preferredCheck, types), id); err != nil {
+		return err
+	}
+
 	return tx.Commit()
+}
+
+// preferredCheckType is the target's preferred check type after a create or
+// update: the requested type if one of the target's checks has it, otherwise
+// the first condition's check type. types lists the target's check types in
+// condition order and is never empty, so the stored preference always names
+// one of the target's checks (backlog A-060).
+func preferredCheckType(requested string, types []string) string {
+	if requested != "" && slices.Contains(types, requested) {
+		return requested
+	}
+	return types[0]
+}
+
+// conditionCheckTypesTx lists the stored type of each condition's check, in
+// condition order.
+func conditionCheckTypesTx(tx *sql.Tx, ruleID string) ([]string, error) {
+	rows, err := tx.Query(`
+		SELECT c.type FROM rule_conditions rc JOIN checks c ON c.id = rc.check_id
+		WHERE rc.rule_id = ? ORDER BY rc.sort_order
+	`, ruleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var types []string
+	for rows.Next() {
+		var t string
+		if err := rows.Scan(&t); err != nil {
+			return nil, err
+		}
+		types = append(types, t)
+	}
+	return types, rows.Err()
 }
 
 // replaceTargetTagsTx clears all tag links for a target and re-inserts the

@@ -452,7 +452,7 @@ Smart-diffs conditions: existing checks with `check_id` are updated, new conditi
 
 **Note:** A check's `type` is immutable after creation. To change a check's type (e.g. http to ping), delete the condition and add a new one with the desired type. The `check_type` field is still required and validated for every condition (400 if invalid), but for existing checks it does not change the stored type.
 
-**Request:** Same structure as POST /api/targets. On update, `preferred_check_type` is applied only if it matches a condition's `check_type`; otherwise the stored value is kept. If omitted, the first condition's `check_type` is used.
+**Request:** Same structure as POST /api/targets. On update, `preferred_check_type` is applied only if one of the target's checks has that type after the save, matched against the stored check types (an existing check keeps its type whatever `check_type` the request sends for it). If it is omitted or no check has that type, the first condition's check type is used, so the stored value always names one of the target's checks.
 
 Conditions can include `check_id` to update existing checks:
 ```json
