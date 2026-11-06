@@ -3,6 +3,7 @@ package api
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"math"
 	"net"
 	"net/http"
@@ -91,7 +92,7 @@ type backupInfo struct {
 	LastBytes int64  `json:"last_bytes"`
 	Encrypted bool   `json:"encrypted"`
 	Schedule  string `json:"schedule"` // auto_backup_schedule: off | weekly | 10days | monthly
-	Time      string `json:"time"`     // auto_backup_time (HH:MM)
+	Time      string `json:"time"`     // hour it runs in, HH:00 (from auto_backup_time; 03:00 when empty or unreadable)
 }
 
 type logInfo struct {
@@ -309,10 +310,8 @@ func (s *Server) readBackupInfo() backupInfo {
 	if info.Schedule == "" {
 		info.Schedule = "off"
 	}
-	info.Time, _ = s.store.GetSetting("auto_backup_time")
-	if info.Time == "" {
-		info.Time = "03:00"
-	}
+	stored, _ := s.store.GetSetting("auto_backup_time")
+	info.Time = fmt.Sprintf("%02d:00", backupHour(stored)) // the hour it runs in
 	entries := loadBackupIndex(s.backupDir)
 	info.Count = len(entries)
 	for _, e := range entries {

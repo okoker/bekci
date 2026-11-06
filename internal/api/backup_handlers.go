@@ -538,33 +538,51 @@ func (s *Server) handleDeleteSavedBackup(w http.ResponseWriter, r *http.Request)
 // RunScheduledBackup creates an unencrypted full backup if the schedule is due.
 // Called from the hourly maintenance goroutine in main.go.
 func (s *Server) RunScheduledBackup() {
+	s.runScheduledBackupAt(time.Now())
+}
+
+// backupHour is the hour the scheduled backup runs in: the hour of the stored
+// auto_backup_time, or 3 when it is empty or not a time. Saves accept only whole
+// hours; "03:45" or "25:00" can be stored from before that check or a restore.
+func backupHour(v string) int {
+	t, err := time.Parse("15:04", v)
+	if err != nil {
+		return 3
+	}
+	return t.Hour()
+}
+
+// calendarDays counts the dates from one time to another, in the second
+// time's zone: a backup on Monday at 14:00 makes the next Monday 7 days on.
+// Exact 24-hour periods made "weekly" every 8 days: the hourly check a week
+// later falls the seconds the backup took short of 7 days and skips, and the
+// next check in that hour is a day later.
+func calendarDays(from, to time.Time) int {
+	fy, fm, fd := from.In(to.Location()).Date()
+	ty, tm, td := to.Date()
+	return int(time.Date(ty, tm, td, 0, 0, 0, 0, time.UTC).Sub(time.Date(fy, fm, fd, 0, 0, 0, 0, time.UTC)).Hours() / 24)
+}
+
+// runScheduledBackupAt is RunScheduledBackup with the time of the check given.
+func (s *Server) runScheduledBackupAt(now time.Time) {
 	schedule, _ := s.store.GetSetting("auto_backup_schedule")
 	if schedule == "" || schedule == "off" {
 		return
 	}
 
 	timeStr, _ := s.store.GetSetting("auto_backup_time")
-	if timeStr == "" {
-		timeStr = "03:00"
-	}
-
-	// Parse target hour:minute
-	var targetHour, targetMin int
-	fmt.Sscanf(timeStr, "%d:%d", &targetHour, &targetMin)
-
-	now := time.Now()
 
 	// Only proceed if current hour matches target hour (checked hourly)
-	if now.Hour() != targetHour {
+	if now.Hour() != backupHour(timeStr) {
 		return
 	}
 
-	// Check if a backup was already made today
+	// Due once the newest saved backup is old enough
 	entries := loadBackupIndex(s.backupDir)
 	if len(entries) > 0 {
 		lastEntry := entries[len(entries)-1]
 		if lastTime, err := time.Parse(time.RFC3339, lastEntry.CreatedAt); err == nil {
-			daysSince := int(now.Sub(lastTime).Hours() / 24)
+			daysSince := calendarDays(lastTime, now)
 			switch schedule {
 			case "weekly":
 				if daysSince < 7 {

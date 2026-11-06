@@ -253,6 +253,12 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusBadRequest, "auto_backup_schedule must be 'off', 'weekly', '10days', or 'monthly'")
 				return
 			}
+		} else if key == "auto_backup_time" {
+			// Whole hours: the hourly check starts the backup at some minute within it
+			if val != "" && val != fmt.Sprintf("%02d:00", backupHour(val)) {
+				writeError(w, http.StatusBadRequest, "auto_backup_time must be a whole hour from 00:00 to 23:00")
+				return
+			}
 		} else if key == "smtp_port" {
 			if val != "" && !validPort(val) {
 				writeError(w, http.StatusBadRequest, "smtp_port must be a valid port number (1-65535)")

@@ -165,11 +165,11 @@ The public landing page (the "Sentinel" design) lives in `_website/` (`index.htm
 Versions above are the `package.json` ranges. `package-lock.json` resolves vue 3.5.28 and @vitejs/plugin-vue 6.0.4; every other package resolves to the version shown.
 
 ### Frontend Build Output
-Measured from the build in `cmd/bekci/frontend_dist/assets/` on 06/11/2026 (Profile message and sign-out fixes, after v3.4.6) (raw bytes; gzip -9; kB = 1000 bytes). Figures change with every frontend build.
+Measured from the build in `cmd/bekci/frontend_dist/assets/` on 06/11/2026 (auto-backup hour dropdown, after v3.4.6) (raw bytes; gzip -9; kB = 1000 bytes). Figures change with every frontend build.
 
 | Asset | Size (raw) | Size (gzipped) |
 |-------|-----------|----------------|
-| index-*.js | 314.11 kB | 100.33 kB |
+| index-*.js | 314.40 kB | 100.49 kB |
 | index-*.css | 49.75 kB | 9.06 kB |
 | SearchView-*.js | 15.15 kB | 5.20 kB |
 | SearchView-*.css | 5.43 kB | 1.53 kB |
@@ -207,8 +207,8 @@ SearchView and SlaView are lazy-loaded (code-split). Lazy-loading SlaView keeps 
 - **System alerts**: `system_alert_admins` (bool) + `system_alert_users` (CSV user IDs). Sent directly, bypassing the scheduler: from main.go startup (unclean restart) and from `RunScheduledBackup` (failed scheduled backup). Uses configured alert channels (email/signal/webhook); the webhook is sent even when no recipients resolve.
 
 ### Automated Backups
-- Hourly goroutine (first tick one hour after startup) checks `auto_backup_schedule` (off/weekly/10days/monthly; empty = off) + `auto_backup_time` (`HH:MM`, empty = `03:00`). Only the hour is used, in the server's local time zone; the minutes are ignored. The backup runs on the tick that falls inside that hour, so the exact minute depends on when the process started
-- Due when the newest entry in index.json (any saved backup: scheduled, Save to server or the download auto-save) is at least 7 / 10 / 30 whole days old. `monthly` means 30 days, not a calendar month
+- Hourly goroutine (first tick one hour after startup) checks `auto_backup_schedule` (off/weekly/10days/monthly; empty = off) + `auto_backup_time` (a whole hour `HH:00`, chosen from a 24-hour dropdown; saves reject anything else; empty = `03:00`). Compared in the server's local time zone. The backup runs on the tick that falls inside that hour, so the exact minute depends on when the process started. A stored value from before the whole-hour check (or a config restore) runs in its hour if it reads as `H:MM`/`HH:MM`, else at `03:00` (`backupHour` in `internal/api/backup_handlers.go`; System Health and the Settings dropdown show that hour)
+- Due when the newest entry in index.json (any saved backup: scheduled, Save to server or the download auto-save) is at least 7 / 10 / 30 days old, counted by date in the server's local time zone (`calendarDays`), so a Monday backup makes the next one due the following Monday whatever the time of day. Exact 24-hour periods are not used: the hourly check a week later falls the seconds the backup took short of 7 days, which made `weekly` every 8 days. `monthly` means 30 days, not a calendar month
 - Calls `buildFullBackupArchive` (unencrypted) + `saveBackupCopy` (respects `backup_max_copies`; shared with Save to server and the download auto-save)
 - Audit log entries: "Starting scheduled backup" + "Backup completed: {filename}" or "Backup failed: {error}". "Backup completed" is written only after the archive and `index.json` are saved; any build or save error audits a failure and sends a system alert ("Bekci scheduled backup failed")
 - Backup files stored at 0600 (owner-only permissions)

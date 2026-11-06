@@ -89,11 +89,22 @@ const autoBackupSaving = ref(false)
 const autoBackupSuccess = ref('')
 const autoBackupError = ref('')
 
+// Whole hours only: the server checks once an hour and starts the backup at
+// whatever minute that check falls within the chosen hour
+const backupHours = Array.from({ length: 24 }, (_, h) => `${String(h).padStart(2, '0')}:00`)
+
+// The hour the server runs a saved time in (backupHour in backup_handlers.go):
+// "04:30" saved before whole hours → "04:00"; empty or not a time → "03:00"
+function backupHourOption(v) {
+  const m = /^([01]?\d|2[0-3]):[0-5]\d$/.exec(v || '')
+  return m ? `${m[1].padStart(2, '0')}:00` : '03:00'
+}
+
 function loadAutoBackupSettings() {
   const s = settings.value
   autoBackupForm.value = {
     schedule: s.auto_backup_schedule || 'off',
-    time: s.auto_backup_time || '03:00',
+    time: backupHourOption(s.auto_backup_time),
   }
 }
 
@@ -1792,7 +1803,7 @@ onUnmounted(() => {
 
       <div class="card backup-card" style="margin-bottom: 1rem;">
         <h3>Automated Backups</h3>
-        <p class="text-muted" style="margin: 0 0 1rem;">Schedule unencrypted full backups. Respects the max backup copies setting. Backup files are stored with owner-only permissions (0600).</p>
+        <p class="text-muted" style="margin: 0 0 1rem;">Schedule unencrypted full backups. Each one starts some time within the chosen hour. Respects the max backup copies setting. Backup files are stored with owner-only permissions (0600).</p>
         <div v-if="autoBackupError" class="error-msg">{{ autoBackupError }}</div>
         <div v-if="autoBackupSuccess" class="success-msg" @click="autoBackupSuccess = ''">{{ autoBackupSuccess }}</div>
         <div style="display: flex; gap: 1rem; align-items: flex-end;">
@@ -1805,9 +1816,11 @@ onUnmounted(() => {
               <option value="monthly">Monthly</option>
             </select>
           </div>
-          <div class="form-group" style="width: 80px;">
+          <div class="form-group" style="width: 100px;">
             <label>Time (24h)</label>
-            <input type="text" v-model="autoBackupForm.time" placeholder="03:00" />
+            <select v-model="autoBackupForm.time">
+              <option v-for="h in backupHours" :key="h" :value="h">{{ h }}</option>
+            </select>
           </div>
         </div>
         <div class="form-actions">

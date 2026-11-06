@@ -39,3 +39,7 @@ It also checks that the Audit Log gives `login_failed` the failure badge colour.
 
 `tag-delete.test.mjs` covers Settings › Tags: deleting a free tag, project, location or category
 asks "Really delete this?", and only an accepted confirm sends the delete.
+
+`auto-backup-time.test.mjs` covers Settings › Backup & Restore › Automated Backups: the time is a
+dropdown of the 24 whole hours, shows the saved hour, and Save sends the one chosen. A time saved
+before whole hours shows as the hour the server runs it in (`04:30` → `04:00`, `25:00` or empty → `03:00`).
