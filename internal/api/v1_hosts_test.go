@@ -130,18 +130,18 @@ func TestV1Hosts_Snapshot(t *testing.T) {
 	ts, st := setupTestServer(t)
 
 	// Seed a project tag so the target field validates via direct store use.
-	_, _ = st.CreateTagOption("project", "DIAS")
+	_, _ = st.CreateTagOption("project", "ACME")
 	_, _ = st.CreateTagOption("location", "DC-1")
 	for _, v := range []string{"P1", "IT"} {
 		_, _ = st.CreateTagOption("tag", v)
 	}
 
 	tid := seedHostTarget(t, st,
-		"Web Server", "10.0.9.20",
+		"Web Server", "192.0.2.20",
 		[]string{"P1", "IT"},
 		"primary prod; owner alice",
 		"ops@example.com",
-		"DIAS", "DC-1",
+		"ACME", "DC-1",
 	)
 
 	// Create an API token directly.
@@ -151,7 +151,7 @@ func TestV1Hosts_Snapshot(t *testing.T) {
 	}
 
 	// Call with bogus token — rejected.
-	req, _ := http.NewRequest("GET", ts.URL+"/api/v1/hosts?host=10.0.9.20", nil)
+	req, _ := http.NewRequest("GET", ts.URL+"/api/v1/hosts?host=192.0.2.20", nil)
 	req.Header.Set("Authorization", "Bearer bk_notatoken")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -163,7 +163,7 @@ func TestV1Hosts_Snapshot(t *testing.T) {
 	}
 
 	// Call with real token — OK, returns one element.
-	req, _ = http.NewRequest("GET", ts.URL+"/api/v1/hosts?host=10.0.9.20", nil)
+	req, _ = http.NewRequest("GET", ts.URL+"/api/v1/hosts?host=192.0.2.20", nil)
 	req.Header.Set("Authorization", "Bearer "+plaintext)
 	resp, err = http.DefaultClient.Do(req)
 	if err != nil {
@@ -187,10 +187,10 @@ func TestV1Hosts_Snapshot(t *testing.T) {
 	if got.TargetID != tid {
 		t.Fatalf("target_id mismatch: %s vs %s", got.TargetID, tid)
 	}
-	if got.Name != "Web Server" || got.Host != "10.0.9.20" {
+	if got.Name != "Web Server" || got.Host != "192.0.2.20" {
 		t.Fatalf("unexpected name/host: %+v", got)
 	}
-	if got.Project != "DIAS" || got.Location != "DC-1" {
+	if got.Project != "ACME" || got.Location != "DC-1" {
 		t.Fatalf("project/location not carried: %+v", got)
 	}
 	if got.Contacts != "ops@example.com" || !strings.Contains(got.Notes, "owner alice") {
@@ -207,7 +207,7 @@ func TestV1Hosts_Snapshot(t *testing.T) {
 	}
 
 	// Case-insensitive match.
-	req, _ = http.NewRequest("GET", ts.URL+"/api/v1/hosts?host=10.0.9.20", nil)
+	req, _ = http.NewRequest("GET", ts.URL+"/api/v1/hosts?host=192.0.2.20", nil)
 	req.Header.Set("Authorization", "Bearer "+plaintext)
 	resp, _ = http.DefaultClient.Do(req)
 	resp.Body.Close()
@@ -245,7 +245,7 @@ func TestV1Hosts_Snapshot(t *testing.T) {
 	if err := st.RevokeAPIToken(tokens[0].ID); err != nil {
 		t.Fatal(err)
 	}
-	req, _ = http.NewRequest("GET", ts.URL+"/api/v1/hosts?host=10.0.9.20", nil)
+	req, _ = http.NewRequest("GET", ts.URL+"/api/v1/hosts?host=192.0.2.20", nil)
 	req.Header.Set("Authorization", "Bearer "+plaintext)
 	resp, _ = http.DefaultClient.Do(req)
 	resp.Body.Close()
