@@ -28,7 +28,8 @@ const health = {
   cpu: { load1: 0, num_cpu: 4 }, scheduler: { status: 'ok', active_checks: 0, stale_seconds: 0 },
 }
 
-// routes: { 'PUT /api/me/password': [status, json] } overrides the defaults.
+// routes: { 'PUT /api/me/password': [status, json] } overrides the defaults; a
+// function instead of the pair is called on each request and returns the pair.
 async function newPage(t, routes = {}) {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } })
   const browserErrors = []
@@ -41,7 +42,8 @@ async function newPage(t, routes = {}) {
   await page.route(`${baseURL}api/**`, async route => {
     const request = route.request()
     const { pathname } = new URL(request.url())
-    const fixture = routes[`${request.method()} ${pathname}`]
+    let fixture = routes[`${request.method()} ${pathname}`]
+    if (typeof fixture === 'function') fixture = fixture()
     if (fixture) return route.fulfill({ status: fixture[0], json: fixture[1] })
     if (request.method() !== 'GET') return route.fulfill({ json: {} })
     let json = []
@@ -87,6 +89,69 @@ test('a 401 from another call still goes to the login page', async t => {
   })
   await page.goto(`${baseURL}audit-log`)
   await page.waitForURL(`${baseURL}login`)
+})
+
+// The 401 handler skipped every call to /me, so Profile Save (PUT /me) with an
+// expired session showed "not authenticated" and stayed on the page.
+test('an expired session on Profile Save goes to the login page', async t => {
+  const page = await newPage(t, {
+    'PUT /api/me': [401, { error: 'not authenticated' }],
+  })
+  await page.goto(`${baseURL}profile`)
+  const account = page.locator('form').filter({ hasText: 'Email' })
+  await account.getByRole('button', { name: 'Save', exact: true }).click()
+
+  await page.waitForFunction(() => location.pathname === '/login' || document.querySelector('.error-msg'))
+  assert.equal(new URL(page.url()).pathname, '/login', 'goes to the login page')
+})
+
+// The session check (GET /me) must stay exempt: the SOC wall opens /soc without
+// being signed in, and its first load gets a 401 from that check.
+test('the SOC wall, not signed in, stays on /soc', async t => {
+  const page = await newPage(t, {
+    'GET /api/me': [401, { error: 'not authenticated' }],
+  })
+  const statusPolled = page.waitForRequest(r => new URL(r.url()).pathname === '/api/soc/status')
+  await page.goto(`${baseURL}soc`)
+  await page.waitForFunction(() => location.pathname === '/login' || document.querySelector('.soc-page'))
+  assert.equal(new URL(page.url()).pathname, '/soc', 'stays on the SOC wall')
+  await statusPolled // and the wall polls its data
+})
+
+// A message from an earlier attempt stayed on screen: after "Password changed",
+// a wrong current password showed the error next to the old success message.
+test('a failed password change after a successful one shows only the error', async t => {
+  let calls = 0
+  const page = await newPage(t, {
+    'PUT /api/me/password': () => (++calls === 1
+      ? [200, { message: 'password changed' }]
+      : [401, { error: 'current password is incorrect' }]),
+  })
+  await page.goto(`${baseURL}profile`)
+  let form = await fillPasswordForm(page)
+  await form.getByRole('button', { name: 'Change Password' }).click()
+  await form.locator('.success-msg', { hasText: 'Password changed' }).waitFor()
+
+  form = await fillPasswordForm(page)
+  await form.getByRole('button', { name: 'Change Password' }).click()
+  await form.locator('.error-msg', { hasText: 'current password is incorrect' }).waitFor()
+  assert.equal(await form.locator('.success-msg').count(), 0, 'old "Password changed" is gone')
+})
+
+// Same pattern in the Account Info form above it.
+test('a failed Profile Save after a successful one shows only the error', async t => {
+  let calls = 0
+  const page = await newPage(t, {
+    'PUT /api/me': () => (++calls === 1 ? [200, { status: 'ok' }] : [400, { error: 'invalid email' }]),
+  })
+  await page.goto(`${baseURL}profile`)
+  const account = page.locator('form').filter({ hasText: 'Email' })
+  await account.getByRole('button', { name: 'Save', exact: true }).click()
+  await account.locator('.success-msg', { hasText: 'Profile updated' }).waitFor()
+
+  await account.getByRole('button', { name: 'Save', exact: true }).click()
+  await account.locator('.error-msg', { hasText: 'invalid email' }).waitFor()
+  assert.equal(await account.locator('.success-msg').count(), 0, 'old "Profile updated" is gone')
 })
 
 // Audit Log badges: actionClass tested "login" before "failed", so every

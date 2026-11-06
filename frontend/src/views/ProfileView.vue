@@ -21,6 +21,7 @@ onMounted(() => {
 
 async function updateProfile() {
   profileErr.value = ''
+  profileMsg.value = ''
   try {
     await api.put('/me', { email: email.value, phone: phone.value })
     profileMsg.value = 'Profile updated'
@@ -33,6 +34,7 @@ async function updateProfile() {
 
 async function changePassword() {
   pwErr.value = ''
+  pwMsg.value = ''
   if (pwForm.value.new_password !== confirmPassword.value) {
     pwErr.value = 'Passwords do not match'
     return
