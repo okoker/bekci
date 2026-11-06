@@ -1066,7 +1066,7 @@ Response formats are identical to their Dashboard counterparts.
 
 ### POST /api/settings/test-email
 
-Sends a test email. Requires the alerter service to be configured.
+Sends a test email. Requires the alerter service to be configured. Uses the saved email settings (provider, key or SMTP account, from address); only the recipient comes from the request, so unsaved edits on the Settings page are not tested.
 
 All SMTP email paths replace CR and LF in the subject with spaces, then apply UTF-8 MIME header encoding. Existing/restored target names remain deliverable without injecting headers or changing the body. Target-name validation and stored values are unchanged.
 
@@ -1090,7 +1090,7 @@ If no body or empty email, sends to the authenticated user's email address.
 
 ### POST /api/settings/test-signal
 
-Sends a test Signal message to the specified phone number. Requires Signal gateway settings to be configured.
+Sends a test Signal message to the specified phone number. Requires Signal gateway settings to be configured. Uses the saved Signal settings; only the phone number comes from the request.
 
 **Request:**
 ```json
@@ -1113,7 +1113,7 @@ Sends a test Signal message to the specified phone number. Requires Signal gatew
 
 ### POST /api/settings/test-webhook
 
-Sends a test webhook payload to the configured webhook URL. Uses the configured auth type (none, Bearer, or Basic). Requires webhook to be enabled with a URL configured.
+Sends a test webhook payload to the configured webhook URL. Uses the configured auth type (none, Bearer, or Basic). Requires webhook to be enabled with a URL configured. Uses the saved webhook settings, including `webhook_enabled` and `webhook_url`.
 
 **Request:** No body required.
 

@@ -2061,6 +2061,7 @@ onUnmounted(() => {
             <button type="button" class="btn" :disabled="alertTesting" @click="sendTestEmail">
               {{ alertTesting ? 'Sending...' : 'Send Test Email' }}
             </button>
+            <span class="text-muted test-hint">Uses the saved settings, not what is typed: save first.</span>
             <span v-if="emailTestResult" :class="emailTestError ? 'inline-error' : 'inline-success'">{{ emailTestResult }}</span>
           </div>
             </div>
@@ -2122,6 +2123,7 @@ onUnmounted(() => {
             <button type="button" class="btn" :disabled="signalTesting || !signalTestPhone" @click="sendTestSignal">
               {{ signalTesting ? 'Sending...' : 'Send Test Signal' }}
             </button>
+            <span class="text-muted test-hint">Uses the saved settings, not what is typed: save first.</span>
           </div>
             </div>
           </div>
@@ -2218,6 +2220,7 @@ onUnmounted(() => {
               :disabled="webhookTesting || alertForm.webhook_enabled !== 'true' || !alertForm.webhook_url">
               {{ webhookTesting ? 'Sending...' : 'Send Test Webhook' }}
             </button>
+            <span class="text-muted test-hint">Uses the saved settings, not what is typed: save first.</span>
             <span v-if="webhookTestResult" :class="webhookTestError ? 'inline-error' : 'inline-success'">{{ webhookTestResult }}</span>
           </div>
             </div>
@@ -2496,6 +2499,10 @@ onUnmounted(() => {
 
 <style scoped>
 /* ── Inline test feedback ── */
+/* Next to the Send Test buttons, on the same row (no top margin, unlike .input-hint) */
+.test-hint {
+  font-size: 0.75rem;
+}
 .inline-success {
   color: #16a34a;
   font-size: 0.85rem;
