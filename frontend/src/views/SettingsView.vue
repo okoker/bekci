@@ -368,11 +368,11 @@ function fmtDate(d) {
 }
 
 function actionClass(action) {
+  if (action.includes('failed')) return 'badge-action-delete' // before 'login': login_failed is a failure
   if (action.includes('login')) return 'badge-action-auth'
   if (action.includes('create')) return 'badge-action-create'
   if (action.includes('delete')) return 'badge-action-delete'
   if (action.includes('suspend')) return 'badge-action-delete'
-  if (action.includes('failed')) return 'badge-action-delete'
   return 'badge-action-default'
 }
 

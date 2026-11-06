@@ -30,3 +30,7 @@ completed download, the Saved Backups list is reloaded so the server's copy appe
 preferred type: Targets, Dashboard and Search badge only the check the server names in
 `primary_check_id`, and the Dashboard row and SOC wall show that check's uptime. After a
 save, the open Targets row badges the new primary check.
+
+`wrong-password.test.mjs` covers Profile › Change Password with a wrong current password: the
+server's 401 is shown on the page, which stays on Profile; any other 401 still goes to the login
+page. It also checks that the Audit Log gives `login_failed` the failure badge colour.
