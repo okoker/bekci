@@ -317,7 +317,8 @@ Returns summary list (no full conditions, includes condition count and state).
       "current_state": "healthy",
       "last_change": "2026-01-15T10:00:00Z",
       "last_evaluated": "2026-01-15T10:05:00Z"
-    }
+    },
+    "primary_check_id": "uuid"  // see "Primary check" under GET /api/targets/{id}
   }
 ]
 ```
@@ -438,9 +439,12 @@ Returns full target detail with conditions, state, and recipient IDs.
     "last_change": "2026-01-15T10:00:00Z",
     "last_evaluated": "2026-01-15T10:05:00Z"
   },
-  "recipient_ids": ["uuid1", "uuid2"]
+  "recipient_ids": ["uuid1", "uuid2"],
+  "primary_check_id": "uuid"
 }
 ```
+
+**Primary check:** `primary_check_id` names the one check that stands for the target: its 90-day uptime drives the SLA page, the dashboard's `sla_status` and the Dashboard/SOC summary row, and `/api/v1/hosts` reports its last result. It is the first check, in name order (case-sensitive byte order, so `Z…` sorts before `a…`; ties by check ID), whose type is `preferred_check_type`; if no check has that type, the first check in that order; `""` when the target has no checks. A target can have several checks of the preferred type, so clients must not work it out from the type: the PRIMARY badge on the Targets, Dashboard and Search pages marks only this check. `conditions` are in rule order, not name order. The same field is in `GET /api/targets`, the POST/PUT responses, `GET /api/dashboard/status` and `GET /api/soc/status`; all use one function (`store.PrimaryCheck`).
 
 ### PUT /api/targets/{id}
 
@@ -893,6 +897,7 @@ Returns enabled targets with their checks, last status, response time, and 90-da
     "name": "Web Server",
     "host": "192.168.1.1",
     "preferred_check_type": "http",
+    "primary_check_id": "uuid",
     "state": "healthy",
     "paused": false,
     "category": "Network",
@@ -921,7 +926,7 @@ Returns enabled targets with their checks, last status, response time, and 90-da
 - Paused targets have `state: "paused"`, `paused: true`, and `paused_at` set to an ISO 8601 timestamp. `paused_at` is omitted (not `null`) for targets that are not paused.
 - `tags` is always an array (`[]` when the target has no tags).
 - `sla_status` is `""` (empty) and `sla_target` is `0` when the category's SLA threshold is 0 (disabled), or the target has no category from the catalog. A catalog category with no saved `sla_<category>` setting uses 99.9.
-- `sla_status` is also `""` while the preferred check (the first check if none has the preferred type) has no results; another check's data never stands in for it.
+- `sla_status` is decided by the primary check (`primary_check_id`, see "Primary check" under GET /api/targets/{id}). It is also `""` while that check has no results; another check's data never stands in for it.
 - `uptime_90d_pct` is `-1` for a check with no results in the last 90 days.
 
 ### GET /api/dashboard/history/{checkId}
@@ -998,7 +1003,7 @@ Returns all categories with per-target daily uptime arrays for the preferred che
 - `sla_threshold` is `0` when the category's SLA is disabled; a category with no saved `sla_<category>` setting gets 99.9
 - `targets` is `[]` (empty array) for categories with no targets
 - `daily_uptime` contains only days with data in `check_daily_rollups` (frontend pads to 90 days)
-- Uses the target's preferred check type; falls back to first check if no match
+- Uses the target's primary check (see "Primary check" under GET /api/targets/{id})
 - Data sourced from `check_daily_rollups` (pre-aggregated) — does not query `check_results`
 
 ---
@@ -1788,7 +1793,7 @@ Return a point-in-time snapshot of any target(s) whose `host` field matches the 
 **Field notes:**
 - `project`, `location`, `contacts`, `notes` are strings. Empty string when unset (never `null`).
 - `tags` is always an array (empty `[]` when unset).
-- `last_check` reports the target's **preferred check** (its `preferred_check_type`), falling back to the first check when the preferred type isn't configured. If no check has ever run, `status: "none"` with just the `check_type` carried.
+- `last_check` reports the target's **primary check**: the first check of its `preferred_check_type` in name order (ties by check ID), falling back to the first check when the preferred type isn't configured (the check named by `primary_check_id` in the targets API). If no check has ever run, `status: "none"` with just the `check_type` carried.
 - `last_check.status` ∈ `"up" | "down" | "none"`. `"none"` is distinct from `"down"` — it means "never observed" rather than "failed".
 
 **Empty result:** unknown host returns `200` with `{"targets": []}` — not 404. Keeps the client code path uniform.

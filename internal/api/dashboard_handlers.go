@@ -24,6 +24,7 @@ type dashboardTarget struct {
 	Name               string           `json:"name"`
 	Host               string           `json:"host"`
 	PreferredCheckType string           `json:"preferred_check_type"`
+	PrimaryCheckID     string           `json:"primary_check_id"` // store.PrimaryCheck; "" without checks
 	State              string           `json:"state"`
 	Paused             bool             `json:"paused"`
 	PausedAt           *string          `json:"paused_at,omitempty"`
@@ -102,6 +103,10 @@ func (s *Server) buildDashboardTargets() ([]dashboardTarget, error) {
 			}
 		}
 
+		if c := store.PrimaryCheck(allChecks[t.ID], t.PreferredCheckType); c != nil {
+			dt.PrimaryCheckID = c.ID
+		}
+
 		for _, c := range allChecks[t.ID] {
 			dc := dashboardCheck{
 				ID:        c.ID,
@@ -128,18 +133,15 @@ func (s *Server) buildDashboardTargets() ([]dashboardTarget, error) {
 		// Compute SLA status from preferred check's 90d uptime vs category threshold
 		if threshold, ok := slaThresholds[t.Category]; ok && threshold > 0 {
 			dt.SLATarget = threshold
-			// The preferred check decides (the first check if none has that
-			// type). Until it has results its uptime is -1 and the status stays
-			// empty; another check's data never stands in for it.
+			// The primary check decides (store.PrimaryCheck). Until it has
+			// results its uptime is -1 and the status stays empty; another
+			// check's data never stands in for it.
 			var pref *dashboardCheck
 			for i := range dt.Checks {
-				if dt.Checks[i].Type == t.PreferredCheckType {
+				if dt.Checks[i].ID == dt.PrimaryCheckID {
 					pref = &dt.Checks[i]
 					break
 				}
-			}
-			if pref == nil && len(dt.Checks) > 0 {
-				pref = &dt.Checks[0]
 			}
 			if pref != nil && pref.Uptime90d >= 0 {
 				if pref.Uptime90d >= threshold {

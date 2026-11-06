@@ -218,8 +218,9 @@ watch(show90d, (val) => {
 
 watch(activeTags, () => { currentPage.value = 1 })
 
+// The server names the check that drives SLA and uptime (primary_check_id).
 function getPreferredCheck(target) {
-  return target.checks?.find(c => c.type === target.preferred_check_type) || target.checks?.[0]
+  return target.checks?.find(c => c.id === target.primary_check_id)
 }
 
 function pad90dBars(data) {

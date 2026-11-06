@@ -131,6 +131,9 @@ function cloneTarget(target) {
 async function onTargetSaved() {
   showForm.value = false
   await loadTargets()
+  // The open row's checks must match the reloaded primary_check_id, or the
+  // PRIMARY badge points at a check the row does not list.
+  if (expandedTargetId.value) await reloadChecks(expandedTargetId.value)
   success.value = editingTargetId.value ? 'Target updated' : 'Target created'
 }
 
@@ -429,7 +432,7 @@ onMounted(async () => {
                       <td>{{ c.name }}</td>
                       <td>
                         <span class="badge badge-type">{{ c.type }}</span>
-                        <span v-if="c.type === t.preferred_check_type" class="badge badge-primary-check" title="Primary check used for SLA &amp; dashboard status">PRIMARY</span>
+                        <span v-if="c.id === t.primary_check_id" class="badge badge-primary-check" title="Primary check used for SLA &amp; dashboard status">PRIMARY</span>
                       </td>
                       <td>{{ formatInterval(c.interval_s) }}</td>
                       <td><span :class="['badge', c.enabled ? 'badge-active' : 'badge-suspended']">{{ c.enabled ? 'yes' : 'no' }}</span></td>

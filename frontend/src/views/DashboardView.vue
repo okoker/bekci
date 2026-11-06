@@ -144,8 +144,10 @@ function pad4hBars(data) {
   return bars
 }
 
+// The server names the check that drives SLA and uptime (primary_check_id);
+// matching by type alone would pick the wrong one when two checks share it.
 function getPreferredCheck(target) {
-  return target.checks.find(c => c.type === target.preferred_check_type) || target.checks[0]
+  return target.checks.find(c => c.id === target.primary_check_id)
 }
 
 function toggleTarget(targetId) {
@@ -437,7 +439,7 @@ onUnmounted(() => {
               <span :class="['status-dot', check.last_status === 'up' ? 'dot-up' : (check.last_status === 'down' ? 'dot-down' : 'dot-unknown')]"></span>
               <span class="check-name">{{ check.name }}</span>
               <span class="badge badge-type">{{ check.type }}</span>
-              <span v-if="check.type === target.preferred_check_type" class="badge badge-primary-check" title="Primary check used for SLA &amp; dashboard status">PRIMARY</span>
+              <span v-if="check.id === target.primary_check_id" class="badge badge-primary-check" title="Primary check used for SLA &amp; dashboard status">PRIMARY</span>
               <span v-if="check.response_ms > 0" class="check-response text-muted">{{ check.response_ms }}ms</span>
               <span v-if="check.uptime_90d_pct >= 0" class="check-uptime" :style="{ color: uptimeColor(check.uptime_90d_pct) }">
                 {{ check.uptime_90d_pct.toFixed(1) }}%

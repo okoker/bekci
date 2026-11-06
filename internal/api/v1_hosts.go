@@ -77,25 +77,11 @@ func (s *Server) handleV1Hosts(w http.ResponseWriter, r *http.Request) {
 			snap.Tags = []string{}
 		}
 
-		// Pick the preferred check, fall back to first check.
+		// The primary check: preferred type, else the first check.
 		checks, _ := s.store.ListChecksByTarget(t.ID)
-		var preferred *int // index into checks
-		for i := range checks {
-			if checks[i].Type == t.PreferredCheckType {
-				idx := i
-				preferred = &idx
-				break
-			}
-		}
-		if preferred == nil && len(checks) > 0 {
-			idx := 0
-			preferred = &idx
-		}
-
-		if preferred == nil {
+		if c := store.PrimaryCheck(checks, t.PreferredCheckType); c == nil {
 			snap.LastCheck = v1LastCheck{Status: "none"}
 		} else {
-			c := checks[*preferred]
 			res, _ := s.store.GetLastResult(c.ID)
 			if res == nil {
 				snap.LastCheck = v1LastCheck{Status: "none", CheckType: c.Type}

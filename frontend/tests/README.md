@@ -25,3 +25,8 @@ completed download, the Saved Backups list is reloaded so the server's copy appe
 
 `alert-method.test.mjs` covers Settings > Alerting > Alert Method "Disabled" (stored as
 `""`): it loads as Disabled, saves as `""`, and still shows Disabled after the save.
+
+`primary-badge.test.mjs` covers the PRIMARY badge for a target with two checks of its
+preferred type: Targets, Dashboard and Search badge only the check the server names in
+`primary_check_id`, and the Dashboard row and SOC wall show that check's uptime. After a
+save, the open Targets row badges the new primary check.

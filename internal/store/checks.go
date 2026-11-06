@@ -40,7 +40,7 @@ func (s *Store) GetCheck(id string) (*Check, error) {
 func (s *Store) ListChecksByTarget(targetID string) ([]Check, error) {
 	rows, err := s.db.Query(`
 		SELECT id, target_id, type, name, config, interval_s, enabled, created_at, updated_at
-		FROM checks WHERE target_id = ? ORDER BY name ASC
+		FROM checks WHERE target_id = ? ORDER BY name ASC, id ASC
 	`, targetID)
 	if err != nil {
 		return nil, err
@@ -63,11 +63,29 @@ func (s *Store) ListChecksByTarget(targetID string) ([]Check, error) {
 	return checks, rows.Err()
 }
 
+// PrimaryCheck returns the check that stands for a target in the SLA page,
+// dashboard and SOC uptime and /api/v1/hosts: the first check of the preferred
+// type, otherwise the first check; nil when there are no checks. checks must be
+// in ListChecksByTarget / ListAllChecks order (name, then id), so that every
+// caller picks the same check. Badges use the API's primary_check_id, never
+// the type alone: a target can have several checks of the preferred type.
+func PrimaryCheck(checks []Check, preferredType string) *Check {
+	for i := range checks {
+		if checks[i].Type == preferredType {
+			return &checks[i]
+		}
+	}
+	if len(checks) > 0 {
+		return &checks[0]
+	}
+	return nil
+}
+
 // ListAllChecks returns all checks grouped by target_id.
 func (s *Store) ListAllChecks() (map[string][]Check, error) {
 	rows, err := s.db.Query(`
 		SELECT id, target_id, type, name, config, interval_s, enabled, created_at, updated_at
-		FROM checks ORDER BY name ASC
+		FROM checks ORDER BY name ASC, id ASC
 	`)
 	if err != nil {
 		return nil, err

@@ -51,6 +51,10 @@ type TargetDetail struct {
 	Conditions   []TargetCondition `json:"conditions"`
 	State        *RuleState        `json:"state"`
 	RecipientIDs []string          `json:"recipient_ids"`
+	// PrimaryCheckID is the check the SLA page and dashboard use (PrimaryCheck);
+	// "" when the target has no checks. Conditions are in rule order, not name
+	// order, so it cannot be worked out from them.
+	PrimaryCheckID string `json:"primary_check_id"`
 }
 
 func scanTarget(row interface{ Scan(...any) error }) (*Target, error) {
@@ -640,6 +644,14 @@ func (s *Store) GetTargetDetail(id string) (*TargetDetail, error) {
 		td.Conditions = []TargetCondition{}
 	}
 
+	checks, err := s.ListChecksByTarget(id)
+	if err != nil {
+		return nil, fmt.Errorf("listing checks: %w", err)
+	}
+	if c := PrimaryCheck(checks, t.PreferredCheckType); c != nil {
+		td.PrimaryCheckID = c.ID
+	}
+
 	// Load alert recipient IDs
 	td.RecipientIDs, _ = s.ListTargetRecipientIDs(id)
 
@@ -654,6 +666,7 @@ type TargetListItem struct {
 	Target
 	ConditionCount int        `json:"condition_count"`
 	State          *RuleState `json:"state"`
+	PrimaryCheckID string     `json:"primary_check_id"` // as in TargetDetail
 }
 
 // ListTargetSummaries returns all targets with condition count and state, for list view.
@@ -663,10 +676,18 @@ func (s *Store) ListTargetSummaries() ([]TargetListItem, error) {
 		return nil, err
 	}
 
+	allChecks, err := s.ListAllChecks()
+	if err != nil {
+		return nil, err
+	}
+
 	var result []TargetListItem
 	tagPtrs := make([]*Target, 0, len(targets))
 	for i := range targets {
 		item := TargetListItem{Target: targets[i]}
+		if c := PrimaryCheck(allChecks[targets[i].ID], targets[i].PreferredCheckType); c != nil {
+			item.PrimaryCheckID = c.ID
+		}
 
 		// Count checks for this target
 		s.db.QueryRow(`SELECT COUNT(*) FROM checks WHERE target_id = ?`, targets[i].ID).Scan(&item.ConditionCount)

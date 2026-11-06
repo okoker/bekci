@@ -545,7 +545,7 @@ onMounted(async () => {
                             <td>{{ c.check_name }}</td>
                             <td>
                               <span class="badge badge-type">{{ c.check_type }}</span>
-                              <span v-if="c.check_type === expandedDetail.preferred_check_type" class="badge badge-primary-check" title="Primary check used for SLA &amp; dashboard status">PRIMARY</span>
+                              <span v-if="c.check_id === expandedDetail.primary_check_id" class="badge badge-primary-check" title="Primary check used for SLA &amp; dashboard status">PRIMARY</span>
                             </td>
                             <td>{{ formatInterval(c.interval_s) }}</td>
                             <td><span :class="['badge', c.enabled !== false ? 'badge-active' : 'badge-suspended']">{{ c.enabled !== false ? 'yes' : 'no' }}</span></td>

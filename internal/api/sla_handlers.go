@@ -71,20 +71,11 @@ func (s *Server) handleSLAHistory(w http.ResponseWriter, r *http.Request) {
 			slog.Warn("SLA: failed to list checks for target", "target_id", t.ID, "error", err)
 			continue
 		}
-		if len(checks) == 0 {
+		primary := store.PrimaryCheck(checks, t.PreferredCheckType)
+		if primary == nil {
 			continue
 		}
-
-		var checkID string
-		for _, c := range checks {
-			if c.Type == t.PreferredCheckType {
-				checkID = c.ID
-				break
-			}
-		}
-		if checkID == "" {
-			checkID = checks[0].ID
-		}
+		checkID := primary.ID
 
 		// Get 90-day daily uptime
 		uptimes, err := s.store.GetDailyUptime(checkID, 90)
