@@ -971,7 +971,7 @@ Returns enabled targets with their checks, last status, response time, and 90-da
 
 ### GET /api/sla/history
 
-Returns all categories with per-target daily uptime arrays for the preferred check. Disabled targets (`enabled=false`) are filtered out. Categories are loaded dynamically from `tag_options` (grp='category'), sorted alphabetically with "Other" always last.
+Returns all categories with per-target daily uptime arrays for the primary check (see "Primary check" under GET /api/targets/{id}). Disabled targets (`enabled=false`) are filtered out. Categories are loaded dynamically from `tag_options` (grp='category'), sorted alphabetically with "Other" always last.
 
 **Response (200):**
 ```json
@@ -1793,7 +1793,7 @@ Return a point-in-time snapshot of any target(s) whose `host` field matches the 
 **Field notes:**
 - `project`, `location`, `contacts`, `notes` are strings. Empty string when unset (never `null`).
 - `tags` is always an array (empty `[]` when unset).
-- `last_check` reports the target's **primary check**: the first check of its `preferred_check_type` in name order (ties by check ID), falling back to the first check when the preferred type isn't configured (the check named by `primary_check_id` in the targets API). If no check has ever run, `status: "none"` with just the `check_type` carried.
+- `last_check` reports the target's **primary check**, the one named by `primary_check_id` in the targets API (see "Primary check" under GET /api/targets/{id}): the first check of its `preferred_check_type`, else the first check. If no check has ever run, `status: "none"` with just the `check_type` carried.
 - `last_check.status` ∈ `"up" | "down" | "none"`. `"none"` is distinct from `"down"` — it means "never observed" rather than "failed".
 
 **Empty result:** unknown host returns `200` with `{"targets": []}` — not 404. Keeps the client code path uniform.
