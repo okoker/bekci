@@ -44,11 +44,12 @@ async function loadHistory() {
   }
 }
 
-// Compute 90d average uptime for a target from its daily data
-function target90dAvg(target) {
-  const vals = target.daily_uptime.map(d => d.uptime_pct).filter(v => v != null)
-  if (vals.length === 0) return null
-  return vals.reduce((a, b) => a + b, 0) / vals.length
+// A target's 90-day uptime, from the server: up runs / all runs, the
+// Dashboard's figure (-1 = no data). Not an average of the daily percentages,
+// which would let a day of a few runs count as much as a full day.
+function targetUptime90d(target) {
+  const pct = target.uptime_90d_pct
+  return pct == null || pct < 0 ? null : pct
 }
 
 const insights = computed(() => {
@@ -59,7 +60,7 @@ const insights = computed(() => {
   const groupAvgs = []
   for (const cat of cats) {
     const targets = cat.targets || []
-    const avgs = targets.map(t => target90dAvg(t)).filter(v => v !== null)
+    const avgs = targets.map(t => targetUptime90d(t)).filter(v => v !== null)
     totalHosts += targets.length
 
     const threshold = cat.sla_threshold || 0
@@ -72,7 +73,7 @@ const insights = computed(() => {
   }
 
   // "All" average
-  const allAvgs = cats.flatMap(c => (c.targets || []).map(t => target90dAvg(t))).filter(v => v !== null)
+  const allAvgs = cats.flatMap(c => (c.targets || []).map(t => targetUptime90d(t))).filter(v => v !== null)
   const allAvg = allAvgs.length > 0 ? allAvgs.reduce((a, b) => a + b, 0) / allAvgs.length : null
 
   return { totalHosts, failingHosts, allAvg, groupAvgs }

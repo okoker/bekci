@@ -43,3 +43,7 @@ asks "Really delete this?", and only an accepted confirm sends the delete.
 `auto-backup-time.test.mjs` covers Settings › Backup & Restore › Automated Backups: the time is a
 dropdown of the 24 whole hours, shows the saved hour, and Save sends the one chosen. A time saved
 before whole hours shows as the hour the server runs it in (`04:30` → `04:00`, `25:00` or empty → `03:00`).
+
+`sla-uptime.test.mjs` covers the SLA page's Not Meeting SLA, category and All cards: they use each
+host's `uptime_90d_pct` from the server (the Dashboard's pooled figure), one value per host, and
+leave out hosts without data (-1), instead of averaging the daily percentages.

@@ -984,6 +984,7 @@ Returns all categories with per-target daily uptime arrays for the primary check
         {
           "id": "uuid",
           "name": "Router-1",
+          "uptime_90d_pct": 99.82,
           "daily_uptime": [
             { "date": "2026-01-20", "uptime_pct": 100.0 },
             { "date": "2026-01-21", "uptime_pct": 99.65 }
@@ -1002,7 +1003,8 @@ Returns all categories with per-target daily uptime arrays for the primary check
 **Notes:**
 - `sla_threshold` is `0` when the category's SLA is disabled; a category with no saved `sla_<category>` setting gets 99.9
 - `targets` is `[]` (empty array) for categories with no targets
-- `daily_uptime` contains only days with data in `check_daily_rollups` (frontend pads to 90 days)
+- `uptime_90d_pct` is the primary check's 90-day uptime pooled over its runs (up runs ÷ all runs, 2 decimals), the same figure as that check's `uptime_90d_pct` on `GET /api/dashboard/status`; `-1` when it has no results in the last 90 days. The SLA page uses it for Not Meeting SLA (under `sla_threshold`) and averages it per category and for All, one value per target. It is not the mean of `daily_uptime`, which would weigh a day of a few runs like a full one
+- `daily_uptime` contains only days with data in `check_daily_rollups` (frontend pads to 90 days); the chart plots it
 - Uses the target's primary check (see "Primary check" under GET /api/targets/{id})
 - Data sourced from `check_daily_rollups` (pre-aggregated) — does not query `check_results`
 

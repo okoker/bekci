@@ -155,3 +155,56 @@ func TestSLADefaultThresholdForNewCategory(t *testing.T) {
 		t.Errorf("explicit 0: SLA page sla_threshold %v, want 0", v)
 	}
 }
+
+// T-P60: backlog A-069 — the SLA page gets each target's 90-day uptime from
+// the server, pooled like the Dashboard's (up runs / all runs), so the two
+// agree. It averaged the daily percentages, every day counting the same: a
+// day of 2 runs with 1 down and a day of 8 up runs gave 75% there and 90%
+// on the Dashboard.
+func TestSLAHistoryUptimeIsPooledLikeDashboard(t *testing.T) {
+	ts, st := setupTestServer(t)
+	createUser(t, st, "pooladmin", "testpassword12345", "admin")
+	client := loginAs(t, ts, "pooladmin", "testpassword12345")
+
+	uneven, ids := createSLATarget(t, client, ts.URL, "uneven", "Network", "http", map[string]string{"http": "a-http"})
+	fresh, _ := createSLATarget(t, client, ts.URL, "fresh", "Network", "http", map[string]string{"http": "a-http"})
+	save := func(daysAgo int, status string) {
+		t.Helper()
+		if err := st.SaveResult(&store.CheckResult{
+			CheckID: ids["http"], Status: status, ResponseMs: 10, Message: status, Metrics: "{}",
+			CheckedAt: time.Now().UTC().Truncate(24*time.Hour).AddDate(0, 0, -daysAgo).Add(12 * time.Hour),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	save(2, "up")
+	save(2, "down")
+	for range 8 {
+		save(1, "up")
+	}
+
+	resp, err := client.Get(ts.URL + "/api/sla/history")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sla := map[string]map[string]any{}
+	for _, c := range parseJSON(t, resp)["categories"].([]any) {
+		for _, tg := range c.(map[string]any)["targets"].([]any) {
+			sla[tg.(map[string]any)["id"].(string)] = tg.(map[string]any)
+		}
+	}
+	if days := sla[uneven]["daily_uptime"].([]any); len(days) != 2 {
+		t.Fatalf("precondition: %d days of data, want 2", len(days))
+	}
+	if v := sla[uneven]["uptime_90d_pct"]; v != float64(90) {
+		t.Errorf("SLA page uptime_90d_pct %v, want 90 (9 up of 10 runs; not 75, the average of 50 and 100)", v)
+	}
+	if v := sla[fresh]["uptime_90d_pct"]; v != float64(-1) {
+		t.Errorf("target without data: uptime_90d_pct %v, want -1", v)
+	}
+
+	dash := dashboardTargets(t, client, ts.URL)[uneven]["checks"].([]any)[0].(map[string]any)["uptime_90d_pct"]
+	if v := sla[uneven]["uptime_90d_pct"]; v != dash {
+		t.Errorf("SLA page %v, Dashboard %v: want the same figure", v, dash)
+	}
+}

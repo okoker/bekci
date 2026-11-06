@@ -165,7 +165,7 @@ The public landing page (the "Sentinel" design) lives in `_website/` (`index.htm
 Versions above are the `package.json` ranges. `package-lock.json` resolves vue 3.5.28 and @vitejs/plugin-vue 6.0.4; every other package resolves to the version shown.
 
 ### Frontend Build Output
-Measured from the build in `cmd/bekci/frontend_dist/assets/` on 06/11/2026 (auto-backup hour dropdown, after v3.4.6) (raw bytes; gzip -9; kB = 1000 bytes). Figures change with every frontend build.
+Measured from the build in `cmd/bekci/frontend_dist/assets/` on 06/11/2026 (SLA page uses the server's pooled 90-day uptime, after v3.4.6) (raw bytes; gzip -9; kB = 1000 bytes). Figures change with every frontend build.
 
 | Asset | Size (raw) | Size (gzipped) |
 |-------|-----------|----------------|
@@ -173,7 +173,7 @@ Measured from the build in `cmd/bekci/frontend_dist/assets/` on 06/11/2026 (auto
 | index-*.css | 49.75 kB | 9.06 kB |
 | SearchView-*.js | 15.15 kB | 5.20 kB |
 | SearchView-*.css | 5.43 kB | 1.53 kB |
-| SlaView-*.js | 239.78 kB | 82.92 kB |
+| SlaView-*.js | 239.72 kB | 82.90 kB |
 | SlaView-*.css | 3.72 kB | 1.11 kB |
 
 SearchView and SlaView are lazy-loaded (code-split). Lazy-loading SlaView keeps its ~240 kB chunk (SLA view + Chart.js) out of the main bundle; it loads on demand.
@@ -235,7 +235,7 @@ The single `check_results` table was split into a 3-table architecture to elimin
 | `GetLastResult` | `check_state` | Engine (rule eval), alerter (webhook payload) |
 | `GetBatchLastResultAndUptime` | `check_state` + `check_daily_rollups` | Dashboard status, SOC status |
 | `GetDailyUptime` | `check_daily_rollups` | SLA page (90d chart), dashboard (90d history) |
-| `GetUptimePercent` | `check_daily_rollups` | SLA badge (via batch query) |
+| `GetUptimePercent` | `check_daily_rollups` | SLA page: each target's `uptime_90d_pct` (Not Meeting SLA, category and All cards). Same formula and 90-day window as the batch query's uptime, so the SLA page and the Dashboard/SOC give one figure |
 | `GetRecentResultsSlim` | `check_results` | Dashboard 4h bar chart |
 | `GetRecentResultsByWindow` | `check_results` | Engine fail_window condition evaluation |
 

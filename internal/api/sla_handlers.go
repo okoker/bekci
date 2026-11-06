@@ -18,6 +18,7 @@ type slaDailyUptime struct {
 type slaTarget struct {
 	ID          string           `json:"id"`
 	Name        string           `json:"name"`
+	Uptime90d   float64          `json:"uptime_90d_pct"` // up runs / all runs, as on the Dashboard; -1 = no data
 	DailyUptime []slaDailyUptime `json:"daily_uptime"`
 }
 
@@ -84,6 +85,14 @@ func (s *Server) handleSLAHistory(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
+		// Pooled over the 90 days, the Dashboard's figure: averaging the daily
+		// percentages would let a day of a few runs count as much as a full one
+		uptime90d, err := s.store.GetUptimePercent(checkID, 90)
+		if err != nil {
+			slog.Warn("SLA: failed to get 90-day uptime", "check_id", checkID, "target_id", t.ID, "error", err)
+			continue
+		}
+
 		daily := make([]slaDailyUptime, len(uptimes))
 		for i, u := range uptimes {
 			daily[i] = slaDailyUptime{Date: u.Date, UptimePct: u.UptimePct}
@@ -92,6 +101,7 @@ func (s *Server) handleSLAHistory(w http.ResponseWriter, r *http.Request) {
 		st := slaTarget{
 			ID:          t.ID,
 			Name:        t.Name,
+			Uptime90d:   uptime90d,
 			DailyUptime: daily,
 		}
 
