@@ -264,7 +264,7 @@ The single `check_results` table was split into a 3-table architecture to elimin
 
 ## Key Differences
 
-- **Local Docker** is self-contained: multi-stage build produces binary + Alpine container. SQLite in a named volume. Single port (65000). No nginx.
+- **Local Docker** is self-contained: multi-stage build produces binary + Alpine container. SQLite in a named volume. Single port (65000), published on `127.0.0.1` only (`docker-compose.yml`), so other machines on the network cannot reach the dev container; change the mapping to `"65000:65000"` to open it up. No nginx.
 - **Production** is bare-metal Ubuntu. Binary runs as `bekci` user via systemd. Nginx on port 443 handles SSL + gzip + security headers, proxies to Go on 65000. No Docker, no npm.
 - **CGO is required everywhere** — go-sqlite3 needs it. Cannot use `CGO_ENABLED=0`.
 - **ICMP mode depends on the process UID** (`internal/checker/ping.go`: `SetPrivileged(os.Getuid() == 0)`). As root (the Docker container), Bekci sends raw ICMP, which needs NET_RAW; Docker grants it via `cap_add`. As a non-root user (production `bekci`), it uses unprivileged ICMP datagram sockets, which Linux governs with the `net.ipv4.ping_group_range` sysctl, not CAP_NET_RAW. Production's systemd unit grants `AmbientCapabilities=CAP_NET_RAW` (not `setcap` on the binary), but the ping checker does not use raw sockets as non-root.
