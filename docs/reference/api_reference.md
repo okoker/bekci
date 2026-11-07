@@ -803,6 +803,8 @@ With `expect_closed: true` it is the other way round: any failed connection is "
 
 Metrics: `packet_loss`, `avg_rtt_ms`, `packets_sent`, `packets_recv`. Status "down" only on 100% packet loss. Mode depends on the process UID: as root it sends raw ICMP (needs `NET_RAW`); otherwise it uses unprivileged ICMP datagram sockets (pro-bing's "udp" mode, allowed by the `net.ipv4.ping_group_range` sysctl).
 
+`response_ms` is the average round trip of the replies that came back, rounded to whole milliseconds and never below 1 (a 0.4 ms LAN host reads 1). pro-bing times each packet from its own send to its own reply, so the wait between packets (one a second) and the wait for a lost packet are not in it. With no reply, the check is "down" and `response_ms` is the time until it gave up, about `timeout_s` (5,000 ms by default), as HTTP, TCP and DNS checks report the time until they failed. `avg_rtt_ms` is the same average to 0.1 ms (`0` when nothing came back), and the message reads `<received>/<sent> packets received, avg <avg_rtt_ms>ms`, or `100% packet loss`. Before A-070 (07/11/2026), `response_ms` was the whole run, about 2,000 ms for the default 3 packets; results stored before the change keep that value until raw retention removes them.
+
 ### dns
 
 | Field | Type | Default | Description |
@@ -1801,6 +1803,7 @@ Return a point-in-time snapshot of any target(s) whose `host` field matches the 
 - `tags` is always an array (empty `[]` when unset).
 - `last_check` reports the target's **primary check**, the one named by `primary_check_id` in the targets API (see "Primary check" under GET /api/targets/{id}): the first check of its `preferred_check_type`, else the first check. If no check has ever run, `status: "none"` with just the `check_type` carried.
 - `last_check.status` ∈ `"up" | "down" | "none"`. `"none"` is distinct from `"down"` — it means "never observed" rather than "failed".
+- `last_check.response_ms` is what the check type measures (see "Check Type Configuration"): for ping, the average round trip of the replies; for the other types, the time the check took. Left out when it is 0 or the check has never run.
 
 **Empty result:** unknown host returns `200` with `{"targets": []}` — not 404. Keeps the client code path uniform.
 

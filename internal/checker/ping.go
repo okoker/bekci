@@ -2,6 +2,7 @@ package checker
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"time"
 
@@ -37,21 +38,33 @@ func runPing(host string, config map[string]any) *Result {
 		}
 	}
 
-	stats := pinger.Statistics()
-	elapsed := time.Since(start).Milliseconds()
+	return pingResult(pinger.Statistics(), time.Since(start))
+}
+
+// pingResult turns pro-bing's statistics into a Result. The response time is
+// the average round trip: pro-bing times each packet from its own send to its
+// own reply and averages only the replies that came back. The run itself is
+// not used while a reply came back, because it is far longer (one packet a
+// second, and on to the timeout when a packet is lost). With no reply there is
+// no round trip, so it is the time until the check gave up, as for the other
+// check types. avg_rtt_ms keeps tenths of a millisecond.
+func pingResult(stats *probing.Statistics, runTime time.Duration) *Result {
 	packetLoss := stats.PacketLoss
-	avgRtt := float64(stats.AvgRtt.Milliseconds())
+	avgRtt := math.Round(float64(stats.AvgRtt)/float64(time.Millisecond)*10) / 10
 
 	status := "up"
+	// At least 1 ms: Run replaces a ResponseMs of 0 with the whole run time.
+	responseMs := max(1, int64(math.Round(avgRtt)))
 	msg := fmt.Sprintf("%d/%d packets received, avg %.1fms", stats.PacketsRecv, stats.PacketsSent, avgRtt)
 	if stats.PacketsRecv == 0 {
 		status = "down"
+		responseMs = runTime.Milliseconds()
 		msg = "100% packet loss"
 	}
 
 	return &Result{
 		Status:     status,
-		ResponseMs: elapsed,
+		ResponseMs: responseMs,
 		Message:    msg,
 		Metrics: map[string]any{
 			"packet_loss":  packetLoss,

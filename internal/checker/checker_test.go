@@ -11,7 +11,9 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
+	probing "github.com/prometheus-community/pro-bing"
 	"golang.org/x/net/dns/dnsmessage"
 )
 
@@ -336,6 +338,95 @@ func TestPingCheckLoopback(t *testing.T) {
 	}
 	if got := r.Metrics["packets_recv"]; got == nil {
 		t.Fatalf("expected ping metrics to include packets_recv, got %#v", r.Metrics)
+	}
+}
+
+// A-070: a ping's response time is the average round trip of its replies, not
+// the whole run. pro-bing sends one packet a second, so the run of 3 packets
+// lasts about 2 s. Loopback answers in well under 1 ms, so this also covers
+// the 1 ms floor: Run replaces a ResponseMs of 0 with the whole run time.
+func TestPingCheckLoopbackRoundTrip(t *testing.T) {
+	r := Run("ping", "127.0.0.1", `{"count":3,"timeout_s":5}`)
+	if r.Status != "up" {
+		t.Skipf("loopback ping not available in this environment: %s", r.Message)
+	}
+	if r.ResponseMs < 1 || r.ResponseMs >= 1000 {
+		t.Fatalf("ResponseMs = %d, want the round trip (1 to 999 ms), not the run (message: %s)", r.ResponseMs, r.Message)
+	}
+}
+
+// A-070: pingResult turns pro-bing's statistics into a Result. Expected values
+// are worked out by hand from the statistics.
+func TestPingResultUsesAverageRoundTrip(t *testing.T) {
+	cases := []struct {
+		name        string
+		stats       probing.Statistics
+		elapsed     time.Duration
+		wantStatus  string
+		wantMs      int64
+		wantAvgRtt  float64
+		wantMessage string
+	}{
+		{
+			name: "all replies: average, rounded to whole ms",
+			stats: probing.Statistics{PacketsSent: 3, PacketsRecv: 3, PacketLoss: 0,
+				MinRtt: 3100 * time.Microsecond, MaxRtt: 4200 * time.Microsecond, AvgRtt: 3620 * time.Microsecond},
+			elapsed: 2077 * time.Millisecond, wantStatus: "up", wantMs: 4, wantAvgRtt: 3.6,
+			wantMessage: "3/3 packets received, avg 3.6ms",
+		},
+		{
+			name: "rounds down below the half",
+			stats: probing.Statistics{PacketsSent: 3, PacketsRecv: 3, PacketLoss: 0,
+				MinRtt: 3 * time.Millisecond, MaxRtt: 4 * time.Millisecond, AvgRtt: 3420 * time.Microsecond},
+			elapsed: 2050 * time.Millisecond, wantStatus: "up", wantMs: 3, wantAvgRtt: 3.4,
+			wantMessage: "3/3 packets received, avg 3.4ms",
+		},
+		{
+			name: "sub-millisecond LAN host reads 1 ms, never 0",
+			stats: probing.Statistics{PacketsSent: 3, PacketsRecv: 3, PacketLoss: 0,
+				MinRtt: 300 * time.Microsecond, MaxRtt: 500 * time.Microsecond, AvgRtt: 400 * time.Microsecond},
+			elapsed: 2003 * time.Millisecond, wantStatus: "up", wantMs: 1, wantAvgRtt: 0.4,
+			wantMessage: "3/3 packets received, avg 0.4ms",
+		},
+		{
+			name: "lost packet: average of the replies, not the run up to the timeout",
+			stats: probing.Statistics{PacketsSent: 3, PacketsRecv: 2, PacketLoss: 100.0 / 3,
+				MinRtt: 9 * time.Millisecond, MaxRtt: 11 * time.Millisecond, AvgRtt: 10 * time.Millisecond},
+			elapsed: 5003 * time.Millisecond, wantStatus: "up", wantMs: 10, wantAvgRtt: 10,
+			wantMessage: "2/3 packets received, avg 10.0ms",
+		},
+		{
+			name:    "all lost: down, time until it gave up",
+			stats:   probing.Statistics{PacketsSent: 3, PacketsRecv: 0, PacketLoss: 100},
+			elapsed: 5038 * time.Millisecond, wantStatus: "down", wantMs: 5038, wantAvgRtt: 0,
+			wantMessage: "100% packet loss",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := pingResult(&tc.stats, tc.elapsed)
+			if r.Status != tc.wantStatus {
+				t.Errorf("Status = %q, want %q", r.Status, tc.wantStatus)
+			}
+			if r.ResponseMs != tc.wantMs {
+				t.Errorf("ResponseMs = %d, want %d", r.ResponseMs, tc.wantMs)
+			}
+			if got := r.Metrics["avg_rtt_ms"]; got != tc.wantAvgRtt {
+				t.Errorf("avg_rtt_ms = %#v, want %v", got, tc.wantAvgRtt)
+			}
+			if r.Message != tc.wantMessage {
+				t.Errorf("Message = %q, want %q", r.Message, tc.wantMessage)
+			}
+			if got := r.Metrics["packet_loss"]; got != tc.stats.PacketLoss {
+				t.Errorf("packet_loss = %#v, want %v", got, tc.stats.PacketLoss)
+			}
+			if got := r.Metrics["packets_sent"]; got != tc.stats.PacketsSent {
+				t.Errorf("packets_sent = %#v, want %d", got, tc.stats.PacketsSent)
+			}
+			if got := r.Metrics["packets_recv"]; got != tc.stats.PacketsRecv {
+				t.Errorf("packets_recv = %#v, want %d", got, tc.stats.PacketsRecv)
+			}
+		})
 	}
 }
 
