@@ -305,14 +305,14 @@ onMounted(async () => {
   <div class="page" data-help-page="targets">
     <div class="page-header">
       <h2>Targets</h2>
-      <button v-if="auth.isOperator" class="btn btn-primary" @click="openForm()">+ Target</button>
+      <button v-if="auth.isOperator" class="btn btn-primary" data-help="targets.add" @click="openForm()">+ Target</button>
     </div>
 
     <div v-if="error" class="error-msg">{{ error }}</div>
     <div v-if="success" class="success-msg" @click="success = ''">{{ success }}</div>
 
     <!-- Category filter bar -->
-    <div v-if="!loading && targets.length > 0" class="filter-bar">
+    <div v-if="!loading && targets.length > 0" class="filter-bar" data-help="targets.cats">
       <button v-for="cat in categories" :key="cat"
         :class="['filter-btn', { active: activeCategory === cat }]"
         @click="activeCategory = cat">
@@ -320,7 +320,7 @@ onMounted(async () => {
       </button>
     </div>
 
-    <div v-if="!loading && targets.length > 0" class="filter-bar-secondary">
+    <div v-if="!loading && targets.length > 0" class="filter-bar-secondary" data-help="targets.filt">
       <label class="filter-label">Project:</label>
       <select v-model="activeProject" class="filter-select">
         <option v-for="p in projectValues" :key="p" :value="p">{{ p }}</option>
@@ -347,21 +347,23 @@ onMounted(async () => {
           <tr>
             <th>Name</th>
             <th>Host</th>
-            <th>State</th>
+            <th><span data-help="targets.state">State</span></th>
             <th>Category</th>
             <th>Project / Location</th>
             <th>Tags</th>
-            <th>Conditions</th>
-            <th>Enabled</th>
-            <th>Actions</th>
+            <th><span data-help="targets.cond">Conditions</span></th>
+            <th><span data-help="targets.en">Enabled</span></th>
+            <th><span v-if="auth.isOperator" data-help="targets.acts">Actions</span><template v-else>Actions</template></th>
           </tr>
         </thead>
         <tbody>
           <template v-for="t in paginatedTargets" :key="t.id">
             <tr :class="{ 'row-expanded': expandedTargetId === t.id, 'row-disabled': !t.enabled }" @click="toggleTarget(t.id)" style="cursor: pointer;">
               <td>
-                <span class="expand-icon">{{ expandedTargetId === t.id ? '&#9660;' : '&#9654;' }}</span>
-                {{ t.name }}
+                <span data-help="targets.row">
+                  <span class="expand-icon">{{ expandedTargetId === t.id ? '&#9660;' : '&#9654;' }}</span>
+                  {{ t.name }}
+                </span>
               </td>
               <td>{{ t.host }}</td>
               <td>
@@ -420,7 +422,7 @@ onMounted(async () => {
                       <td>{{ c.name }}</td>
                       <td>
                         <span class="badge badge-type">{{ c.type }}</span>
-                        <span v-if="c.id === t.primary_check_id" class="badge badge-primary-check" title="Primary check used for SLA &amp; dashboard status">PRIMARY</span>
+                        <span v-if="c.id === t.primary_check_id" class="badge badge-primary-check" data-help="targets.prim" title="Primary check used for SLA &amp; dashboard status">PRIMARY</span>
                       </td>
                       <td>{{ formatInterval(c.interval_s) }}</td>
                       <td><span :class="['badge', c.enabled ? 'badge-active' : 'badge-suspended']">{{ c.enabled ? 'yes' : 'no' }}</span></td>
@@ -433,7 +435,7 @@ onMounted(async () => {
         </tbody>
       </table>
 
-      <div v-if="totalPages > 1" class="pagination">
+      <div v-if="totalPages > 1" class="pagination" data-help="targets.pages">
         <button class="page-btn" :disabled="currentPage <= 1" @click="currentPage--">&laquo; Prev</button>
         <span class="page-info">{{ currentPage }} / {{ totalPages }} ({{ filteredTargets.length }} targets)</span>
         <button class="page-btn" :disabled="currentPage >= totalPages" @click="currentPage++">&raquo; Next</button>
@@ -441,7 +443,7 @@ onMounted(async () => {
 
       <!-- Guide -->
       <div v-if="!loading" class="guide-bar">
-        <button type="button" class="guide-btn" @click="showGuide = !showGuide">
+        <button type="button" class="guide-btn" data-help="targets.guide" @click="showGuide = !showGuide">
           <span class="guide-btn-q">?</span>
           {{ showGuide ? 'Hide guide' : 'Target creation guide' }}
           <span class="guide-chevron" :class="{ open: showGuide }">&#9662;</span>
@@ -595,7 +597,7 @@ onMounted(async () => {
     <TargetEditModal :show="showForm" :target-id="editingTargetId" :clone-source-id="cloneSourceId" @close="showForm = false" @saved="onTargetSaved" />
 
     <!-- Delete confirmation modal -->
-    <div v-if="showDeleteConfirm" class="modal-overlay" @click.self="showDeleteConfirm = false">
+    <div v-if="showDeleteConfirm" class="modal-overlay" data-help-scope="dialog" @click.self="showDeleteConfirm = false">
       <div class="modal-card">
         <h3>Delete Target</h3>
         <p>Delete this target and all its checks? This cannot be undone.</p>
@@ -607,7 +609,7 @@ onMounted(async () => {
     </div>
 
     <!-- Pause confirmation modal -->
-    <div v-if="showPauseConfirm" class="modal-overlay" @click.self="showPauseConfirm = false">
+    <div v-if="showPauseConfirm" class="modal-overlay" data-help-scope="dialog" @click.self="showPauseConfirm = false">
       <div class="modal-card">
         <h3>Pause Target</h3>
         <p>Testing will stop for this target. SLA will not be affected during pause. Are you sure?</p>
@@ -619,7 +621,7 @@ onMounted(async () => {
     </div>
 
     <!-- Unpause confirmation modal -->
-    <div v-if="showUnpauseConfirm" class="modal-overlay" @click.self="showUnpauseConfirm = false">
+    <div v-if="showUnpauseConfirm" class="modal-overlay" data-help-scope="dialog" @click.self="showUnpauseConfirm = false">
       <div class="modal-card">
         <h3>Unpause Target</h3>
         <p>Testing will resume immediately for all checks. Continue?</p>

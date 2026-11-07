@@ -52,7 +52,7 @@ onMounted(() => loadAlerts())
   <div class="page" data-help-page="alerts">
     <div class="page-header">
       <h2>Alerts</h2>
-      <span class="text-muted">{{ total }} total</span>
+      <span class="text-muted" data-help="alerts.audit">{{ total }} total</span>
     </div>
 
     <div v-if="error" class="error-msg">{{ error }}</div>
@@ -63,9 +63,9 @@ onMounted(() => loadAlerts())
           <tr>
             <th>Timestamp</th>
             <th>Target</th>
-            <th>Type</th>
-            <th>Recipient</th>
-            <th>Message</th>
+            <th><span data-help="alerts.type">Type</span></th>
+            <th><span data-help="alerts.rcp">Recipient</span></th>
+            <th><span data-help="alerts.msg">Message</span></th>
           </tr>
         </thead>
         <tbody>

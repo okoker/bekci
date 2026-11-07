@@ -62,21 +62,21 @@ async function changePassword() {
       </div>
       <div class="form-group">
         <label>Role</label>
-        <input :value="auth.user?.role" disabled />
+        <input :value="auth.user?.role" disabled data-help="profile.role" />
       </div>
       <form @submit.prevent="updateProfile">
         <div class="form-group">
           <label>Email</label>
-          <input v-model="email" type="email" />
+          <input v-model="email" type="email" data-help="profile.email" />
         </div>
         <div class="form-group">
           <label>Phone</label>
-          <input v-model="phone" type="tel" placeholder="+1234567890" />
+          <input v-model="phone" type="tel" placeholder="+1234567890" data-help="profile.phone" />
           <span class="text-muted" style="font-size:0.8rem;">For Signal alerts</span>
         </div>
         <div v-if="profileErr" class="error-msg">{{ profileErr }}</div>
         <div v-if="profileMsg" class="success-msg" @click="profileMsg = ''">{{ profileMsg }}</div>
-        <button type="submit" class="btn btn-primary">Save</button>
+        <button type="submit" class="btn btn-primary" data-help="profile.save">Save</button>
       </form>
     </div>
 
@@ -89,7 +89,7 @@ async function changePassword() {
         </div>
         <div class="form-group">
           <label class="required">New Password (min 15 chars)</label>
-          <input v-model="pwForm.new_password" type="password" required minlength="15" />
+          <input v-model="pwForm.new_password" type="password" required minlength="15" data-help="profile.pw" />
         </div>
         <div class="form-group">
           <label class="required">Confirm New Password</label>
@@ -97,7 +97,7 @@ async function changePassword() {
         </div>
         <div v-if="pwErr" class="error-msg">{{ pwErr }}</div>
         <div v-if="pwMsg" class="success-msg" @click="pwMsg = ''">{{ pwMsg }}</div>
-        <button type="submit" class="btn btn-primary">Change Password</button>
+        <button type="submit" class="btn btn-primary" data-help="profile.change">Change Password</button>
       </form>
     </div>
   </div>

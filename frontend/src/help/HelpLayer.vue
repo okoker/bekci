@@ -402,6 +402,18 @@ onUnmounted(() => {
 .help-note-next { justify-self: end; text-align: right; }
 .help-note-step:focus-visible { outline: 2px solid var(--help); outline-offset: 2px; border-radius: 3px; }
 .help-note-pos { color: #64748b; white-space: nowrap; }
+
+/* Pictures of the app's own controls in a note's rows. Their classes are
+   scoped to the views (Targets, Search, Alerts), so the few that main.css
+   doesn't have are copied here, in the app's real colours. */
+.badge-paused { background: #e0e7ff; color: #4338ca; }
+.badge-unknown { background: #f1f5f9; color: #64748b; }
+.badge-firing { background: #fee2e2; color: #991b1b; }
+.badge-recovery { background: #dcfce7; color: #166534; }
+.badge-realert { background: #fef3c7; color: #92400e; }
+.btn-pause { color: #4338ca; border-color: #c7d2fe; }
+.btn-unpause { color: #166534; border-color: #bbf7d0; }
+.btn-danger { color: #991b1b; border-color: #fca5a5; }
 </style>
 
 <style>

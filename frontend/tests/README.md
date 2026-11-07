@@ -83,8 +83,9 @@ json)`, or a function of the URL returning one of those or a promise of one, whi
 `delays` (ms to hold back a path's answer) and `viewport`. It
 returns `{ page, writes }`; writes are recorded and answered `{}`. A test fails if its page throws a
 JavaScript error or asks for an API path no fixture answers. Fixture sets to spread into `fixtures`:
-`moreTargets(count)` (a Dashboard and SOC wall with `count` more healthy targets, "Server 03" on, each
-with one ping check: enough rows to scroll and page) and `staleScheduler()` (a stale scheduler, so the
+`moreTargets(count)` (a Dashboard, SOC wall and Targets list with `count` more healthy targets,
+"Server 03" on, each with one ping check: enough rows to scroll and page; their detail and checks
+aren't answered, so don't unfold them) and `staleScheduler()` (a stale scheduler, so the
 header shows the red "Monitoring engine not responding" banner). Also: `helpButton(page)`,
 `turnHelpOn(page)`, `waitForStyle(locator, prop, value)` and `orangeIn(page, selector)` (every use of
 Bekci's orange in those elements, SVG fill and stroke included; help never uses it). So that an empty
@@ -112,6 +113,19 @@ doesn't keep Esc. Marks follow a scroll (−200 px for `scrollBy(0, 200)`), a no
 at 1280×800 and 1440×900. Marks appear for rows that arrive after help was turned on (the Dashboard's
 answer is held back until the header marks are drawn), and the stale-scheduler banner has a mark only
 while it shows.
+
+`help-pages.test.mjs` covers the notes of the pages after the Dashboard, a section per page (Task 6
+adds Settings, Users and Audit Log): Targets, Search, SLA, Alerts and Profile. Per page, the ? marks on
+screen equal the expected list in page order (then the header's), each named "Help: <title>", each
+opens a note with that title (one at a time, its control outlined), the bar says the page's summary,
+and none of help's own parts is orange. Role limits: a viewer on Targets has no + Target and no
+Actions mark; a viewer sent from Search to the Dashboard has no Search marks. Drawn controls: the
+State and Type notes' badges and the Actions note's buttons have the app's own colours (checked
+against the table's own). Controls that appear later get marks then: PRIMARY after unfolding a Targets
+row, the pagination with 51 targets, Save and the result columns once a Search has results, Last 4
+hours after unfolding a result, Saved searches with a saved search in localStorage. A page's own
+dialog (Pause, Unpause, Delete on Targets and Search; the SLA zoom) takes the page's marks away while
+it is open (`data-help-scope="dialog"`) and they come back when it closes.
 
 `help-switch.test.mjs` covers Help in the header: it comes after the last link each role sees, is
 missing on the SOC wall and Login, and turns on a slate bar under the header (pushing the page down)

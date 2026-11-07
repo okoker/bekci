@@ -229,9 +229,11 @@ export function apiFixtures({ role = 'admin', version = HELP_VERSION } = {}) {
   return fixtures
 }
 
-// Fixtures for a Dashboard and SOC wall with `count` more healthy targets after
-// the two above: "Server 03", "Server 04", …, each with one ping check (cx03, …)
-// and its history. Enough rows to scroll and to page (the Dashboard shows 10).
+// Fixtures for a Dashboard, SOC wall and Targets list with `count` more healthy
+// targets after the two above: "Server 03", "Server 04", …, each with one ping
+// check (cx03, …) and its history. Enough rows to scroll and to page (the
+// Dashboard shows 10, Targets 50). Their detail and checks (/api/targets/tx03…)
+// are not answered: unfolding one of them is not covered.
 // Spread into openPage's `fixtures`.
 export function moreTargets(count) {
   const extra = Array.from({ length: count }, (_, i) => {
@@ -248,7 +250,9 @@ export function moreTargets(count) {
       last_message: c.message, response_ms: c.ms, uptime_90d_pct: c.uptime }],
   })
   const rows = [...targets.map(statusRow), ...extra.map(row)]
-  const fixtures = { '/api/dashboard/status': rows, '/api/soc/status': rows }
+  const list = [...targets.map(targetSummary),
+    ...extra.map(({ target: t }) => ({ ...targetSummary(t), condition_count: 1 }))]
+  const fixtures = { '/api/dashboard/status': rows, '/api/soc/status': rows, '/api/targets': list }
   for (const { check } of extra) {
     fixtures[`/api/dashboard/history/${check.id}`] = history(check)
     fixtures[`/api/soc/history/${check.id}`] = history(check)

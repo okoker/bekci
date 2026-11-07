@@ -416,10 +416,11 @@ onMounted(async () => {
           v-model="searchText"
           type="text"
           class="search-input"
+          data-help="search.q"
           placeholder="Search by name, host, or IP..."
         />
       </div>
-      <div class="search-filters">
+      <div class="search-filters" data-help="search.filters">
         <select v-model="filterProject" class="filter-select">
           <option value="">All Projects</option>
           <option v-for="p in projectOptions" :key="p.id" :value="p.value">{{ p.value }}</option>
@@ -431,7 +432,7 @@ onMounted(async () => {
         <TagChipInput v-model="filterTags" :options="tagOptions" placeholder="Tags…" />
       </div>
       <div v-if="hasActiveFilter" class="save-btn-wrap">
-        <button class="btn btn-sm btn-save-search" @click="showSaveName = !showSaveName" title="Save your searches for future reuse.">
+        <button class="btn btn-sm btn-save-search" data-help="search.save" @click="showSaveName = !showSaveName" title="Save your searches for future reuse.">
           {{ showSaveName ? 'Cancel' : '+ Save' }}
         </button>
         <div v-if="showSaveName" class="save-popover">
@@ -443,7 +444,7 @@ onMounted(async () => {
 
     <!-- Saved searches chip bar -->
     <div v-if="savedSearches.length > 0" class="saved-searches-bar">
-      <span class="saved-label">Saved searches</span>
+      <span class="saved-label" data-help="search.saved">Saved searches</span>
       <div v-for="s in savedSearches" :key="s.id" class="saved-chip" @click="applySavedSearch(s)" :title="buildChipTooltip(s)">
         <span class="saved-chip-name">{{ s.name }}</span>
         <span class="saved-chip-x" @click.stop="deleteSavedSearch(s.id)" title="Remove">&times;</span>
@@ -463,19 +464,21 @@ onMounted(async () => {
             <tr>
               <th>Name</th>
               <th>Host</th>
-              <th>State</th>
+              <th><span data-help="search.state">State</span></th>
               <th>Category</th>
               <th>Project</th>
               <th>Location</th>
-              <th>Actions</th>
+              <th><span data-help="search.acts">Actions</span></th>
             </tr>
           </thead>
           <tbody>
             <template v-for="t in filteredTargets" :key="t.id">
               <tr :class="{ 'row-expanded': expandedTargetId === t.id }" @click="toggleExpand(t.id)" style="cursor: pointer;">
                 <td>
-                  <span class="expand-icon">{{ expandedTargetId === t.id ? '&#9660;' : '&#9654;' }}</span>
-                  {{ t.name }}
+                  <span data-help="search.row">
+                    <span class="expand-icon">{{ expandedTargetId === t.id ? '&#9660;' : '&#9654;' }}</span>
+                    {{ t.name }}
+                  </span>
                 </td>
                 <td class="host-cell">{{ t.host }}</td>
                 <td>
@@ -556,7 +559,7 @@ onMounted(async () => {
                             <th>Type</th>
                             <th>Interval</th>
                             <th>Enabled</th>
-                            <th>Last 4 hours</th>
+                            <th><span data-help="search.strip">Last 4 hours</span></th>
                           </tr>
                         </thead>
                         <tbody>
@@ -598,7 +601,7 @@ onMounted(async () => {
     <TargetEditModal :show="showEditModal" :target-id="editTargetId" :clone-source-id="cloneSourceId" @close="showEditModal = false" @saved="onTargetSaved" />
 
     <!-- Delete confirmation modal -->
-    <div v-if="showDeleteConfirm" class="modal-overlay" :style="dialogStyle" @click.self="showDeleteConfirm = false">
+    <div v-if="showDeleteConfirm" class="modal-overlay" data-help-scope="dialog" :style="dialogStyle" @click.self="showDeleteConfirm = false">
       <div ref="confirmCard" class="modal-card">
         <h3>Delete Target</h3>
         <p>Delete this target and all its checks? This cannot be undone.</p>
@@ -610,7 +613,7 @@ onMounted(async () => {
     </div>
 
     <!-- Pause confirmation modal -->
-    <div v-if="showPauseConfirm" class="modal-overlay" :style="dialogStyle" @click.self="showPauseConfirm = false">
+    <div v-if="showPauseConfirm" class="modal-overlay" data-help-scope="dialog" :style="dialogStyle" @click.self="showPauseConfirm = false">
       <div ref="confirmCard" class="modal-card">
         <h3>Pause Target</h3>
         <p>Testing will stop for this target. SLA will not be affected during pause. Are you sure?</p>
@@ -622,7 +625,7 @@ onMounted(async () => {
     </div>
 
     <!-- Unpause confirmation modal -->
-    <div v-if="showUnpauseConfirm" class="modal-overlay" :style="dialogStyle" @click.self="showUnpauseConfirm = false">
+    <div v-if="showUnpauseConfirm" class="modal-overlay" data-help-scope="dialog" :style="dialogStyle" @click.self="showUnpauseConfirm = false">
       <div ref="confirmCard" class="modal-card">
         <h3>Unpause Target</h3>
         <p>Testing will resume immediately for all checks. Continue?</p>

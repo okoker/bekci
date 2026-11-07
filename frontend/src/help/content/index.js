@@ -19,7 +19,12 @@
 //   }
 // `args` is the parsed JSON of the control's data-help-args attribute ({} if none).
 // Content is plain data, rendered with {{ }}, never as HTML.
+import * as alerts from './alerts.js'
 import * as dashboard from './dashboard.js'
 import * as header from './header.js'
+import * as profile from './profile.js'
+import * as search from './search.js'
+import * as sla from './sla.js'
+import * as targets from './targets.js'
 
-export const pages = { ...dashboard, ...header }
+export const pages = { ...alerts, ...dashboard, ...header, ...profile, ...search, ...sla, ...targets }

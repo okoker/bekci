@@ -300,15 +300,15 @@ onUnmounted(() => {
     <!-- Insights card -->
     <div class="insights-card">
       <div class="insights-grid">
-        <div class="icard">
+        <div class="icard" data-help="sla.hosts">
           <span class="icard-value">{{ insights.totalHosts }}</span>
           <span class="icard-label">Hosts Monitored</span>
         </div>
-        <div class="icard" :class="{ 'icard-warn': insights.failingHosts > 0 }">
+        <div class="icard" :class="{ 'icard-warn': insights.failingHosts > 0 }" data-help="sla.notmeet">
           <span class="icard-value">{{ insights.failingHosts }}</span>
           <span class="icard-label">Not Meeting SLA</span>
         </div>
-        <div class="icard icard-all">
+        <div class="icard icard-all" data-help="sla.avg">
           <span class="icard-label">All</span>
           <span class="icard-value">{{ insights.allAvg !== null ? insights.allAvg.toFixed(1) + '%' : '—' }}</span>
         </div>
@@ -318,7 +318,7 @@ onUnmounted(() => {
             <span class="icard-value">{{ g.avg !== null ? g.avg.toFixed(1) + '%' : '—' }}</span>
           </div>
         </template>
-        <div class="icard">
+        <div class="icard" data-help="sla.planned">
           <span class="icard-value">{{ pauseStats.count }}</span>
           <span class="icard-label">Planned Work ({{ new Date().toLocaleDateString('en-GB', { month: 'short' }) }})</span>
           <span v-if="pauseStats.affected_hosts > 0" class="icard-sub">{{ pauseStats.affected_hosts }} host{{ pauseStats.affected_hosts !== 1 ? 's' : '' }}</span>
@@ -343,7 +343,7 @@ onUnmounted(() => {
         <div v-if="cat.targets.length === 0" class="empty-cat">
           No targets in this category
         </div>
-        <div v-else class="chart-wrap">
+        <div v-else class="chart-wrap" data-help="sla.chart">
           <Line :data="buildChartData(cat)" :options="buildChartOptions(cat, false)" />
         </div>
       </div>
@@ -353,7 +353,7 @@ onUnmounted(() => {
 
     <!-- Modal -->
     <Teleport to="body">
-      <div v-if="modalCat" class="modal-backdrop" @click.self="closeModal">
+      <div v-if="modalCat" class="modal-backdrop" data-help-scope="dialog" @click.self="closeModal">
         <div class="modal-content">
           <div class="modal-header">
             <div class="modal-title-row">
@@ -364,7 +364,7 @@ onUnmounted(() => {
             </div>
             <button class="modal-close" @click="closeModal">&times;</button>
           </div>
-          <div class="modal-toolbar">
+          <div class="modal-toolbar" data-help="sla.zoom">
             <button v-if="isZoomed" class="btn-reset-zoom" @click="resetZoom">Reset zoom</button>
             <span v-else class="zoom-hint">Scroll to zoom, drag to pan</span>
           </div>
