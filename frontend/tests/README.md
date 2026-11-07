@@ -154,8 +154,9 @@ condition's operator winning), the subject and verb per check type for Status eq
 refused or accepted, swapped by Port must stay closed), the count phrase and the delay line in minutes or
 seconds, and the fallback wording for a field or comparator the form doesn't offer. It also pins each
 false-alarm check's text, level and order (no-recipient is a neutral note; a Fail Count 1 condition AND'd
-with a test of another type is confirmed by it and not warned about, while one alone, in an OR group or
-AND'd with its own type is), the Fail Count lane labels, summary and the figures it used (an interval under
+with a failing test of another type is confirmed by it and not warned about, while one alone, in an OR group,
+AND'd with its own type or only with a test that must pass (Status equals up) is), the Fail Count lane labels,
+summary and the figures it used (an interval under
 10 seconds runs every 10), and that a name like `<b>x</b>` comes back unchanged as a plain string.
 
 `help-target-form.test.mjs` covers help inside the target form (New, Edit, Clone). With help on, on

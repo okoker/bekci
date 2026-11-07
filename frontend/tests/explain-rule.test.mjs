@@ -370,3 +370,18 @@ test('R14 keeps the table order: the ✓ for two tests, then a single-failure wa
     { level: 'note', text: 'No one is ticked, so this target sends no email or Signal. The webhook, if it is switched on, still sends.' },
   ])
 })
+
+// R14 as amended: only a failing test of another type confirms. A partner that
+// must be passing (Status equals up) is the normal state, so it confirms nothing.
+test('R14: Page Hash on the latest check AND\'d with "web page answers" is still warned about: a passing test confirms nothing', () => {
+  const r = explainRule([
+    cond({ check_type: 'page_hash', check_name: 'Page content', ...fc(1) }, 0, 'AND'),
+    cond({ check_type: 'http', check_name: 'Web page answers', value: 'up', ...fc(2, 300) }, 0, 'AND'),
+  ], 'T', 1)
+  assert.ok(texts(r).includes(PING_WARN('Page content')), texts(r).join(' | '))
+  assert.ok(!texts(r).includes(NO_FLICKER))
+  // a failing partner of another type still confirms: ping on the latest check AND web page down 2 in a row
+  const pingWeb = explainRule([cond({ check_name: 'Ping', ...fc(1) }, 0, 'AND'), cond({ check_type: 'http', ...fc(2, 300) }, 0, 'AND')], 'T', 1)
+  assert.ok(!pingWeb.checks.some((c) => c.level === 'warn'))
+  assert.ok(texts(pingWeb).includes(NO_FLICKER))
+})
