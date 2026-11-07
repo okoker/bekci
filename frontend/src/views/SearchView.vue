@@ -229,10 +229,27 @@ function formatTooltip4h(r) {
   return `${timeStr}: ${r.status} (${r.response_ms}ms)`
 }
 
+// Confirm dialogs (Delete, Pause, Unpause) open level with the button that opened
+// them, kept inside the window. The card is measured once rendered, before paint.
+const confirmCard = ref(null)
+const dialogTop = ref(null)
+const dialogStyle = computed(() => dialogTop.value == null ? {} : { paddingTop: `${dialogTop.value}px` })
+async function placeDialog(event) {
+  const anchor = event?.currentTarget?.getBoundingClientRect()
+  dialogTop.value = null
+  if (!anchor) return
+  await nextTick()
+  const h = confirmCard.value?.offsetHeight
+  if (!h) return
+  const mid = anchor.top + anchor.height / 2
+  dialogTop.value = Math.round(Math.max(16, Math.min(mid - h / 2, window.innerHeight - h - 32)))
+}
+
 // Delete
-function deleteTarget(id) {
+function deleteTarget(id, event) {
   pendingDeleteId.value = id
   showDeleteConfirm.value = true
+  placeDialog(event)
 }
 
 async function confirmDelete() {
@@ -255,9 +272,10 @@ async function confirmDelete() {
 }
 
 // Pause / Unpause
-function pauseTarget(id) {
+function pauseTarget(id, event) {
   pendingPauseId.value = id
   showPauseConfirm.value = true
+  placeDialog(event)
 }
 
 async function confirmPause() {
@@ -275,9 +293,10 @@ async function confirmPause() {
   }
 }
 
-function unpauseTarget(id) {
+function unpauseTarget(id, event) {
   pendingPauseId.value = id
   showUnpauseConfirm.value = true
+  placeDialog(event)
 }
 
 async function confirmUnpause() {
@@ -477,12 +496,12 @@ onMounted(async () => {
                 </td>
                 <td class="actions" @click.stop>
                   <template v-if="auth.isOperator">
-                    <button v-if="isTargetPaused(t)" class="btn btn-sm btn-unpause" @click="unpauseTarget(t.id)">Unpause</button>
-                    <button v-else class="btn btn-sm btn-pause" @click="pauseTarget(t.id)">Pause</button>
+                    <button v-if="isTargetPaused(t)" class="btn btn-sm btn-unpause" @click="unpauseTarget(t.id, $event)">Unpause</button>
+                    <button v-else class="btn btn-sm btn-pause" @click="pauseTarget(t.id, $event)">Pause</button>
                     <button class="btn btn-sm" @click="runAllChecks(t.id)">Run Now</button>
                     <button class="btn btn-sm" @click="openEdit(t.id)">Edit</button>
                     <button class="btn btn-sm" @click="cloneTarget(t.id)">Clone</button>
-                    <button class="btn btn-sm btn-danger" @click="deleteTarget(t.id)">Delete</button>
+                    <button class="btn btn-sm btn-danger" @click="deleteTarget(t.id, $event)">Delete</button>
                   </template>
                 </td>
               </tr>
@@ -579,8 +598,8 @@ onMounted(async () => {
     <TargetEditModal :show="showEditModal" :target-id="editTargetId" :clone-source-id="cloneSourceId" @close="showEditModal = false" @saved="onTargetSaved" />
 
     <!-- Delete confirmation modal -->
-    <div v-if="showDeleteConfirm" class="modal-overlay" @click.self="showDeleteConfirm = false">
-      <div class="modal-card">
+    <div v-if="showDeleteConfirm" class="modal-overlay" :style="dialogStyle" @click.self="showDeleteConfirm = false">
+      <div ref="confirmCard" class="modal-card">
         <h3>Delete Target</h3>
         <p>Delete this target and all its checks? This cannot be undone.</p>
         <div class="form-actions">
@@ -591,8 +610,8 @@ onMounted(async () => {
     </div>
 
     <!-- Pause confirmation modal -->
-    <div v-if="showPauseConfirm" class="modal-overlay" @click.self="showPauseConfirm = false">
-      <div class="modal-card">
+    <div v-if="showPauseConfirm" class="modal-overlay" :style="dialogStyle" @click.self="showPauseConfirm = false">
+      <div ref="confirmCard" class="modal-card">
         <h3>Pause Target</h3>
         <p>Testing will stop for this target. SLA will not be affected during pause. Are you sure?</p>
         <div class="form-actions">
@@ -603,8 +622,8 @@ onMounted(async () => {
     </div>
 
     <!-- Unpause confirmation modal -->
-    <div v-if="showUnpauseConfirm" class="modal-overlay" @click.self="showUnpauseConfirm = false">
-      <div class="modal-card">
+    <div v-if="showUnpauseConfirm" class="modal-overlay" :style="dialogStyle" @click.self="showUnpauseConfirm = false">
+      <div ref="confirmCard" class="modal-card">
         <h3>Unpause Target</h3>
         <p>Testing will resume immediately for all checks. Continue?</p>
         <div class="form-actions">
@@ -936,5 +955,19 @@ onMounted(async () => {
   z-index: 100;
   overflow-y: auto;
   padding: 2rem 1rem;
+}
+.modal-card {
+  background: #fff;
+  border-radius: 8px;
+  padding: 1.5rem;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+}
+.modal-card h3 { margin-bottom: 1rem; }
+.form-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
 }
 </style>

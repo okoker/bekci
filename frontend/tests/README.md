@@ -56,3 +56,8 @@ saves `expect_closed: false`.
 `targets-tag-filter.test.mjs` covers the Targets filter bar: a Tags chip has only its Remove button
 (no pin), and tags, Location and Project combine so each one narrows the list; removing a chip
 widens it again.
+
+`search-confirm-dialog.test.mjs` covers the Search page's Delete, Pause and Unpause dialogs: each is
+the same white card as the Targets page's dialogs (compared with one opened there), opens level with
+the button that was clicked and stays inside the window, Cancel sends nothing, and confirming
+Unpause unpauses the row it was opened for.
