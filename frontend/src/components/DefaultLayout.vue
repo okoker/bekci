@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useRouter, useRoute } from 'vue-router'
 import api from '../api'
+import { help, toggleHelp, closeHelp, LazyHelpBar } from '../help/useHelp.js'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -36,7 +37,10 @@ async function fetchHealth() {
   try {
     const { data } = await api.get('/system/health')
     health.value = data
-    if (data.version) appVersion.value = data.version
+    if (data.version) {
+      appVersion.value = data.version
+      help.runningVersion = data.version
+    }
   } catch {
     health.value = null
   }
@@ -113,8 +117,10 @@ function closePopover(e) {
   }
 }
 
+// Help is for the page it was turned on for: another page starts with it off
 watch(() => route.path, () => {
   showUserMenu.value = false
+  closeHelp()
 })
 
 onMounted(() => {
@@ -128,6 +134,9 @@ onUnmounted(() => {
   clearInterval(pollTimer)
   document.removeEventListener('click', closePopover)
   document.removeEventListener('click', closeUserMenu)
+  // Leaving for a page without this layout (SOC, Login) unmounts it before the
+  // route watcher above can run
+  closeHelp()
 })
 </script>
 
@@ -145,6 +154,13 @@ onUnmounted(() => {
         <router-link v-if="auth.isOperator" to="/audit-log" class="nav-link">Audit Log</router-link>
         <router-link v-if="auth.isAdmin" to="/users" class="nav-link">Users</router-link>
         <router-link v-if="auth.isAdmin" to="/settings" class="nav-link">Settings</router-link>
+        <button
+          type="button"
+          class="nav-link nav-help"
+          :class="{ 'is-on': help.on }"
+          :aria-pressed="help.on ? 'true' : 'false'"
+          @click="toggleHelp"
+        ><span class="nav-help-icon" aria-hidden="true"></span>Help</button>
       </div>
       <div class="navbar-right">
         <span v-if="appVersion" class="app-version">v{{ appVersion }}</span>
@@ -175,6 +191,7 @@ onUnmounted(() => {
         </div>
       </div>
     </nav>
+    <LazyHelpBar v-if="help.on" />
     <div v-if="schedulerStale" class="stale-banner">
       Monitoring engine not responding — dashboard data may be outdated
     </div>

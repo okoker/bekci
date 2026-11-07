@@ -400,7 +400,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="page">
+  <div class="page" data-help-page="search">
     <div class="page-header">
       <h2>Search</h2>
     </div>

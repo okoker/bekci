@@ -287,7 +287,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="sla-page">
+  <div class="sla-page" data-help-page="sla">
     <div class="page-header">
       <h1>SLA Compliance</h1>
       <span class="subtitle">90-day daily uptime trend per category</span>

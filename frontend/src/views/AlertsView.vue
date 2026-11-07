@@ -49,7 +49,7 @@ onMounted(() => loadAlerts())
 </script>
 
 <template>
-  <div class="page">
+  <div class="page" data-help-page="alerts">
     <div class="page-header">
       <h2>Alerts</h2>
       <span class="text-muted">{{ total }} total</span>

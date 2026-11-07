@@ -1,5 +1,18 @@
 /* Bekci v2 — Hand-rolled CSS */
 
+/* ─── In-app help tokens (design in_app_help.md §5) ──────── */
+/* Help is turquoise and never uses Bekci's orange #ea580c. */
+:root {
+  --help: #0d9488;           /* borders, leader lines, dots, outlines */
+  --help-dk: #0f766e;        /* text and links on white; fills behind white text */
+  --help-tint: #f0fdfa;      /* note footers, card headers, banners */
+  --help-line: #99f6e4;      /* thin rules on tinted areas */
+  --help-bar: #1e293b;       /* the help bar */
+  --help-bar-text: #cbd5e1;
+  --help-glow: 0 0 0 5px rgba(20, 184, 166, .16);        /* ring around every help box */
+  --help-glow-window: 0 0 0 6px rgba(20, 184, 166, .16); /* the same, on windows */
+}
+
 /* ─── Reset & Base ───────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -136,6 +149,100 @@ a:hover { text-decoration: underline; }
   font-size: 0.85rem;
   letter-spacing: 0.02em;
 }
+
+/* ─── In-app help: header item and bar ───────────────────── */
+/* Here rather than in HelpBar.vue: the "could not load" message (useHelp.js)
+   takes the bar's place when its chunk can't be fetched, and needs this look. */
+.nav-help {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 4px;
+  background: none;
+  border: 0;
+  font-family: inherit;
+  line-height: inherit;
+  cursor: pointer;
+}
+.nav-help-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: var(--help-dk);
+  border: 1.5px solid #fff;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+}
+.nav-help-icon::before { content: '?'; }
+.nav-help.is-on,
+.nav-help.is-on:hover {
+  background: #fff;
+  color: var(--help-dk);
+}
+.nav-help.is-on .nav-help-icon { border-color: var(--help-dk); }
+
+.help-bar {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.75rem;
+  min-height: 56px;
+  padding: 0.625rem 1.25rem;
+  background: var(--help-bar);
+  color: var(--help-bar-text);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.22);
+}
+.help-disc {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--help-dk);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 800;
+}
+.help-disc::before { content: '?'; }
+.help-bar-text {
+  flex: 1 1 360px;
+  max-width: 780px;
+  font-size: 1rem;
+  line-height: 1.45;
+}
+.help-bar-text strong { color: #fff; font-weight: 700; }
+.help-bar-side {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-left: auto;
+}
+.help-bar-stamp { font-size: 0.875rem; color: #94a3b8; }
+.help-bar-stamp b { color: #e2e8f0; font-weight: 600; }
+.help-done {
+  flex: none;
+  padding: 0.5rem 1rem;
+  border: 0;
+  border-radius: 7px;
+  background: #fff;
+  color: #0f172a;
+  font-family: inherit;
+  font-size: 0.925rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.help-done:hover { background: #e2e8f0; }
+.help-done:focus-visible { outline: 2px solid var(--help-line); outline-offset: 2px; }
+.help-bar-error .help-done { margin-left: auto; }
 
 /* ─── Pagination ─────────────────────────────────────────── */
 .pagination {

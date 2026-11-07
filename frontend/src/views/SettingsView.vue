@@ -402,6 +402,15 @@ const editUserForm = ref({ email: '', phone: '', role: '' })
 // ── Users > sub-tabs (humans / api-access) ──
 const usersSubTab = ref('humans')
 
+// The in-app help page for the tab on show (data-help-page on the root)
+const helpPageOfTab = {
+  general: 'settingsGeneral', tags: 'settingsTags', sla: 'settingsSla', alerting: 'settingsAlerting',
+  backup: 'settingsBackup', fail2ban: 'settingsFail2ban', system: 'settingsHealth', audit: 'auditLog',
+}
+const helpPage = computed(() => activeTab.value === 'users'
+  ? (usersSubTab.value === 'api-access' ? 'apiAccess' : 'users')
+  : helpPageOfTab[activeTab.value])
+
 // ── API tokens state ──
 const apiTokens = ref([])
 const apiTokenError = ref('')
@@ -1167,7 +1176,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="page">
+  <div class="page" :data-help-page="helpPage">
     <div class="page-header">
       <h2>{{ activeTab === 'users' ? 'Users' : activeTab === 'audit' ? 'Audit Log' : 'Settings' }}</h2>
       <button

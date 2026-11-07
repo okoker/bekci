@@ -302,7 +302,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="page">
+  <div class="page" data-help-page="targets">
     <div class="page-header">
       <h2>Targets</h2>
       <button v-if="auth.isOperator" class="btn btn-primary" @click="openForm()">+ Target</button>

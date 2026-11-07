@@ -51,7 +51,7 @@ async function changePassword() {
 </script>
 
 <template>
-  <div class="page">
+  <div class="page" data-help-page="profile">
     <h2>Profile</h2>
 
     <div class="card">

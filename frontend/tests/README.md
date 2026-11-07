@@ -71,3 +71,25 @@ widens it again.
 the same white card as the Targets page's dialogs (compared with one opened there), opens level with
 the button that was clicked and stays inside the window, Cancel sends nothing, and confirming
 Unpause unpauses the row it was opened for.
+
+`help-fixtures.mjs` is not a test file: it is the shared set-up the in-app help tests
+(`help-*.test.mjs`) import. `startApp()` / `stopApp(app)` start and stop a Vite server and Chrome.
+`openPage(t, app, path, options)` opens a page signed in as `role` (`'admin'`, `'operator'`,
+`'viewer'`, or `null` for signed out) with every API request answered from `apiFixtures()`: three
+users, two targets (Core switch, healthy; Web shop, down, with a PRIMARY HTTP check) and the data each
+page loads. Options: `version` (what `/api/system/health` reports; defaults to `HELP_VERSION`),
+`fixtures` (answers laid over the defaults, by GET path or `"METHOD /path"`; a value, `reply(status,
+json)`, or a function of the URL), `delays` (ms to hold back a path's answer) and `viewport`. It
+returns `{ page, writes }`; writes are recorded and answered `{}`. A test fails if its page throws a
+JavaScript error or asks for an API path no fixture answers. Also: `helpButton(page)`,
+`turnHelpOn(page)`, `waitForStyle(locator, prop, value)` and `orangeIn(page, selector)` (every use of
+Bekci's orange in those elements; help never uses it).
+
+`help-switch.test.mjs` covers Help in the header: it comes after the last link each role sees, is
+missing on the SOC wall and Login, and turns on a slate bar under the header (pushing the page down)
+with the page's summary and "Written for Bekci <version>", plus "(running <version>)" when the server
+runs another. Done, Esc, Help again and going to another page turn it off. Each page's root names its
+help page (`data-help-page`; Settings per tab), and the bar follows a tab change. Nothing in the bar or
+the Help item is orange. When the bar's code can't be fetched (an old tab after a deploy; tried as a
+404 and as the index.html a built Bekci serves for a missing file), it says "Help could not load:
+reload the page." and the page keeps working.

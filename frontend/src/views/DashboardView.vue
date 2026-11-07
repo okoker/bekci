@@ -329,7 +329,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="page">
+  <div class="page" data-help-page="dashboard">
     <div class="page-header">
       <h2>Dashboard</h2>
       <span v-if="lastUpdated" class="text-muted">
