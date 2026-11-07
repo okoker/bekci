@@ -5,7 +5,12 @@
 // with Fail Count N > 1 needs N matching results in a row, one non-match breaks the run.
 
 const ORDINALS = ['', 'first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth']
-const ordinal = (n) => ORDINALS[n] || `${n}th`
+function ordinal(n) {
+  if (ORDINALS[n]) return ORDINALS[n]
+  const last2 = n % 100
+  const suffix = last2 >= 11 && last2 <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] || 'th')
+  return `${n}${suffix}`
+}
 
 const TYPE_LABEL = {
   http: 'HTTP', tcp: 'TCP', ping: 'Ping', dns: 'DNS', page_hash: 'Page Hash',
@@ -23,26 +28,36 @@ const failCountOf = (c) => {
   return Number.isFinite(n) && n >= 1 ? n : 1
 }
 const cfg = (c) => (c.config && typeof c.config === 'object' ? c.config : {})
+// Like the checkers' configInt (internal/checker/checker.go): a number is kept as is
+// (0 included); anything else (missing, blank string) takes the checker's default.
+const numOr = (v, dflt) => (typeof v === 'number' && Number.isFinite(v) ? v : dflt)
 const isStatus = (c, v) => c.field === 'status' && c.comparator === 'eq' && c.value === v
 
-// "2 to 3 minutes" / "90 to 135 seconds" for a run of N checks every `intervalS`.
-function delayRange(failCount, intervalS) {
-  const lo = (failCount - 1) * intervalS
-  const hi = failCount * intervalS
-  return intervalS % 60 === 0 ? `${lo / 60} to ${hi / 60} minutes` : `${lo} to ${hi} seconds`
+// "2 to 3 minutes" / "90 to 135 seconds" for a low and high bound in seconds.
+function rangeText(lo, hi) {
+  if (lo % 60 === 0 && hi % 60 === 0) return `${lo / 60} to ${hi / 60} minute${hi / 60 === 1 ? '' : 's'}`
+  return `${lo} to ${hi} seconds`
 }
+const delayRange = (failCount, intervalS) => rangeText((failCount - 1) * intervalS, failCount * intervalS)
 
-function everyPhrase(intervalS) {
-  if (intervalS === 60) return 'one check a minute'
-  if (intervalS % 60 === 0) return `one check every ${intervalS / 60} minutes`
-  return intervalS === 1 ? 'one check every second' : `one check every ${intervalS} seconds`
+function everyPhrase(intervals) {
+  const list = [...new Set(intervals)].sort((a, b) => a - b)
+  if (list.length === 1) {
+    const i = list[0]
+    if (i === 60) return 'one check a minute'
+    if (i % 60 === 0) return `one check every ${i / 60} minutes`
+    return i === 1 ? 'one check every second' : `one check every ${i} seconds`
+  }
+  // Different intervals in one group: list them, in minutes only if all are whole minutes.
+  if (list.every((i) => i % 60 === 0)) return `checks every ${joinList(list.map((i) => i / 60), 'and')} minutes`
+  return `checks every ${joinList(list, 'and')} seconds`
 }
 
 export function outageDelay(failCount, intervalS) {
   const n = Math.floor(Number(failCount))
   const i = Number(intervalS)
   if (!(n > 1) || !(i > 0)) return null
-  return `${delayRange(n, i)} into an outage, at ${everyPhrase(i)}`
+  return `${delayRange(n, i)} into an outage, at ${everyPhrase([i])}`
 }
 
 export function failCountTimeline(failCount, intervalS) {
@@ -75,8 +90,11 @@ function subjectOf(c) {
   switch (c.check_type) {
     case 'ping': return 'ping'
     case 'http': return k.endpoint && k.endpoint !== '/' ? `the page ${k.endpoint}` : 'the web page'
-    case 'tcp': return `port ${k.port}`
-    case 'dns': return k.nameserver ? `the DNS answer at ${k.nameserver}` : 'the DNS answer'
+    case 'tcp': return typeof k.port === 'number' && Number.isFinite(k.port) ? `port ${k.port}` : 'the port'
+    case 'dns': {
+      const q = typeof k.query === 'string' ? k.query.trim() : ''
+      return `the DNS answer${q ? ` for ${q}` : ''}${k.nameserver ? ` at ${k.nameserver}` : ''}`
+    }
     case 'page_hash': return "the page's content"
     case 'tls_cert': return 'the certificate'
     case 'snmp_v2c':
@@ -88,20 +106,27 @@ function subjectOf(c) {
 // The participle that follows "has" / "have": what the check did.
 function phraseOf(c) {
   const k = cfg(c)
-  if (c.field === 'response_ms' && c.comparator === 'gt') return `taken longer than ${c.value} ms`
-  if (c.field === 'metrics.packet_loss' && c.comparator === 'gt') return `lost more than ${c.value}% of its pings`
+  const value = String(c.value ?? '').trim()
+  if (c.field === 'response_ms' && c.comparator === 'gt') {
+    return value ? `taken longer than ${value} ms` : 'taken longer than the time you set'
+  }
+  if (c.field === 'metrics.packet_loss' && c.comparator === 'gt') {
+    return value ? `lost more than ${value}% of its pings` : 'lost more than the share you set of its pings'
+  }
   if (c.field === 'status' && c.comparator === 'eq' && (c.value === 'down' || c.value === 'up')) {
     const down = c.value === 'down'
     switch (c.check_type) {
-      case 'http': return `${down ? 'not answered' : 'answered'} with ${k.expect_status || 200}`
+      case 'http': return `${down ? 'not answered' : 'answered'} with ${numOr(k.expect_status, 200)}`
       case 'tcp': return (down !== !!k.expect_closed) ? 'refused connections' : 'accepted a connection'
       case 'dns':
-        if (k.expect_value) return down ? `given an address other than ${k.expect_value}` : `given ${k.expect_value}`
+        if (k.expect_value) {
+          return down ? `given an address other than ${k.expect_value}, or failed to resolve` : `given ${k.expect_value}`
+        }
         return down ? 'failed to resolve' : 'resolved'
       case 'page_hash': return down ? 'changed, or could not be read' : 'matched its baseline'
       case 'tls_cert':
-        return down ? `shown fewer than ${k.warn_days} days left, or could not be checked`
-          : `shown at least ${k.warn_days} days left`
+        return down ? `shown fewer than ${numOr(k.warn_days, 30)} days left, or could not be checked`
+          : `shown at least ${numOr(k.warn_days, 30)} days left`
       case 'snmp_v2c':
       case 'snmp_v3': return down ? 'not answered' : 'answered'
       default: return down ? 'failed' : 'answered' // ping and anything unknown
@@ -109,7 +134,7 @@ function phraseOf(c) {
   }
   const field = FIELD_LABEL[c.field] || c.field
   const cmp = COMPARATOR_WORDS[c.comparator] || c.comparator
-  return `had ${field} ${cmp} ${c.value}`
+  return `had ${field} ${cmp} ${value || 'an empty value'}`
 }
 
 // A neutral wording for a group whose conditions would otherwise each say something
@@ -154,15 +179,16 @@ function groupSentence(conds, op) {
   return isOr ? `any one of these: ${joinList(clauses, 'or')}` : joinList(clauses, 'and')
 }
 
-// One delay line per group. AND waits for the slowest run, OR fires on the fastest;
-// any single-check condition in an OR group fires at once, so there is no delay to show.
+// One delay line per group, from the first check to the alert. Each condition alerts
+// between (N-1) and N intervals into an outage (Fail Count 1: 0 to one interval).
+// AND waits for every member: largest low to largest high. OR fires on the first
+// member: smallest low to smallest high.
 function groupDelay(conds, op) {
-  const multi = conds.filter((c) => failCountOf(c) > 1)
-  if (multi.length === 0) return null
-  if (op === 'OR' && multi.length < conds.length) return null
-  const span = (c) => failCountOf(c) * intervalOf(c)
-  const pick = multi.reduce((a, b) => ((op === 'OR' ? span(b) < span(a) : span(b) > span(a)) ? b : a))
-  return outageDelay(failCountOf(pick), intervalOf(pick))
+  if (!conds.some((c) => failCountOf(c) > 1)) return null
+  const lows = conds.map((c) => (failCountOf(c) - 1) * intervalOf(c))
+  const highs = conds.map((c) => failCountOf(c) * intervalOf(c))
+  const pick = op === 'OR' ? Math.min : Math.max
+  return `${rangeText(pick(...lows), pick(...highs))} into an outage, at ${everyPhrase(conds.map(intervalOf))}`
 }
 
 export function explainRule(conditions, targetName, recipientCount) {
@@ -199,7 +225,8 @@ export function explainRule(conditions, targetName, recipientCount) {
     }
   })
 
-  const downs = list.filter((c) => isStatus(c, 'down'))
+  // Everything except Status equals up can flicker (up is a passing test that rules out outages).
+  const downs = list.filter((c) => !isStatus(c, 'up'))
   if (downs.length > 0 && downs.every((c) => failCountOf(c) >= 2)) {
     ok('No test that can flicker alerts on a single failure.')
   }
