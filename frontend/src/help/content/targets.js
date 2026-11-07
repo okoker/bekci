@@ -27,16 +27,16 @@ export const targets = {
       title: 'State',
       text: ['Whether the target is up, judged by its alert rule.'],
       rows: [
-        { control: { label: 'healthy', className: 'badge badge-active' }, text: 'No part of its rule is met.' },
+        { control: { label: 'healthy', className: 'badge badge-active' }, text: 'No part of its rule is met. A new target starts healthy until its checks report.' },
         { control: { label: 'unhealthy', className: 'badge badge-suspended' }, text: 'Its rule is met, so it counts as down and its recipients are alerted.' },
         { control: { label: 'paused', className: 'badge badge-paused' }, text: 'Switched off for maintenance.' },
-        { control: { label: '—', className: 'badge badge-unknown' }, text: 'Not evaluated yet.' },
+        { control: { label: '—', className: 'text-muted' }, text: 'No checks, so there is no rule to judge it by.' },
       ],
       link: 'lesson',
     },
     cond: {
       title: 'Conditions',
-      text: ['How many checks this target runs. Edit shows the rule that combines them.'],
+      text: ['How many checks this target has. Edit shows the rule that combines them.'],
       place: 'corner',
     },
     en: {
@@ -48,8 +48,8 @@ export const targets = {
       title: 'Actions',
       text: ['What you can do to one target (operators and admins).'],
       rows: [
-        { control: { label: 'Pause', className: 'btn btn-sm btn-pause' }, text: "Stops its scheduled checks for maintenance, so nothing alerts and its SLA isn't affected. Bekci asks first; recorded in the Audit Log." },
-        { control: { label: 'Unpause', className: 'btn btn-sm btn-unpause' }, text: 'Starts them again and runs every check at once.' },
+        { control: { label: 'Pause', className: 'btn btn-sm btn-pause' }, text: "Stops its scheduled checks for maintenance, so nothing alerts on schedule (a Run Now still can) and its SLA isn't affected. Bekci asks first; recorded in the Audit Log." },
+        { control: { label: 'Unpause', className: 'btn btn-sm btn-unpause' }, text: 'Starts them again and runs every check at once. Bekci asks first.' },
         { control: { label: 'Run Now', className: 'btn btn-sm' }, text: 'Runs every check right away instead of waiting its turn. Each run is recorded in the Audit Log; it runs even on a paused target, and those results count.' },
         { control: { label: 'Edit', className: 'btn btn-sm' }, text: 'Change the target, its checks or its rule.' },
         { control: { label: 'Clone', className: 'btn btn-sm' }, text: 'Start a new target with the same checks and rule; you fill in the host and choose recipients.' },

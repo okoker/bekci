@@ -30,10 +30,10 @@ export const search = {
       title: 'State',
       text: ['Whether the target is up, judged by its alert rule.'],
       rows: [
-        { control: { label: 'healthy', className: 'badge badge-active' }, text: 'No part of its rule is met.' },
+        { control: { label: 'healthy', className: 'badge badge-active' }, text: 'No part of its rule is met. A new target starts healthy until its checks report.' },
         { control: { label: 'unhealthy', className: 'badge badge-suspended' }, text: 'Its rule is met, so it counts as down and its recipients are alerted.' },
         { control: { label: 'paused', className: 'badge badge-paused' }, text: 'Switched off for maintenance.' },
-        { control: { label: '—', className: 'badge badge-unknown' }, text: 'Not evaluated yet.' },
+        { control: { label: '—', className: 'text-muted' }, text: 'No checks, so there is no rule to judge it by.' },
       ],
       link: 'lesson',
     },
@@ -43,7 +43,7 @@ export const search = {
       rows: [
         { control: { label: 'Pause', className: 'btn btn-sm btn-pause' }, text: 'Stops its scheduled checks for maintenance. Bekci asks first.' },
         { control: { label: 'Unpause', className: 'btn btn-sm btn-unpause' }, text: 'Starts them again and runs every check at once. Bekci asks first.' },
-        { control: { label: 'Delete', className: 'btn btn-sm btn-danger' }, text: 'Removes the target, its checks and their whole history. Bekci asks first.' },
+        { control: { label: 'Delete', className: 'btn btn-sm' }, text: 'Removes the target, its checks and their whole history. Bekci asks first.' },
       ],
       tip: 'The question opens next to the button you pressed.',
     },

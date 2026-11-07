@@ -9,7 +9,7 @@ export const alerts = {
     audit: {
       title: 'Total',
       text: [
-        'For auditors: a row means Bekci tried to send; delivery failures are only in the server log.',
+        'For auditors: a row means Bekci tried to send. Email and Signal delivery failures are only in the server log; webhook failures are also in the Audit Log.',
         'A change within the cooldown (30 minutes by default) is neither sent nor listed. People without an email (or phone, for Signal) and suspended users are skipped.',
         'Rows are kept for 91 days by default.',
       ],
@@ -29,7 +29,7 @@ export const alerts = {
     },
     msg: {
       title: 'Message',
-      text: ['Email rows show the subject that was sent. Signal and webhook rows start with [Signal] or [Webhook]. Long text is cut off.'],
+      text: ['Email rows show the subject that was sent. Signal and webhook rows start with [Signal] or [Webhook] (reminders: [Signal RE-ALERT] or [Webhook RE-ALERT]). Long text is cut off.'],
     },
   },
 }

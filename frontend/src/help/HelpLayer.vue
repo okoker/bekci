@@ -295,7 +295,7 @@ onUnmounted(() => {
    no stripe (design §5). Tokens are on :root in main.css. */
 .help-mark {
   position: fixed;
-  z-index: 150;
+  z-index: 1100;
   width: 18px;
   height: 18px;
   padding: 0;
@@ -321,7 +321,7 @@ onUnmounted(() => {
 .help-lines {
   position: fixed;
   inset: 0;
-  z-index: 150;
+  z-index: 1100;
   width: 100%;
   height: 100%;
   overflow: visible;
@@ -332,7 +332,7 @@ onUnmounted(() => {
 
 .help-note {
   position: fixed;
-  z-index: 151;
+  z-index: 1101;
   width: min(400px, calc(100vw - 24px));
   overflow: auto;
   padding: 16px 20px 0;
@@ -407,7 +407,6 @@ onUnmounted(() => {
    scoped to the views (Targets, Search, Alerts), so the few that main.css
    doesn't have are copied here, in the app's real colours. */
 .badge-paused { background: #e0e7ff; color: #4338ca; }
-.badge-unknown { background: #f1f5f9; color: #64748b; }
 .badge-firing { background: #fee2e2; color: #991b1b; }
 .badge-recovery { background: #dcfce7; color: #166534; }
 .badge-realert { background: #fef3c7; color: #92400e; }
