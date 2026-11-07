@@ -362,6 +362,8 @@ Creates target, checks, rule, and rule conditions in one transaction. Creator is
 }
 ```
 
+**Condition fields:** `field` is `status`, `response_ms` or `metrics.<key>`, a key of the check's metrics (see "Check Type Configuration"). The server stores any value and does not check it. `gt`/`lt`/`gte`/`lte` compare numbers (the actual and expected values must both parse as numbers, or the condition is never true); `eq`/`neq` compare text. The target editor offers Status, Response (ms) and, for ping only, Packet loss (%) (`metrics.packet_loss`, 0–100, in steps of 100 ÷ `count`). Picking Response (ms) or Packet loss sets `gt` and an empty value, and the editor will not save until the value is a plain number (`^-?\d+(\.\d+)?$`; 0–100 for packet loss). Picking Status sets `eq` / `down`.
+
 **Condition groups:** Conditions are grouped by `condition_group` (integer). Within a group, conditions are combined using `group_operator` (AND/OR). Across groups, the logic is always OR — any group triggering means the target is unhealthy. Example: `(TCP AND HTTP) OR PING` = group 0 with AND (TCP, HTTP), group 1 with AND (PING).
 
 If `group_operator` is omitted, it defaults to the top-level `operator` value for backward compatibility.

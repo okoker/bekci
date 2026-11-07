@@ -473,9 +473,9 @@ onMounted(async () => {
           <div class="guide-two-col-right">
             <h5 class="guide-h" style="margin-top:0;">Alert Criteria</h5>
             <div class="guide-alert-list">
-              <div class="guide-al"><strong>Field</strong><span>What to evaluate from the check result: <code>status</code> (up/down) or <code>response_ms</code> (response time in milliseconds)</span></div>
+              <div class="guide-al"><strong>Field</strong><span>What to evaluate from the check result: <code>status</code> (up/down), <code>response_ms</code> (response time in milliseconds; for ping, the average round trip) or, for ping only, packet loss (the % of the check's pings that got no reply, in steps of 100 &divide; Ping Count)</span></div>
               <div class="guide-al"><strong>Comparator</strong><span>How to compare: <code>equals</code>, <code>not equals</code>, <code>greater than</code>, <code>less than</code></span></div>
-              <div class="guide-al"><strong>Value</strong><span>The expected value: <code>down</code>, <code>up</code>, or a number like <code>500</code>, <code>5000</code> (for response_ms)</span></div>
+              <div class="guide-al"><strong>Value</strong><span>The expected value: <code>down</code>, <code>up</code>, or a number like <code>500</code>, <code>5000</code> (for response_ms) or <code>30</code> (packet loss %). Choosing response_ms or packet loss sets <code>greater than</code> and asks for a number</span></div>
               <div class="guide-al"><strong>Fail Count</strong><span>How many consecutive failures before triggering the alert. Set to <code>1</code> for immediate, or higher (e.g. <code>3</code>) to avoid false positives</span></div>
               <div class="guide-al"><strong>Time Window</strong><span>Window (in seconds) to count consecutive failures. Only active when fail count &gt; 1. Example: fail count <code>3</code> + window <code>600</code> = 3 failures within 10 minutes</span></div>
             </div>

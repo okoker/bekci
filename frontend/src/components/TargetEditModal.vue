@@ -151,6 +151,57 @@ function onConditionTypeChange(cond) {
   if (!cond.check_id) {
     cond.config = getDefaultConfig(cond.check_type)
   }
+  // Packet loss exists only for ping
+  if (cond.field === 'metrics.packet_loss' && cond.check_type !== 'ping') {
+    cond.field = 'status'
+    onFieldChange(cond)
+  }
+}
+
+// Changing Field sets the Comparator and Value that field needs, so a rule
+// such as "packet loss equals down", which can never be true, is not left behind.
+function onFieldChange(cond) {
+  if (cond.field === 'status') {
+    cond.comparator = 'eq'
+    cond.value = 'down'
+  } else {
+    cond.comparator = 'gt'
+    cond.value = ''
+  }
+}
+
+const valuePlaceholder = { status: 'down', response_ms: '500', 'metrics.packet_loss': '30' }
+
+// Number fields are compared with Go's strconv.ParseFloat in the engine; a
+// plain decimal is what both sides read the same way. Anything else never fires.
+const plainNumber = /^-?\d+(\.\d+)?$/
+
+function valueError(cond) {
+  if (cond.field === 'response_ms' && !plainNumber.test(cond.value)) {
+    return 'Enter a number of milliseconds, such as 500.'
+  }
+  if (cond.field === 'metrics.packet_loss' &&
+      (!plainNumber.test(cond.value) || Number(cond.value) < 0 || Number(cond.value) > 100)) {
+    return 'Enter a percentage from 0 to 100, such as 30.'
+  }
+  return ''
+}
+
+const hasValueError = computed(() => form.value.conditions.some(cond => valueError(cond)))
+
+// Packet loss = lost ÷ sent × 100, so with n pings it moves in steps of 100/n.
+function packetLossHint(cond) {
+  const count = cond.config.count
+  const n = Number.isInteger(count) && count >= 1 ? count : 3
+  const parts = [`Share of this check's ${n} pings that got no reply, in steps of ${Math.round(1000 / n) / 10}%.`]
+  if (cond.comparator === 'gt' && plainNumber.test(cond.value)) {
+    const k = Math.floor(Number(cond.value) * n / 100) + 1
+    parts.push(k > n
+      ? `Greater than ${cond.value} can never be true: at most ${n} of ${n} can be lost.`
+      : `Greater than ${cond.value} = ${k} or more of the ${n} lost (no reply at all counts too).`)
+  }
+  parts.push('More pings give finer steps; each adds about a second to the check.')
+  return parts.join(' ')
 }
 
 // Unique check types from current conditions — for preferred check dropdown
@@ -254,7 +305,7 @@ async function loadTargetDetail(id) {
 // Save
 async function saveTarget() {
   formError.value = ''
-  if (hasFailWindowError.value) return
+  if (hasFailWindowError.value || hasValueError.value) return
   try {
     const payload = {
       name: form.value.name,
@@ -601,9 +652,11 @@ watch(() => props.show, async (val) => {
                   <div class="form-row form-row-5">
                     <div class="form-group">
                       <label>Field</label>
-                      <select v-model="cond.field">
+                      <select v-model="cond.field" @change="onFieldChange(cond)">
                         <option value="status">Status</option>
                         <option value="response_ms">Response (ms)</option>
+                        <option v-if="cond.check_type === 'ping' || cond.field === 'metrics.packet_loss'"
+                          value="metrics.packet_loss">Packet loss (%)</option>
                       </select>
                     </div>
                     <div class="form-group">
@@ -617,7 +670,8 @@ watch(() => props.show, async (val) => {
                     </div>
                     <div class="form-group">
                       <label>Value</label>
-                      <input v-model="cond.value" placeholder="down" />
+                      <input v-model="cond.value" :placeholder="valuePlaceholder[cond.field] || 'down'"
+                        v-custom-validity="valueError(cond)" />
                     </div>
                     <div class="form-group">
                       <label>Fail Count</label>
@@ -633,6 +687,7 @@ watch(() => props.show, async (val) => {
                         :title="cond.fail_count <= 1 ? 'Set Fail Count > 1 to enable window' : 'Time window for consecutive failures'" />
                     </div>
                   </div>
+                  <p v-if="cond.field === 'metrics.packet_loss'" class="text-muted input-hint">{{ packetLossHint(cond) }}</p>
                 </div>
               </template>
 
