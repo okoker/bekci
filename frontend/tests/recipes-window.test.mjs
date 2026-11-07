@@ -459,6 +459,12 @@ test('with help on, the window and the replace question hide the form\'s marks; 
   const addBox = await modal.getByRole('button', { name: '+ Add Group or Condition', exact: true }).boundingBox()
   assert.ok(addMark.x >= recipeBox.x + recipeBox.width + 2 && addMark.x + addMark.width <= addBox.x,
     `the mark sits between the two buttons (${JSON.stringify({ addMark, recipeBox, addBox })})`)
+  // Wait until nothing else on the page is changing (the form's recipients are listed, the
+  // header's health dots have finished their colour change), so the marks must go because
+  // the window opened, not because a late change elsewhere made the layer look again
+  await modal.locator('.recipient-item').nth(2).waitFor()
+  await page.waitForFunction(() => document.getAnimations().length === 0, null, { timeout: 2000 })
+  await settle(page)
   await openRecipes(modal)
   await page.waitForFunction(() => document.querySelectorAll('.help-mark').length === 0, null, { timeout: 2000 })
   assert.equal(await page.evaluate(() => {

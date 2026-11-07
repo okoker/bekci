@@ -200,9 +200,18 @@ function observeAnchors() {
   watched = now
 }
 
-// Changes inside the layer itself (marks moving) are its own doing
+// Changes inside the layer itself (marks moving) are its own doing, except a
+// help scope arriving or leaving there: the recipes window, which the layer
+// draws, names its own scope, so the page's marks under it must go when it is
+// on screen and come back when it has gone. It is followed by its element, not
+// by help.recipesOpen: its code loads on first use, so it can appear a few
+// frames after it was asked for, after a refresh run for the state change.
+const holdsScope = node => node.nodeType === Node.ELEMENT_NODE
+  && (node.matches('[data-help-scope]') || !!node.querySelector('[data-help-scope]'))
 const mutations = new MutationObserver(records => {
-  if (records.some(r => !root.value?.contains(r.target))) schedule()
+  if (records.some(r => !root.value?.contains(r.target) || [...r.addedNodes, ...r.removedNodes].some(holdsScope))) {
+    schedule()
+  }
 })
 
 // ── Opening and closing ──────────────────────────────────────────────────────
@@ -289,9 +298,8 @@ watch(() => help.current, (now, before) => {
 }, { flush: 'pre' })
 
 watch(() => help.page, () => schedule())
-// Help turned on or off with the layer up, and the recipes window (its own scope,
-// inside the layer, which the MutationObserver leaves out) opening or closing
-watch(() => [help.on, help.recipesOpen], () => schedule())
+// Help turned on or off while the layer stays up for the recipes window
+watch(() => help.on, () => schedule())
 
 onMounted(() => {
   mutations.observe(document.body, {
