@@ -1,11 +1,25 @@
-// Every help page, by the id a view names in data-help-page. Each content module
-// exports its pages under their ids (Settings will export one per tab).
+// Every help page, by the id a view names in data-help-page (and the header's,
+// HEADER_PAGE in ../anchors.js). Each content module exports its pages under
+// their ids (Settings will export one per tab).
 //
-// pages[id] = { summary: { name, text }, items: { key: Note } }, where
-// Note = { title, text: string[] | (args) => string[],
-//          rows?: [{ control: { label, className }, text }], tip?,
-//          link?: 'lesson' | 'recipes', each?: true, place?: 'right' | 'left' | 'corner' }
-// ('corner' is for the PRIMARY badge). Content is plain data, rendered with {{ }}.
+// pages[id] = { summary?: { name, text }, items: { key: Note } }, where
+//   Note = {
+//     title,                          the mark's name (tooltip, "Help: <title>") and the note's heading
+//     text: string[] | (args) => string[],          one to three sentences
+//     rows?: [{ control: { label, className }, text }] | (args) => rows,
+//                                     controls drawn with the app's own classes, one line each
+//     tip?: string | (args) => string,                the grey tip box
+//     link?: 'lesson' | 'recipes',    shown once that window exists (HelpLayer.vue LINKS)
+//     place?: 'right' | 'left' | 'corner',            where the mark sits: right of the control
+//                                     (default), left of it, or on its top-right corner (tight spots)
+//     box?: 'content',                measure the control's content (its text and children), not its
+//                                     whole box: for a full-width bar whose items are centred
+//     each?: true,                    a mark on every visible instance, not just the first (the target
+//                                     form's per-condition fields); `args` are then that instance's
+//   }
+// `args` is the parsed JSON of the control's data-help-args attribute ({} if none).
+// Content is plain data, rendered with {{ }}, never as HTML.
 import * as dashboard from './dashboard.js'
+import * as header from './header.js'
 
-export const pages = { ...dashboard }
+export const pages = { ...dashboard, ...header }

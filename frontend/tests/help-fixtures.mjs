@@ -228,6 +228,44 @@ export function apiFixtures({ role = 'admin', version = HELP_VERSION } = {}) {
   return fixtures
 }
 
+// Fixtures for a Dashboard and SOC wall with `count` more healthy targets after
+// the two above: "Server 03", "Server 04", …, each with one ping check (cx03, …)
+// and its history. Enough rows to scroll and to page (the Dashboard shows 10).
+// Spread into openPage's `fixtures`.
+export function moreTargets(count) {
+  const extra = Array.from({ length: count }, (_, i) => {
+    const n = String(i + 3).padStart(2, '0')
+    const check = { target: `tx${n}`, id: `cx${n}`, name: 'Ping', type: 'ping', status: 'up', message: '3/3 replies',
+      ms: 2, uptime: 100 }
+    const target = { id: `tx${n}`, name: `Server ${n}`, host: `server${n}.example.com`, category: 'Other',
+      preferred_check_type: 'ping', primary_check_id: check.id, state: 'healthy', sla_status: 'healthy', sla_target: 99 }
+    return { target, check }
+  })
+  const row = ({ target: t, check: c }) => ({
+    ...statusRow(t),
+    checks: [{ id: c.id, name: c.name, type: c.type, enabled: true, interval_s: 60, last_status: c.status,
+      last_message: c.message, response_ms: c.ms, uptime_90d_pct: c.uptime }],
+  })
+  const rows = [...targets.map(statusRow), ...extra.map(row)]
+  const fixtures = { '/api/dashboard/status': rows, '/api/soc/status': rows }
+  for (const { check } of extra) {
+    fixtures[`/api/dashboard/history/${check.id}`] = history(check)
+    fixtures[`/api/soc/history/${check.id}`] = history(check)
+  }
+  return fixtures
+}
+
+// A /api/system/health answer whose scheduler has stopped ticking: the header
+// shows the red "Monitoring engine not responding" banner. Spread into `fixtures`.
+export function staleScheduler(version = HELP_VERSION) {
+  return {
+    '/api/system/health': {
+      ...health(version),
+      scheduler: { status: 'stale', last_tick: ago(300_000), active_checks: checks.length, stale_seconds: 300 },
+    },
+  }
+}
+
 // ── A page ───────────────────────────────────────────────────────────────────
 
 // Opens `path` in a new page, signed in as `role`, every API request answered
@@ -306,23 +344,32 @@ export async function waitForStyle(locator, prop, value) {
 // Every use of Bekci's orange (#ea580c, rgb(234, 88, 12)) in the elements
 // matching `selector`, their descendants and their ::before/::after: a list of
 // "class property", empty when there is none. Help never uses the orange.
-export function orangeIn(page, selector) {
-  return page.evaluate(selector => {
+// So that "none" means something, it fails when `selector` matches nothing, and
+// when the same scan doesn't find the orange of the header (.navbar), which is
+// the positive control.
+export async function orangeIn(page, selector) {
+  const { matched, control, found } = await page.evaluate(selector => {
     const props = ['color', 'backgroundColor', 'borderTopColor', 'borderRightColor', 'borderBottomColor',
-      'borderLeftColor', 'outlineColor', 'boxShadow', 'backgroundImage']
-    const found = []
-    for (const root of document.querySelectorAll(selector)) {
-      for (const el of [root, ...root.querySelectorAll('*')]) {
-        for (const pseudo of [null, '::before', '::after']) {
-          const style = getComputedStyle(el, pseudo)
-          for (const prop of props) {
-            if (style[prop].includes('234, 88, 12')) {
-              found.push(`${el.getAttribute('class') || el.tagName}${pseudo || ''} ${prop}`)
+      'borderLeftColor', 'outlineColor', 'boxShadow', 'backgroundImage', 'fill', 'stroke']
+    const scan = selector => {
+      const found = []
+      for (const root of document.querySelectorAll(selector)) {
+        for (const el of [root, ...root.querySelectorAll('*')]) {
+          for (const pseudo of [null, '::before', '::after']) {
+            const style = getComputedStyle(el, pseudo)
+            for (const prop of props) {
+              if (style[prop].includes('234, 88, 12')) {
+                found.push(`${el.getAttribute('class') || el.tagName}${pseudo || ''} ${prop}`)
+              }
             }
           }
         }
       }
+      return found
     }
-    return found
+    return { matched: document.querySelectorAll(selector).length, control: scan('.navbar'), found: scan(selector) }
   }, selector)
+  assert.ok(matched > 0, `orangeIn: nothing matches ${selector}, so finding no orange there would prove nothing`)
+  assert.ok(control.length > 0, 'orangeIn: the scan must find the orange of the header (.navbar), its positive control')
+  return found
 }

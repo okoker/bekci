@@ -3,7 +3,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useRouter, useRoute } from 'vue-router'
 import api from '../api'
-import { help, toggleHelp, closeHelp, LazyHelpBar } from '../help/useHelp.js'
+import { help, toggleHelp, closeHelp, LazyHelpBar, LazyHelpLayer } from '../help/useHelp.js'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -141,7 +141,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="layout-v">
+  <div class="layout-v" data-help-scope="layout">
     <nav class="navbar">
       <div class="navbar-left">
         <router-link to="/" class="navbar-brand"><img src="/bekci-icon.png" alt="Bekci" class="navbar-icon" />Bekci</router-link>
@@ -163,9 +163,9 @@ onUnmounted(() => {
         ><span class="nav-help-icon" aria-hidden="true"></span>Help</button>
       </div>
       <div class="navbar-right">
-        <span v-if="appVersion" class="app-version">v{{ appVersion }}</span>
+        <span v-if="appVersion" class="app-version" data-help="header.version">v{{ appVersion }}</span>
         <div class="health-indicator" @click.stop="togglePopover">
-          <div class="health-dots">
+          <div class="health-dots" data-help="header.dots">
             <span class="health-dot" :class="dotColor('net')" title="Network"></span>
             <span class="health-dot" :class="dotColor('disk')" title="Disk"></span>
             <span class="health-dot" :class="dotColor('cpu')" title="CPU"></span>
@@ -179,7 +179,7 @@ onUnmounted(() => {
           </div>
         </div>
         <div class="user-menu">
-          <div class="user-menu-trigger" @click.stop="toggleUserMenu">
+          <div class="user-menu-trigger" data-help="header.user" @click.stop="toggleUserMenu">
             <span class="navbar-user">{{ auth.user?.username }}</span>
             <span class="navbar-role">({{ auth.user?.role }})</span>
             <span class="user-caret">&#9662;</span>
@@ -192,7 +192,8 @@ onUnmounted(() => {
       </div>
     </nav>
     <LazyHelpBar v-if="help.on" />
-    <div v-if="schedulerStale" class="stale-banner">
+    <LazyHelpLayer v-if="help.on" />
+    <div v-if="schedulerStale" class="stale-banner" data-help="header.banner">
       Monitoring engine not responding — dashboard data may be outdated
     </div>
     <main class="content">

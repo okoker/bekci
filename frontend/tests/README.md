@@ -81,9 +81,34 @@ page loads. Options: `version` (what `/api/system/health` reports; defaults to `
 `fixtures` (answers laid over the defaults, by GET path or `"METHOD /path"`; a value, `reply(status,
 json)`, or a function of the URL), `delays` (ms to hold back a path's answer) and `viewport`. It
 returns `{ page, writes }`; writes are recorded and answered `{}`. A test fails if its page throws a
-JavaScript error or asks for an API path no fixture answers. Also: `helpButton(page)`,
+JavaScript error or asks for an API path no fixture answers. Fixture sets to spread into `fixtures`:
+`moreTargets(count)` (a Dashboard and SOC wall with `count` more healthy targets, "Server 03" on, each
+with one ping check: enough rows to scroll and page) and `staleScheduler()` (a stale scheduler, so the
+header shows the red "Monitoring engine not responding" banner). Also: `helpButton(page)`,
 `turnHelpOn(page)`, `waitForStyle(locator, prop, value)` and `orangeIn(page, selector)` (every use of
-Bekci's orange in those elements; help never uses it).
+Bekci's orange in those elements, SVG fill and stroke included; help never uses it). So that an empty
+answer means something, `orangeIn` fails when `selector` matches nothing, and when the same scan
+doesn't find the header's orange (its positive control).
+
+`help-anchors.test.mjs` (Node only, no browser) holds the help's anchors and content together: every
+note in `src/help/content` has a `data-help="<page>.<key>"` in some view (or a key in an
+`<page>Anchors` map in `src/help/anchors.js`), and every anchor has a note; a computed `:data-help`
+must come from such a map. It also holds the help out of the main bundle: outside `src/help/`, only
+`useHelp.js` and `anchors.js` may be imported from it statically (the rest loads with `import()`),
+`useHelp.js` imports only Vue, and `anchors.js` imports nothing. A failure names the file and import
+or the key.
+
+`help-marks.test.mjs` covers the ? marks and notes on the Dashboard and the header: one mark per
+documented control on screen (the first row only for a control on every row), in page order and then
+the header's, each named "Help: <name>"; the bar's "Click any ? to read it" and its stepper ("12
+notes", then "n of N" counting each key once). Unfolding a target adds its PRIMARY and check-row
+marks. A mark opens its note (one at a time) with a leader line ending in a dot on the control, which
+gets a turquoise outline; the note doesn't cover it, and nothing is orange. The same mark again, or a
+click on the page, closes it. Keyboard: Tab goes mark to mark, Enter opens, ← and → step, Esc closes
+the note (focus back on its mark) and then help; a text box keeps its own Esc and arrows, a checkbox
+doesn't keep Esc. Marks follow a scroll (−200 px for `scrollBy(0, 200)`), a note stays inside a
+1280×800 window, marks appear for rows that load after help was turned on (600 ms late), and the
+stale-scheduler banner has a mark only while it shows.
 
 `help-switch.test.mjs` covers Help in the header: it comes after the last link each role sees, is
 missing on the SOC wall and Login, and turns on a slate bar under the header (pushing the page down)

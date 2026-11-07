@@ -332,7 +332,7 @@ onUnmounted(() => {
   <div class="page" data-help-page="dashboard">
     <div class="page-header">
       <h2>Dashboard</h2>
-      <span v-if="lastUpdated" class="text-muted">
+      <span v-if="lastUpdated" class="text-muted" data-help="dashboard.updated">
         Updated {{ lastUpdated.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) }}
       </span>
     </div>
@@ -350,7 +350,7 @@ onUnmounted(() => {
 
     <template v-else>
       <!-- Category filter bar -->
-      <div class="filter-bar">
+      <div class="filter-bar" data-help="dashboard.cats">
         <button v-for="cat in categories" :key="cat"
           :class="['filter-btn', { active: activeCategory === cat, 'has-problems': categoryStats[cat].hasProblems }]"
           @click="activeCategory = cat">
@@ -361,7 +361,7 @@ onUnmounted(() => {
       <div v-for="target in paginatedTargets" :key="target.id" class="target-card card">
         <!-- Collapsed view: target header + preferred check bars -->
         <div class="target-header" @click="toggleTarget(target.id)">
-          <div class="target-header-left">
+          <div class="target-header-left" data-help="dashboard.row">
             <span class="expand-icon">{{ expandedTargetId === target.id ? '&#9660;' : '&#9654;' }}</span>
             <span v-if="target.checks.length > 0"
               :class="['status-dot', isTargetPaused(target) ? 'dot-paused' : (isTargetDown(target) ? 'dot-down' : (targetStateLabel(target) === 'UP' ? 'dot-up' : 'dot-unknown'))]">
@@ -371,11 +371,11 @@ onUnmounted(() => {
           </div>
           <div class="target-header-right">
             <template v-if="target.checks.length > 0">
-              <span class="badge badge-type">{{ target._preferredCheck?.type }}</span>
+              <span class="badge badge-type" data-help="dashboard.type">{{ target._preferredCheck?.type }}</span>
               <span v-if="target._preferredCheck?.response_ms > 0" class="check-response text-muted">
                 {{ target._preferredCheck?.response_ms }}ms
               </span>
-              <span v-if="target._preferredCheck?.uptime_90d_pct >= 0" class="check-uptime"
+              <span v-if="target._preferredCheck?.uptime_90d_pct >= 0" class="check-uptime" data-help="dashboard.pct"
                 :style="{ color: uptimeColor(target._preferredCheck?.uptime_90d_pct) }">
                 {{ target._preferredCheck?.uptime_90d_pct.toFixed(1) }}%
               </span>
@@ -387,8 +387,8 @@ onUnmounted(() => {
               <span class="badge badge-paused">PAUSED</span>
             </template>
             <template v-else>
-              <span v-if="slaLabel(target)" :class="['badge', slaClass(target)]">{{ slaLabel(target) }}</span>
-              <span v-if="targetStateLabel(target)" :class="['badge', targetStateClass(target)]">{{ targetStateLabel(target) }}</span>
+              <span v-if="slaLabel(target)" :class="['badge', slaClass(target)]" data-help="dashboard.sla">{{ slaLabel(target) }}</span>
+              <span v-if="targetStateLabel(target)" :class="['badge', targetStateClass(target)]" data-help="dashboard.updown">{{ targetStateLabel(target) }}</span>
             </template>
           </div>
         </div>
@@ -399,7 +399,7 @@ onUnmounted(() => {
             <span class="history-error-icon">!</span> History unavailable
           </div>
           <div v-else class="uptime-bars-row">
-            <div class="bar-section bar-90d-section">
+            <div class="bar-section bar-90d-section" data-help="dashboard.bars90">
               <div class="bar-track">
                 <div v-for="(day, i) in (historyData[target._preferredCheck?.id]?.bar90d || empty90d)" :key="'90d-' + i"
                   class="bar-tick"
@@ -412,7 +412,7 @@ onUnmounted(() => {
                 <span>Today</span>
               </div>
             </div>
-            <div class="bar-section bar-4h-section">
+            <div class="bar-section bar-4h-section" data-help="dashboard.bars4h">
               <div class="bar-track">
                 <div v-for="(r, i) in (historyData[target._preferredCheck?.id]?.bar4h || empty4h)" :key="'4h-' + i"
                   class="bar-tick"
@@ -434,12 +434,12 @@ onUnmounted(() => {
             No checks configured
           </div>
 
-          <div v-for="check in target.checks" :key="check.id" class="check-row" @click="toggleCheck($event, check.id)">
+          <div v-for="check in target.checks" :key="check.id" class="check-row" data-help="dashboard.check" @click="toggleCheck($event, check.id)">
             <div class="check-info">
               <span :class="['status-dot', check.last_status === 'up' ? 'dot-up' : (check.last_status === 'down' ? 'dot-down' : 'dot-unknown')]"></span>
               <span class="check-name">{{ check.name }}</span>
               <span class="badge badge-type">{{ check.type }}</span>
-              <span v-if="check.id === target.primary_check_id" class="badge badge-primary-check" title="Primary check used for SLA &amp; dashboard status">PRIMARY</span>
+              <span v-if="check.id === target.primary_check_id" class="badge badge-primary-check" data-help="dashboard.prim" title="Primary check used for SLA &amp; dashboard status">PRIMARY</span>
               <span v-if="check.response_ms > 0" class="check-response text-muted">{{ check.response_ms }}ms</span>
               <span v-if="check.uptime_90d_pct >= 0" class="check-uptime" :style="{ color: uptimeColor(check.uptime_90d_pct) }">
                 {{ check.uptime_90d_pct.toFixed(1) }}%
@@ -450,7 +450,7 @@ onUnmounted(() => {
               <span class="history-error-icon">!</span> History unavailable
             </div>
             <div v-else class="uptime-bars-row">
-              <div class="bar-section bar-90d-section">
+              <div class="bar-section bar-90d-section" data-help="dashboard.bars90">
                 <div class="bar-track">
                   <div v-for="(day, i) in (historyData[check.id]?.bar90d || empty90d)" :key="'90d-' + i"
                     class="bar-tick"
@@ -463,7 +463,7 @@ onUnmounted(() => {
                   <span>Today</span>
                 </div>
               </div>
-              <div class="bar-section bar-4h-section">
+              <div class="bar-section bar-4h-section" data-help="dashboard.bars4h">
                 <div class="bar-track">
                   <div v-for="(r, i) in (historyData[check.id]?.bar4h || empty4h)" :key="'4h-' + i"
                     class="bar-tick"
@@ -486,7 +486,7 @@ onUnmounted(() => {
       </div>
 
       <!-- Pagination -->
-      <div v-if="totalPages > 1" class="pagination">
+      <div v-if="totalPages > 1" class="pagination" data-help="dashboard.pages">
         <button class="page-btn" :disabled="currentPage <= 1" @click="currentPage--">&laquo; Prev</button>
         <span class="page-info">{{ currentPage }} / {{ totalPages }} ({{ filteredAndSortedTargets.length }} hosts)</span>
         <button class="page-btn" :disabled="currentPage >= totalPages" @click="currentPage++">&raquo; Next</button>
