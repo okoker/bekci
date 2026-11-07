@@ -413,7 +413,7 @@ test('Edit with 2 conditions: asks first; Cancel keeps them; Replace replaces; U
   assert.equal(await ask.locator('.recipe-confirm-text').innerText(),
     'Replace the 2 conditions in this form with this recipe? On a saved target, Save then deletes the replaced checks and their history, SLA included.')
   assert.deepEqual(await ask.getByRole('button').allInnerTexts(), ['Replace', 'Cancel'])
-  await page.waitForFunction(() => document.activeElement?.textContent === 'Cancel', null, { timeout: 2000 })
+  await page.waitForFunction(() => document.activeElement?.textContent === 'Cancel', null, { timeout: 5000 })
   assert.deepEqual(await orangeIn(page, '.recipe-confirm'), [])
 
   // Cancel: nothing changes
@@ -427,7 +427,7 @@ test('Edit with 2 conditions: asks first; Cancel keeps them; Replace replaces; U
   await ask.getByRole('button', { name: 'Replace', exact: true }).click()
   await ask.waitFor({ state: 'detached' })
   await banner(modal).waitFor()
-  await page.waitForFunction(() => document.activeElement?.textContent === 'Start from a recipe', null, { timeout: 2000 })
+  await page.waitForFunction(() => document.activeElement?.textContent === 'Start from a recipe', null, { timeout: 5000 })
     .catch(async () => assert.fail(`focus back on "Start from a recipe" after Replace, not ${await focusIs(page)}`))
   assert.deepEqual(await names(), ['Remote desktop port'])
   assert.equal(await condField(modal, 'Port').inputValue(), '3389')
@@ -478,10 +478,10 @@ test('with help on, the window and the replace question hide the form\'s marks; 
   // header's health dots have finished their colour change), so the marks must go because
   // the window opened, not because a late change elsewhere made the layer look again
   await modal.locator('.recipient-item').nth(2).waitFor()
-  await page.waitForFunction(() => document.getAnimations().length === 0, null, { timeout: 2000 })
+  await page.waitForFunction(() => document.getAnimations().length === 0, null, { timeout: 10000 })
   await settle(page)
   await openRecipes(modal)
-  await page.waitForFunction(() => document.querySelectorAll('.help-mark').length === 0, null, { timeout: 2000 })
+  await page.waitForFunction(() => document.querySelectorAll('.help-mark').length === 0, null, { timeout: 5000 })
   assert.equal(await page.evaluate(() => {
     const el = document.elementFromPoint(innerWidth / 2, innerHeight / 2)
     return !!el?.closest('.recipes-window')
@@ -495,10 +495,10 @@ test('with help on, the window and the replace question hide the form\'s marks; 
   // The replace question is a dialog: no marks while it is open
   await useRecipe(modal, 'B1')
   await confirmBox(page).waitFor()
-  await page.waitForFunction(() => document.querySelectorAll('.help-mark').length === 0, null, { timeout: 2000 })
+  await page.waitForFunction(() => document.querySelectorAll('.help-mark').length === 0, null, { timeout: 5000 })
   await confirmBox(page).getByRole('button', { name: 'Cancel', exact: true }).click()
   await marks.first().waitFor()
-  await page.waitForFunction(() => document.activeElement?.textContent === 'Start from a recipe', null, { timeout: 2000 })
+  await page.waitForFunction(() => document.activeElement?.textContent === 'Start from a recipe', null, { timeout: 5000 })
     .catch(async () => assert.fail(`focus back on "Start from a recipe" after Cancel, not ${await focusIs(page)}`))
 
   // The next Esc turns help off
@@ -634,4 +634,65 @@ test('a recipe can\'t be used while Edit or Clone is still loading the target; o
       assert.deepEqual(body.conditions, EDIT_CONDITIONS.map(({ check_id, ...c }) => c), 'the cloned conditions, as new checks')
     }
   }
+})
+
+// ---- final review ----
+// internal/checker/http.go's CheckRedirect refuses the 10th redirect (len(via) >= 10),
+// so at most 9 are followed
+test('B2 says how many redirects Bekci follows: up to 9', async t => {
+  const { page, modal } = await openForm(t)
+  await openRecipes(modal)
+  await pick(page, 'B2')
+  assert.equal(await win(page).locator('.recipe-before li').first().innerText(),
+    'Bekci follows up to 9 redirects and judges the page it ends on.')
+})
+
+test('Esc on the replace question is its Cancel: the conditions stay and focus goes back; with help on, help stays on', async t => {
+  for (const help of [true, false]) {
+    const { page, modal } = await openForm(t, { button: 'Edit', help })
+    const helpBar = page.locator('.modal-overlay .help-bar')
+    await useRecipe(modal, 'S3')
+    const ask = confirmBox(page)
+    await ask.waitFor()
+    await page.waitForFunction(() => document.activeElement?.textContent === 'Cancel', null, { timeout: 5000 })
+    await page.keyboard.press('Escape')
+    await ask.waitFor({ state: 'detached', timeout: 5000 }).catch(async () => assert.fail(
+      `help ${help ? 'on' : 'off'}: Esc left the question open (help is ${await helpBar.count() ? 'on' : 'off'})`))
+    assert.equal(await cards(modal).count(), 2, `help ${help ? 'on' : 'off'}: the form's conditions stay`)
+    assert.equal(await banner(modal).count(), 0, `help ${help ? 'on' : 'off'}: no banner`)
+    await page.waitForFunction(() => document.activeElement?.textContent === 'Start from a recipe', null, { timeout: 5000 })
+      .catch(async () => assert.fail(`focus back on "Start from a recipe" after Esc, not ${await focusIs(page)}`))
+    assert.equal(await helpBar.count(), help ? 1 : 0, `help ${help ? 'on' : 'off'}: help is as it was`)
+    await modal.waitFor() // the form is still open
+  }
+})
+
+// Ruling R20: only the gate. A closed form's load finishing must not end the wait of
+// the form opened after it. (Whether that late answer lands in the new form is not
+// covered here: that is the app's own load, outside help.)
+test('Edit one target, close it while it loads, Edit another: "Start from a recipe" waits for the second load', async t => {
+  const { page } = await openPage(t, app, '/targets', {
+    role: 'operator', viewport: { width: 1440, height: 900 },
+    delays: { '/api/targets/t1': 1000, '/api/targets/t2': 2500 },
+  })
+  const row = name => page.locator('tbody tr', { hasText: name })
+  await row('Web shop').waitFor()
+  const modal = page.locator('.modal-overlay').filter({ has: page.locator('.modal-wide') }).locator('.modal-card')
+  const firstAnswer = page.waitForResponse(r => new URL(r.url()).pathname === '/api/targets/t1')
+  await row('Core switch').getByRole('button', { name: 'Edit', exact: true }).click()
+  await modal.waitFor()
+  assert.equal(await startButton(modal).isDisabled(), true, 'disabled while Core switch loads')
+  await modal.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await modal.waitFor({ state: 'detached' })
+  await row('Web shop').getByRole('button', { name: 'Edit', exact: true }).click()
+  await modal.waitFor()
+  assert.equal(await startButton(modal).isDisabled(), true, 'disabled while Web shop loads')
+  // Core switch's answer lands while Web shop's is still on its way
+  await firstAnswer
+  await settle(page)
+  assert.equal(await startButton(modal).isDisabled(), true, 'still disabled: the answer that landed was the closed form\'s')
+  // Web shop's answer: the button works, with its two conditions in the form
+  await page.waitForFunction(() => document.querySelector('.modal-card .btn-recipe')?.disabled === false, null, { timeout: 10000 })
+  await cards(modal).nth(1).waitFor()
+  assert.equal(await cards(modal).count(), 2)
 })

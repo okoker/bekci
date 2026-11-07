@@ -250,6 +250,17 @@ function cancelRecipe() {
   backToRecipeStart()
 }
 
+// Esc answers the replace question with Cancel. On document, so it runs before
+// help's own Esc (on window), which skips a key already used (preventDefault)
+// instead of turning help off under the question.
+function onRecipeKeydown(e) {
+  if (e.key !== 'Escape' || !pendingRecipe.value || e.defaultPrevented) return
+  e.preventDefault()
+  cancelRecipe()
+}
+onMounted(() => document.addEventListener('keydown', onRecipeKeydown))
+onUnmounted(() => document.removeEventListener('keydown', onRecipeKeydown))
+
 // The conditions and Preferred Check from before the recipe, check ids
 // included, so Save keeps those checks
 function undoRecipe() {
@@ -365,6 +376,10 @@ function close() {
   emit('close')
 }
 
+// The latest load. A form closed while loading and another opened lets the
+// first load finish late: only the latest one may end the wait for a recipe.
+let loadSeq = 0
+
 // When modal opens, load data
 watch(() => props.show, async (val) => {
   if (!val) return
@@ -373,6 +388,7 @@ watch(() => props.show, async (val) => {
   recipeBanner.value = null
   loadAllUsers()
   loadTagOptions()
+  const seq = ++loadSeq
   loading.value = true
   try {
     if (props.targetId) {
@@ -389,7 +405,7 @@ watch(() => props.show, async (val) => {
       selectedRecipients.value = []
     }
   } finally {
-    loading.value = false
+    if (seq === loadSeq) loading.value = false
   }
 })
 </script>

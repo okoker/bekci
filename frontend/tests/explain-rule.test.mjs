@@ -385,3 +385,47 @@ test('R14: Page Hash on the latest check AND\'d with "web page answers" is still
   assert.ok(!pingWeb.checks.some((c) => c.level === 'warn'))
   assert.ok(texts(pingWeb).includes(NO_FLICKER))
 })
+
+// ---- final review ----
+// The card's delay uses the interval Bekci runs (checkInterval: 10 to 86400 seconds,
+// 60 when blank), as the Fail Count note does, so the two never disagree.
+test('the card\'s delay uses the interval Bekci runs, so it matches the Fail Count note', () => {
+  const r = explainRule([cond(fc(3, 5))], 'T', 1)
+  assert.equal(r.groups[0].delay, '20 to 30 seconds into an outage, at one check every 10 seconds')
+  assert.ok(failCountTimeline(3, 5).summary.endsWith('A real outage alerts on the third failed check, 20 to 30 seconds in.'))
+  // 5 and 10 seconds both run every 10, so the group reads as one shared phrase and one interval
+  const and = explainRule([cond(fc(3, 5)), cond({ check_type: 'http', ...fc(3, 10) })], 'T', 1)
+  assert.equal(sentence(and), 'ping and the web page have both failed 3 checks in a row')
+  assert.equal(and.groups[0].delay, '20 to 30 seconds into an outage, at one check every 10 seconds')
+  assert.equal(explainRule([cond({ ...fc(3), interval_s: '' })], 'T', 1).groups[0].delay,
+    '2 to 3 minutes into an outage, at one check a minute')
+})
+
+// A "what happens" phrase that ends in a number (or N ms) or in an "or …" clause is
+// kept apart from the count phrase, so the two don't run together. The pinned
+// wordings ("ping has failed 3 checks in a row", "on the latest check") stay.
+test('the count phrase stays apart from a phrase ending in a number or an "or" clause', () => {
+  const one = (over) => sentence(explainRule([cond(over)], 'T', 1))
+  const dns = (expect_value, over = {}) => one({ check_type: 'dns', config: { ...getDefaultConfig('dns'), expect_value }, ...over })
+  assert.equal(one({ check_type: 'http', ...fc(3) }), 'the web page has not answered with 200 on 3 checks in a row')
+  assert.equal(one({ check_type: 'http' }), 'the web page has not answered with 200 on the latest check')
+  assert.equal(one({ check_type: 'tls_cert', config: { warn_days: 14 } }),
+    'the certificate has shown fewer than 14 days left, or could not be checked, on the latest check')
+  assert.equal(one({ check_type: 'tls_cert', config: { warn_days: 14 }, ...fc(3, 600) }),
+    'the certificate has shown fewer than 14 days left, or could not be checked, on 3 checks in a row')
+  assert.equal(one({ check_type: 'page_hash', ...fc(2, 300) }), "the page's content has changed, or could not be read, on 2 checks in a row")
+  assert.equal(dns('1.2.3.4', fc(2)), 'the DNS answer has given an address other than 1.2.3.4, or failed to resolve, on 2 checks in a row')
+  assert.equal(dns('1.1.1.1', { value: 'up', ...fc(2) }), 'the DNS answer has given 1.1.1.1 on 2 checks in a row')
+  assert.equal(one({ field: 'response_ms', comparator: 'gt', value: '5000', ...fc(5) }), 'ping has taken longer than 5000 ms on 5 checks in a row')
+  // Several conditions sharing a phrase that ends in a number
+  assert.equal(sentence(explainRule([
+    cond({ check_type: 'http', ...fc(3) }),
+    cond({ check_type: 'http', config: { ...getDefaultConfig('http'), endpoint: '/shop' }, ...fc(3) }),
+  ], 'T', 1)), 'the web page and the page /shop have both not answered with 200 on 3 checks in a row')
+  // Unchanged: phrases that end in a word
+  assert.equal(one(fc(3)), 'ping has failed 3 checks in a row')
+  assert.equal(one({}), 'ping has failed on the latest check')
+  assert.equal(one({ check_type: 'tcp', config: { port: 25, timeout_s: 5, expect_closed: false }, ...fc(3) }), 'port 25 has refused connections 3 checks in a row')
+  assert.equal(sentence(explainRule([cond(fc(3)), cond({ check_type: 'http', ...fc(3) })], 'T', 1)),
+    'ping and the web page have both failed 3 checks in a row')
+})

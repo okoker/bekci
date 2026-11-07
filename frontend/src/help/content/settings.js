@@ -2,7 +2,8 @@
 // General: sign-in length internal/auth/auth.go:107-128; results purge cmd/bekci/main.go:252-262 and
 //   internal/store/results.go:269-290 (rollups 90 days), only 4-hour views read raw results
 //   (dashboard_handlers.go:187-202); audit and alert retention main.go:287-305; backup copies
-//   backup_handlers.go:240-310; public SOC router.go:152-153, 171-173, 197-199, SocView.vue;
+//   backup_handlers.go:240-310; public SOC router.go:152-153, 171-173, 197-199, SocView.vue, its data
+//   dashboard_handlers.go dashboardCheck/dashboardTarget (:10-36) and handleCheckHistory (4h, 90d);
 //   rate limit middleware.go:114-135; SNMP masking settings_handlers.go:174-186, 314-322,
 //   SNMP cache internal/scheduler/scheduler.go:45-66.
 // Tags: internal/store/tags.go (normalize :28-37, look-alikes :39-60, delete :114-158, rename :162-201).
@@ -43,7 +44,7 @@ export const settingsGeneral = {
       title: 'SOC View Public Access',
       text: [
         'Yes lets anyone who can reach this server see the SOC view without signing in.',
-        "That shows target names, addresses and categories, their state and uptime, and the server's own health; the data behind it also gives each check's last result message, the tags and Bekci's version.",
+        "That shows target names, addresses and categories, their state and uptime, and the server's own health; the data behind it also gives each check's name, type, interval, last response time, last result message and 4-hour and 90-day history, each target's SLA goal, the tags and Bekci's version.",
       ],
     },
     rate: {

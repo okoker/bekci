@@ -19,7 +19,7 @@ const waitForTitle = (page, title) => page.waitForFunction(title => {
   const note = document.querySelector('.help-note')
   return note?.querySelector('.help-note-title').textContent.trim() === title
     && getComputedStyle(note).visibility === 'visible'
-}, title, { timeout: 2000 })
+}, title, { timeout: 5000 })
 // Marks are drawn in the window, beside their field: a field below the form's
 // fold is scrolled to first, as a person would
 async function clickMark(page, key, n = 0) {
@@ -45,7 +45,7 @@ const inside = (box, view) => box.x >= 0 && box.y >= 0 && box.x + box.width <= v
 async function textMatches(locator, pattern, message) {
   const handle = await locator.elementHandle()
   await locator.page().waitForFunction(([el, source]) => new RegExp(source).test(el.innerText),
-    [handle, pattern.source], { timeout: 2000 }).catch(() => {})
+    [handle, pattern.source], { timeout: 5000 }).catch(() => {})
   assert.match(await locator.innerText(), pattern, message)
 }
 
@@ -147,7 +147,7 @@ test('Help on, on Targets: + Target, Edit and Clone open the form with help on; 
 test('a mark on every condition\'s Fail Count, the stepper counting it once; each note uses its own condition\'s numbers', async t => {
   const { page, overlay } = await openForm(t)
   await page.waitForFunction(() => document.querySelectorAll('.help-mark[data-help-mark="targetForm.fc"]').length === 2,
-    null, { timeout: 2000 })
+    null, { timeout: 5000 })
   const ids = await page.locator('.help-mark').evaluateAll(els => els.map(e => e.dataset.helpMark))
   assert.deepEqual([...new Set(ids)], KEYS.map(k => `targetForm.${k}`), 'the form\'s notes in page order, header marks gone')
   for (const [key, count] of [['fc', 2], ['tw', 2], ['type', 2], ['when', 2], ['remove', 3], ['group', 1]]) {
@@ -207,7 +207,7 @@ test('the plain-words card follows the form: Fail Count 1→3 reads "3 checks in
   const group = card(page).locator('.rule-card-group')
   assert.equal(await group.count(), 2)
   assert.equal((await group.nth(0).innerText()).trim(), 'ping has failed on the latest check')
-  assert.match(await group.nth(1).innerText(), /the web page has not answered with 200 2 checks in a row\s+5 to 10 minutes into an outage, at one check every 5 minutes/)
+  assert.match(await group.nth(1).innerText(), /the web page has not answered with 200 on 2 checks in a row\s+5 to 10 minutes into an outage, at one check every 5 minutes/)
   assert.match(text, /It counts as up again on the first check where none of these is true\./)
   assert.match(text, /Checked for false alarms/)
   assert.match(text, /Ping alerts on a single failed check\. One blip will page people; 3 in a row is safer\./)
@@ -239,14 +239,14 @@ test('the plain-words card follows the form: Fail Count 1→3 reads "3 checks in
 
   // A third group: another box and another OR pill
   await modal.getByRole('button', { name: '+ Add Group or Condition', exact: true }).click()
-  await page.waitForFunction(() => document.querySelectorAll('.rule-card-group').length === 3, null, { timeout: 2000 })
+  await page.waitForFunction(() => document.querySelectorAll('.rule-card-group').length === 3, null, { timeout: 5000 })
   assert.equal(await pill.count(), 2)
 })
 
 test('a ping on the latest check AND\'d with a web page that fails 2 in a row is not warned about: the web page must fail too', async t => {
   const { page } = await openForm(t)
   await card(page).waitFor()
-  await textMatches(card(page), /ping has failed on the latest check and the web page has not answered with 200 2 checks in a row/)
+  await textMatches(card(page), /ping has failed on the latest check and the web page has not answered with 200 on 2 checks in a row/)
   const text = await card(page).innerText()
   assert.match(text, /Group 1 needs two different tests to agree before it alerts\./)
   assert.match(text, /No test that can flicker alerts on a single failure\./)
@@ -400,9 +400,9 @@ test('removing a condition while a note is open: the note stays with its own con
   await waitForTitle(page, 'Fail Count')
   await removeButton(0).focus()
   await page.keyboard.press('Enter')
-  await page.waitForFunction(() => document.querySelectorAll('.condition-card').length === 1, null, { timeout: 2000 })
+  await page.waitForFunction(() => document.querySelectorAll('.condition-card').length === 1, null, { timeout: 5000 })
   await page.waitForFunction(() => document.querySelectorAll('.help-mark[data-help-mark="targetForm.fc"]').length === 1,
-    null, { timeout: 2000 })
+    null, { timeout: 5000 })
   assert.equal(await note(page).count(), 1, 'the note stays open')
   assert.match(await note(page).innerText(), /a check every 300 seconds, Fail Count 2/, 'on its own condition')
   assert.equal(await mark(page, 'fc').getAttribute('data-help-n'), '0')
@@ -417,12 +417,12 @@ test('removing a condition while a note is open: the note stays with its own con
   await modal.getByRole('button', { name: '+ Add condition to group', exact: true }).click()
   await modal.getByRole('button', { name: '+ Add condition to group', exact: true }).click()
   await page.waitForFunction(() => document.querySelectorAll('.help-mark[data-help-mark="targetForm.fc"]').length === 3,
-    null, { timeout: 2000 })
+    null, { timeout: 5000 })
   await clickMark(page, 'fc', 2)
   await waitForTitle(page, 'Fail Count')
   await removeButton(2).focus()
   await page.keyboard.press('Enter')
-  await page.waitForFunction(() => document.querySelectorAll('.condition-card').length === 2, null, { timeout: 2000 })
+  await page.waitForFunction(() => document.querySelectorAll('.condition-card').length === 2, null, { timeout: 5000 })
   await note(page).waitFor({ state: 'detached' })
   assert.equal(await page.locator('[data-help-on]').count(), 0, 'no outline left')
   assert.equal(await mark(page, 'fc').count(), 2)

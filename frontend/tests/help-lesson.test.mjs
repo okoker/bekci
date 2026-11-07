@@ -8,6 +8,7 @@ import assert from 'node:assert/strict'
 import { after, before, test } from 'node:test'
 import { openPage, orangeIn, startApp, stopApp, turnHelpOn } from './help-fixtures.mjs'
 import { HELP_VERSION } from '../src/help/content/version.js'
+import { recipes } from '../src/help/recipes.js'
 
 let app
 before(async () => { app = await startApp() })
@@ -98,6 +99,20 @@ test('part 1: three boxes and the Mail Gateway rule drawn as a diagram with "Rea
   assert.ok(read.includes('Mail Gateway counts as down when'), read)
   assert.ok(read.includes('ping and the web page have both failed 3 checks in a row'), read)
   assert.ok(read.includes('fewer than 14 days left'), read)
+  // The example teaches no setting the card warns about: explainRule finds nothing to
+  // warn of in it, and each condition has recipe C3's settings (the same rule's shape).
+  // The rule as the lesson exports it, from the app's own modules (Vite).
+  const example = await page.evaluate(async () => {
+    const [{ mailGateway }, { explainRule }] = await Promise.all([
+      import('/src/help/LessonPanel.vue'), import('/src/help/explainRule.js')])
+    return { rule: mailGateway, checks: explainRule(mailGateway, 'Mail Gateway', null).checks }
+  })
+  assert.equal(example.rule.length, 3, 'the lesson\'s example rule, as exported')
+  assert.deepEqual(example.checks.filter(c => c.level === 'warn'), [], 'no false-alarm warning on the example')
+  const shape = c => [c.check_type, c.interval_s, c.field, c.comparator, c.value, c.fail_count, c.fail_window,
+    c.condition_group, c.group_operator]
+  assert.deepEqual(example.rule.map(shape), recipes.find(r => r.id === 'C3').conditions.map(shape))
+  assert.match(read, /the certificate has shown fewer than 14 days left.* 3 checks in a row/, 'the certificate waits for 3 in a row')
 })
 
 test('part 2: three lanes drawn from the same ten results, with the counts the engine uses', async t => {
@@ -116,10 +131,14 @@ test('part 2: three lanes drawn from the same ten results, with the counts the e
   assert.deepEqual(await words('fc1'), ['', '', 'down', 'down', '', 'down', 'down', 'down', 'down', ''])
   // Fail Count 3: 1, 2, reset, 1, 2, down, down
   assert.deepEqual(await words('fc3'), ['', '', '1', '2', 'reset', '1', '2', 'down', 'down', ''])
-  assert.equal((await lane('fc1').locator('.lesson-lane-summary').innerText()).trim(), '2 alerts, 2 recoveries')
-  assert.equal((await lane('fc3').locator('.lesson-lane-summary').innerText()).trim(), '1 alert, 1 recovery')
+  // Ruling R19: the lanes count changes of state; part 5 says which of them send a message
+  assert.equal((await lane('fc1').locator('.lesson-lane-summary').innerText()).trim(), 'down twice, up twice')
+  assert.equal((await lane('fc3').locator('.lesson-lane-summary').innerText()).trim(), 'down once, up once')
   assert.equal(await lane('results').locator('.lesson-lane-summary').count(), 0)
   const text = (await part.innerText()).replace(/\s+/g, ' ')
+  assert.ok(text.includes('at Fail Count 1 and at Fail Count 3; part 5 says which changes send a message.'), text)
+  assert.ok(!/\balerts?\b|recover/.test((await part.locator('.lesson-lane-summary').allInnerTexts()).join(' ')),
+    'the lane summaries name no alerts or recoveries')
   assert.ok(text.includes('The time window must hold the whole run. Bekci sets it for you once Fail Count is above 1: at least Fail Count × Interval, at most 30 minutes.'), text)
   assert.ok(text.includes('checked once a minute'), text)
 })

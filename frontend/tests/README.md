@@ -98,8 +98,12 @@ note in `src/help/content` has a `data-help="<page>.<key>"` in some view (or a k
 must come from such a map. It also holds the help out of the main bundle: outside `src/help/`, only
 `useHelp.js`, `anchors.js` and `applyConditions.js` (the target form puts recipes in with it) may be
 imported from it statically (the rest loads with `import()`),
-`useHelp.js` imports only Vue, and `anchors.js` imports nothing. A failure names the file and import
-or the key.
+`useHelp.js` imports only Vue, and `anchors.js` imports nothing. It also follows every static import from
+`src/main.js` (through the router and the `.vue` files; `import()` starts a chunk of its own), so a help
+module can't reach the main bundle through an allowed one either (`applyConditions.js` importing
+`recipes.js`, say), and checks that every Settings › General field (the keys of `labels` in
+`SettingsView.vue`) has a key in `settingsGeneralAnchors`. A failure names the file and import (and who
+imported it) or the key.
 
 `help-marks.test.mjs` covers the ? marks and notes on the Dashboard and the header: one mark per
 documented control on screen (the first row only for a control on every row), in page order and then
@@ -131,7 +135,9 @@ PRIMARY after unfolding a Targets row, the pagination with 51 targets, Save and 
 once a Search has results, Last 4 hours after unfolding a result, Saved searches with a saved search
 in localStorage, a new API token's card, and a closed Settings section's fields once it is opened
 (Alerting's Email, Signal and Webhook; Backup's Full Database Backup). The Alerting test note is
-the agreed wording and doesn't repeat the hint printed beside the buttons. A page's own dialog
+the agreed wording and doesn't repeat the hint printed beside the buttons; the SOC View Public Access note
+lists everything the public SOC data gives (each check's name, type, interval, last response time, last
+result message, 4-hour and 90-day history, each target's SLA goal, the tags and Bekci's version). A page's own dialog
 (Pause, Unpause, Delete on Targets and Search; the SLA zoom; an audit entry; Edit and Suspend on
 Users; the Config Restore confirmation) takes the page's marks away while it is open
 (`data-help-scope="dialog"`) and they come back when it closes. The browser's own `confirm()`
@@ -152,8 +158,10 @@ reload the page." and the page keeps working.
 (pure functions, Node only, no browser). It pins the plain-words reading of a rule: the opening (with
 "This target" for an empty name), one sentence per group (AND "have both", OR "any one of", the last
 condition's operator winning), the subject and verb per check type for Status equals down and up (TCP
-refused or accepted, swapped by Port must stay closed), the count phrase and the delay line in minutes or
-seconds, and the fallback wording for a field or comparator the form doesn't offer. It also pins each
+refused or accepted, swapped by Port must stay closed), the count phrase (kept apart from a phrase ending in a number or an "or …"
+clause: "not answered with 200 on 3 checks in a row", "…, or could not be checked, on the latest check",
+while "ping has failed 3 checks in a row" stays) and the delay line in minutes or seconds, at the interval
+Bekci runs (5 seconds reads as 10, as in the Fail Count note), and the fallback wording for a field or comparator the form doesn't offer. It also pins each
 false-alarm check's text, level and order (no-recipient is a neutral note; a Fail Count 1 condition AND'd
 with a failing test of another type is confirmed by it and not warned about, while one alone, in an OR group,
 AND'd with its own type or only with a test that must pass (Status equals up) is), the Fail Count lane labels,
@@ -210,9 +218,12 @@ needs the service's port here." until 22 is typed (the marking clears with a val
 own check is bypassed; S4 refuses the admin path `admin` and sends `/admin`. Edit with two conditions asks
 "Replace the 2 conditions in this form with this recipe? …" first: Cancel keeps them, Replace replaces, and
 Undo puts the originals back so the PUT sends their check ids; one condition is asked about in the singular
-("Replace the 1 condition …"). While Edit or Clone is still loading the target (its answer held back), "Start
-from a recipe" is disabled and a window opened another way has no "Use this recipe"; once the conditions show
-it works, and Undo brings back the loaded ones. Focus goes into the window when it opens, and back to "Start
+("Replace the 1 condition …"). Esc on that question is its Cancel (help, if on, stays on). While Edit or
+Clone is still loading the target (its answer held back), "Start from a recipe" is disabled and a window
+opened another way has no "Use this recipe"; once the conditions show it works, and Undo brings back the
+loaded ones. A form closed while loading doesn't end the wait of the next one: Edit Core switch, close it,
+Edit Web shop, and the button stays disabled when Core switch's answer lands, until Web shop's does. B2
+says Bekci follows up to 9 redirects. Focus goes into the window when it opens, and back to "Start
 from a recipe" after ✕, Close, Esc, and the question's Replace or Cancel. No POST or PUT carries a `needs` key.
 Changing a recipe check's type drops its fields to fill in; when the window's code can't be fetched, it says to
 reload and Close closes it; nothing is orange, and the legend's swatch is the green chip it explains.
@@ -223,8 +234,10 @@ note on Targets and Search ("How alert rules work") and the Condition Groups not
 the full lesson") open it, as do the plain-words card's two buttons ("Rule recipes: ready-made rules" and "Learn
 alert rules: the full lesson"). The lesson has the recipes window's frame (2px turquoise, 40px margins), its own
 help scope (no marks of the page under it), the six headings in order, the Mail Gateway rule drawn by the diagram
-(blue groups, slate OR pill) with "Read it as", three lanes drawn from the same ten results (Fail Count 1: "2 alerts,
-2 recoveries"; Fail Count 3: counts 1, 2, reset, 1, 2, down, "1 alert, 1 recovery"), the window sentence, the
+(blue groups, slate OR pill) with "Read it as" (the example has recipe C3's settings, the certificate on 3 in a row, and
+`explainRule` finds no false alarm in it), three lanes drawn from the same ten results (Fail Count 1: "down twice, up
+twice"; Fail Count 3: counts 1, 2, reset, 1, 2, down, "down once, up once"; part 2 says part 5 tells which
+changes send a message), the window sentence, the
 cooldown and reminder defaults, and the four mistakes. Its recipes button opens the window on top, read-only: no
 "Use this recipe" button, the footer "To use a recipe, press + Target, then Start from a recipe." for operators and
 admins and nothing for a viewer. From the form's card the window can apply a recipe, and using one from the lesson

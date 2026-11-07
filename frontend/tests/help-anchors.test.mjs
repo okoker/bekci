@@ -5,7 +5,7 @@
 // it is pages[page].items[key] in src/help/content. Keys a view computes come
 // from a map in src/help/anchors.js, exported as <page>Anchors.
 import assert from 'node:assert/strict'
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
@@ -109,4 +109,57 @@ test('outside src/help/, only useHelp.js, anchors.js and applyConditions.js are 
   // import(), and anchors.js is plain data with no imports at all
   assert.deepEqual(staticImports(join(helpDir, 'useHelp.js')), ['vue'], 'useHelp.js static imports')
   assert.deepEqual(staticImports(join(helpDir, 'anchors.js')), [], 'anchors.js static imports')
+})
+
+// The main bundle is everything src/main.js reaches through static imports; import()
+// starts a chunk of its own. The test above checks each import into src/help/; this
+// one follows the whole chain, so a help module can't join the main bundle through
+// a module that is allowed there (applyConditions.js importing recipes.js, say).
+// Of src/help/ the bundle may hold only IMPORTABLE (conditionRules.js, which
+// applyConditions.js imports, lives in src/: the target form's own rules).
+function staticClosure(entry) {
+  const importer = new Map([[entry, null]]) // each file reached, and the file that first imported it
+  const unresolved = []
+  const stack = [entry]
+  while (stack.length) {
+    const file = stack.pop()
+    if (!/\.(js|vue)$/.test(file)) continue // a stylesheet imports no code
+    for (const spec of staticImports(file)) {
+      if (!spec.startsWith('.')) continue // a package (vue, pinia, axios)
+      const base = resolve(dirname(file), spec)
+      const target = [base, `${base}.js`, `${base}.vue`, join(base, 'index.js')]
+        .find(path => existsSync(path) && statSync(path).isFile())
+      if (!target) unresolved.push(`${rel(file)}: import '${spec}'`)
+      else if (!importer.has(target)) {
+        importer.set(target, file)
+        stack.push(target)
+      }
+    }
+  }
+  return { importer, unresolved }
+}
+
+test('of src/help/, the main bundle holds only useHelp.js, anchors.js and applyConditions.js, however they are reached', () => {
+  const { importer, unresolved } = staticClosure(join(src, 'main.js'))
+  assert.deepEqual(unresolved, [], 'relative imports that resolve to no file: the walk would miss what they import')
+  // The walk goes through the router and the .vue files to the layout's help state
+  assert.ok(importer.has(join(helpDir, 'useHelp.js')), 'the walk from main.js never reached help/useHelp.js: it is broken')
+  const extra = [...importer]
+    .filter(([file]) => file.startsWith(helpDir) && !IMPORTABLE.includes(file.slice(helpDir.length)))
+    .map(([file, from]) => `${rel(file)} (imported by ${rel(from)})`)
+  assert.deepEqual(extra, [], 'src/help/ modules the main bundle would carry')
+})
+
+// Settings › General draws a field for each key of SettingsView.vue's `labels`, marked
+// data-help="settingsGeneral." + settingsGeneralAnchors[key]. A key missing from the map
+// would give "settingsGeneral.undefined", which the computed-anchor checks above don't see.
+test('every Settings › General field has a key in settingsGeneralAnchors', async () => {
+  const view = readFileSync(join(src, 'views', 'SettingsView.vue'), 'utf8')
+  const block = view.match(/\nconst labels = \{([^}]*)\}/)
+  assert.ok(block, 'const labels = { … } not found in SettingsView.vue: the scan is broken')
+  const keys = [...block[1].matchAll(/^\s*['"]?([A-Za-z0-9_]+)['"]?\s*:/gm)].map(m => m[1])
+  assert.ok(keys.length > 0, 'no keys read from labels: the scan is broken')
+  const { settingsGeneralAnchors } = await import('../src/help/anchors.js')
+  assert.deepEqual(keys.filter(key => !Object.hasOwn(settingsGeneralAnchors, key)), [],
+    'General settings with no settingsGeneralAnchors entry (their mark would be settingsGeneral.undefined)')
 })

@@ -20,10 +20,9 @@ const TYPE_LABEL = {
 const FIELD_LABEL = { status: 'Status', response_ms: 'Response (ms)', 'metrics.packet_loss': 'Packet loss (%)' }
 const COMPARATOR_WORDS = { eq: 'equals', neq: 'not equals', gt: 'greater than', lt: 'less than', gte: 'at least', lte: 'at most' }
 
-const intervalOf = (c) => {
-  const n = Number(c.interval_s)
-  return Number.isFinite(n) && n > 0 ? n : 60
-}
+// The interval Bekci runs the check at (10 to 86400 seconds, 60 when blank), the
+// same figure the Fail Count note uses
+const intervalOf = (c) => checkInterval(c.interval_s)
 const failCountOf = (c) => {
   const n = Math.floor(Number(c.fail_count))
   return Number.isFinite(n) && n >= 1 ? n : 1
@@ -156,6 +155,18 @@ function sharedPhrase(c) {
 
 const countPhrase = (fc) => (fc > 1 ? `${fc} checks in a row` : 'on the latest check')
 
+// What the check did, then how often. A phrase that ends in a number (or N ms) takes
+// "on" before "N checks in a row" ("not answered with 200 on 3 checks in a row"), and
+// one that ends in an "or …" clause closes it with a comma ("…, or could not be
+// checked, on the latest check"), so the figures and clauses don't run together.
+function withCount(phrase, fc) {
+  const count = countPhrase(fc)
+  const on = fc > 1 ? `on ${count}` : count
+  if (/, or [^,]*$/.test(phrase)) return `${phrase}, ${on}`
+  if (/\d( ms)?$/.test(phrase)) return `${phrase} ${on}`
+  return `${phrase} ${count}`
+}
+
 function joinList(items, word) {
   if (items.length <= 2) return items.join(` ${word} `)
   return `${items.slice(0, -1).join(', ')} ${word} ${items[items.length - 1]}`
@@ -165,7 +176,7 @@ function groupSentence(conds, op) {
   const isOr = op === 'OR'
   if (conds.length === 1) {
     const c = conds[0]
-    return `${subjectOf(c)} has ${phraseOf(c)} ${countPhrase(failCountOf(c))}`
+    return `${subjectOf(c)} has ${withCount(phraseOf(c), failCountOf(c))}`
   }
   const sameCount = conds.every((c) => failCountOf(c) === failCountOf(conds[0]) && intervalOf(c) === intervalOf(conds[0]))
   let phrase = null
@@ -177,13 +188,13 @@ function groupSentence(conds, op) {
       if (shared.every((p) => p && p === shared[0])) phrase = shared[0]
     }
   }
-  const count = countPhrase(failCountOf(conds[0]))
   const subjects = conds.map(subjectOf)
   if (phrase) {
-    if (isOr) return `any one of ${joinList(subjects, 'or')} has ${phrase} ${count}`
-    return `${joinList(subjects, 'and')} have ${conds.length === 2 ? 'both' : 'all'} ${phrase} ${count}`
+    const happened = withCount(phrase, failCountOf(conds[0]))
+    if (isOr) return `any one of ${joinList(subjects, 'or')} has ${happened}`
+    return `${joinList(subjects, 'and')} have ${conds.length === 2 ? 'both' : 'all'} ${happened}`
   }
-  const clauses = conds.map((c) => `${subjectOf(c)} has ${phraseOf(c)} ${countPhrase(failCountOf(c))}`)
+  const clauses = conds.map((c) => `${subjectOf(c)} has ${withCount(phraseOf(c), failCountOf(c))}`)
   return isOr ? `any one of these: ${joinList(clauses, 'or')}` : joinList(clauses, 'and')
 }
 

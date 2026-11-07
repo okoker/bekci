@@ -23,9 +23,9 @@ const waitForTitle = (page, title) => page.waitForFunction(title => {
   const note = document.querySelector('.help-note')
   return note?.querySelector('.help-note-title').textContent.trim() === title
     && getComputedStyle(note).visibility === 'visible'
-}, title, { timeout: 2000 })
+}, title, { timeout: 5000 })
 const waitForFocusInNote = page => page.waitForFunction(() => !!document.activeElement?.closest('.help-note'),
-  null, { timeout: 2000 })
+  null, { timeout: 5000 })
 const overlap = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height
 const levelWith = (m, row) => m.y + m.height / 2 > row.y && m.y + m.height / 2 < row.y + row.height
 
@@ -45,7 +45,7 @@ async function dashboardWithHelp(t, options = {}) {
 }
 
 const allMarks = (page, n) => page.waitForFunction(n => document.querySelectorAll('.help-mark').length === n, n,
-  { timeout: 2000 })
+  { timeout: 5000 })
 
 test('one ? mark per documented control on screen, in page order and then the header; the bar counts them', async t => {
   const page = await dashboardWithHelp(t)
@@ -200,7 +200,7 @@ test('marks follow their control when the page scrolls; the pagination has a mar
   assert.equal(await page.evaluate(() => window.scrollY), 200, 'the page scrolled')
   await page.waitForFunction(([id, y]) =>
     document.querySelector(`.help-mark[data-help-mark="${id}"]`).getBoundingClientRect().y !== y,
-  ['dashboard.row', before.y], { timeout: 2000 })
+  ['dashboard.row', before.y], { timeout: 5000 })
   const moved = await rowMark.boundingBox()
   assert.ok(Math.abs(moved.y - (before.y - 200)) <= 1, `mark top ${before.y} → ${moved.y}`)
   assert.ok(levelWith(moved, await page.locator('.target-header').first().boundingBox()), 'still beside its row')

@@ -74,7 +74,7 @@ export const recipes = [
       { text: 'The server stops answering.', result: 'alerts' },
     ],
     before: [
-      'Bekci follows redirects, up to 10, and judges the page it ends on.',
+      'Bekci follows up to 9 redirects and judges the page it ends on.',
       'For a site behind a login, check the login page: it answers without signing in.',
     ],
     preferred: 'http',

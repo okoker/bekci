@@ -1,3 +1,20 @@
+<script>
+// The Mail Gateway rule: the mail server is down when ping and the web page have
+// both failed 3 checks in a row, or its certificate has had fewer than 14 days left
+// on 3 checks in a row. The settings are recipe C3's (recipes.js), so the lesson
+// teaches nothing the plain-words card warns about.
+const down = (over) => ({
+  check_id: '', config: {}, interval_s: 60, field: 'status', comparator: 'eq', value: 'down',
+  fail_count: 3, fail_window: 180, condition_group: 0, group_operator: 'AND', ...over,
+})
+// Exported so a test can read it back with explainRule
+export const mailGateway = [
+  down({ check_type: 'ping', check_name: 'Ping', group_operator: 'AND' }),
+  down({ check_type: 'http', check_name: 'Web page', group_operator: 'AND' }),
+  down({ check_type: 'tls_cert', check_name: 'Certificate', config: { warn_days: 14 }, interval_s: 600, fail_window: 1800, condition_group: 1 }),
+]
+</script>
+
 <script setup>
 // The rule lesson (design in_app_help.md §4.8): six short parts on how an alert
 // rule works, in a window with the recipes window's frame. The help layer draws it,
@@ -30,36 +47,27 @@ const PARTS = [
   'Mistakes that cause false alarms',
 ]
 
-// The Mail Gateway rule: the mail server is down when ping and the web page have
-// both failed 3 checks in a row, or its certificate has fewer than 14 days left
-const down = (over) => ({
-  check_id: '', config: {}, interval_s: 60, field: 'status', comparator: 'eq', value: 'down',
-  fail_count: 3, fail_window: 180, condition_group: 0, group_operator: 'AND', ...over,
-})
-const mailGateway = [
-  down({ check_type: 'ping', check_name: 'Ping', group_operator: 'AND' }),
-  down({ check_type: 'http', check_name: 'Web page', group_operator: 'AND' }),
-  down({ check_type: 'tls_cert', check_name: 'Certificate', config: { warn_days: 14 }, interval_s: 600, fail_count: 1, fail_window: 0, condition_group: 1 }),
-]
 const reading = explainRule(mailGateway, 'Mail Gateway', null)
 
 // Ten minutes of a flaky link, checked once a minute: ✓ ✓ ✕ ✕ ✓ ✕ ✕ ✕ ✕ ✓
 const SAMPLE = [true, true, false, false, true, false, false, false, false, true]
 const INTERVAL = 60
 
-// A lane: the ten results with what Bekci says under each, and how many alerts and
-// recoveries that makes (an alert where a run of "down" starts, a recovery where it ends)
+// A lane: the ten results with what Bekci says under each, and how often the target
+// goes down and comes back up (down where a run of "down" starts, up where it ends).
+// These are changes of state, not messages: inside the cooldown the alerter skips a
+// message (alerter.go Dispatch), which part 5 explains (ruling R19).
 function lane(id, title, failCount) {
   const { steps } = failCountTimeline(failCount, INTERVAL, SAMPLE)
-  let alerts = 0
-  let recoveries = 0
+  let downs = 0
+  let ups = 0
   steps.forEach((step, i) => {
     const wasDown = i > 0 && steps[i - 1].label === 'down'
-    if (step.label === 'down' && !wasDown) alerts++
-    if (step.result === 'ok' && wasDown) recoveries++
+    if (step.label === 'down' && !wasDown) downs++
+    if (step.result === 'ok' && wasDown) ups++
   })
-  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
-  return { id, title, steps, summary: `${plural(alerts, 'alert', 'alerts')}, ${plural(recoveries, 'recovery', 'recoveries')}` }
+  const times = n => (n === 1 ? 'once' : n === 2 ? 'twice' : `${n} times`)
+  return { id, title, steps, summary: `down ${times(downs)}, up ${times(ups)}` }
 }
 const results = failCountTimeline(1, INTERVAL, SAMPLE).steps.map(step => ({ ...step, label: '' }))
 const lanes = [
@@ -134,7 +142,7 @@ onBeforeUnmount(() => {
           <!-- 2 -->
           <section class="lesson-part">
             <h3 class="lesson-heading">{{ PARTS[1] }}</h3>
-            <p>Ten minutes of a flaky link, checked once a minute. Here is what Bekci does with the same ten results at Fail Count 1 and at Fail Count 3.</p>
+            <p>Ten minutes of a flaky link, checked once a minute. Here is what Bekci does with the same ten results at Fail Count 1 and at Fail Count 3; part 5 says which changes send a message.</p>
             <div class="lesson-lanes">
               <div v-for="l in lanes" :key="l.id" class="lesson-lane" :data-lane="l.id">
                 <div class="lesson-lane-title">{{ l.title }}</div>

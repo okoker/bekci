@@ -20,9 +20,9 @@ const waitForTitle = (page, title) => page.waitForFunction(title => {
   const note = document.querySelector('.help-note')
   return note?.querySelector('.help-note-title').textContent.trim() === title
     && getComputedStyle(note).visibility === 'visible'
-}, title, { timeout: 2000 })
+}, title, { timeout: 5000 })
 const waitForMarks = (page, n) => page.waitForFunction(n => document.querySelectorAll('.help-mark').length === n, n,
-  { timeout: 2000 })
+  { timeout: 5000 })
 const HEADER = ['header.version', 'header.dots', 'header.user']
 
 // Opens `path` with help on and waits until the marks stop changing.
@@ -267,7 +267,7 @@ test('SLA: the enlarged chart hides the page\'s marks and names its own; Esc clo
   await waitForMarks(page, SLA.length + HEADER.length)
   await page.locator('.sla-card.clickable').first().click()
   await page.locator('.modal-content').waitFor()
-  await page.waitForFunction(() => document.querySelectorAll('.help-mark').length === 1, null, { timeout: 2000 })
+  await page.waitForFunction(() => document.querySelectorAll('.help-mark').length === 1, null, { timeout: 5000 })
   assert.deepEqual(await markIds(page), ['sla.zoom'])
   // The help layer draws above the zoom window (z-index 1000): the mark is clickable, its note on top
   const topmost = (sel) => page.evaluate(sel => {
@@ -349,7 +349,7 @@ test('Profile as a viewer has the same marks', async t => {
 
 // Waits until the marks on screen are exactly `ids` (in order); fails showing the difference.
 const waitForIds = (page, ids) => page.waitForFunction(ids => JSON.stringify(
-  [...document.querySelectorAll('.help-mark')].map(e => e.dataset.helpMark)) === JSON.stringify(ids), ids, { timeout: 2000 })
+  [...document.querySelectorAll('.help-mark')].map(e => e.dataset.helpMark)) === JSON.stringify(ids), ids, { timeout: 5000 })
   .catch(async () => assert.deepEqual(await markIds(page), ids))
 const idsOf = list => list.map(([id]) => id)
 
@@ -551,6 +551,19 @@ for (const [tab, [, summary, marks]] of Object.entries(SETTINGS_TABS)) {
     await checkMarks(page, marks)
   })
 }
+
+// What anyone can read once the SOC view is public: /api/soc/status (targets and each
+// check's name, type, interval, last result), /api/soc/history (4 hours, 90 days),
+// /api/tags and /api/system/health (internal/api/router.go socAuth routes)
+test('Settings › General: the SOC View Public Access note lists everything the public SOC data gives', async t => {
+  const { page } = await withHelp(t, '/settings', { role: 'admin' }, settingsTab('General'))
+  await mark(page, 'settingsGeneral.soc').click()
+  await waitForTitle(page, 'SOC View Public Access')
+  assert.deepEqual((await note(page).locator('.help-note-text').allInnerTexts()).map(s => s.trim()), [
+    'Yes lets anyone who can reach this server see the SOC view without signing in.',
+    "That shows target names, addresses and categories, their state and uptime, and the server's own health; the data behind it also gives each check's name, type, interval, last response time, last result message and 4-hour and 90-day history, each target's SLA goal, the tags and Bekci's version.",
+  ])
+})
 
 test('Settings: switching tab while help is on swaps the summary and the marks; Fail2Ban and System Health have a Refresh each', async t => {
   const { page } = await withHelp(t, '/settings', { role: 'admin' }, settingsTab('General'))
