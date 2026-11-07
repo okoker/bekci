@@ -12,8 +12,12 @@
 //     link?: 'lesson' | 'recipes',    shown once that window exists (HelpLayer.vue LINKS)
 //     place?: 'right' | 'left' | 'corner',            where the mark sits: right of the control
 //                                     (default), left of it, or on its top-right corner (tight spots)
-//     box?: 'content',                measure the control's content (its text and children), not its
-//                                     whole box: for a full-width bar whose items are centred
+//     box?: 'content' | 'label',      'content': measure the control's content (its text and children),
+//                                     not its whole box: for a full-width bar whose items are centred.
+//                                     'label': the control is a form field (its .form-group); the mark
+//                                     sits just after the text of its label
+//     timeline?: (args) => { caption, steps: [{ result: 'ok' | 'fail', label }], summary },
+//                                     a row of check results drawn under the text (the Fail Count note)
 //     each?: true,                    a mark on every visible instance, not just the first (the target
 //                                     form's per-condition fields); `args` are then that instance's
 //   }
@@ -28,8 +32,9 @@ import * as search from './search.js'
 import * as settings from './settings.js'
 import * as sla from './sla.js'
 import * as targets from './targets.js'
+import * as targetForm from './targetForm.js'
 import * as users from './users.js'
 
 export const pages = {
-  ...alerts, ...auditLog, ...dashboard, ...header, ...profile, ...search, ...settings, ...sla, ...targets, ...users,
+  ...alerts, ...auditLog, ...dashboard, ...header, ...profile, ...search, ...settings, ...sla, ...targets, ...targetForm, ...users,
 }

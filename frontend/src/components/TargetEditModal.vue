@@ -1,7 +1,8 @@
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import api from '../api'
 import TagChipInput from './TagChipInput.vue'
+import { help, toggleHelp, LazyHelpBar, LazyRuleCard } from '../help/useHelp.js'
 import {
   checkTypes, getDefaultConfig, getDefaultCondition, maxFailWindow, minFailWindow,
   failWindowError, valueError, packetLossHint,
@@ -175,6 +176,28 @@ async function saveRecipients(targetId) {
   await api.put(`/targets/${targetId}/recipients`, { user_ids: selectedRecipients.value })
 }
 
+// ── In-app help (design in_app_help.md §4.5) ──
+// The form is help page "targetForm" and its own help scope. At 1280px and
+// wider the plain-words card sits left of the form and notes open in the right
+// margin (the form card is marked data-help-margin for the help layer); narrower, the
+// card sits above Condition Groups and notes open below their field.
+const WIDE = '(min-width: 1280px)'
+const wide = ref(false)
+let wideQuery = null
+const onWideChange = () => { wide.value = wideQuery.matches }
+onMounted(() => {
+  wideQuery = window.matchMedia(WIDE)
+  onWideChange()
+  wideQuery.addEventListener('change', onWideChange)
+})
+onUnmounted(() => wideQuery?.removeEventListener('change', onWideChange))
+
+// Who the card counts as ticked: the ticked boxes, i.e. active users (the only
+// ones the alerter messages); unknown while the user list can't be loaded.
+const recipientCount = computed(() => (allUsersError.value
+  ? null
+  : allUsers.value.filter(u => selectedRecipients.value.includes(u.id)).length))
+
 // Load target detail for editing
 async function loadTargetDetail(id) {
   try {
@@ -294,18 +317,28 @@ watch(() => props.show, async (val) => {
 </script>
 
 <template>
-  <div v-if="show" class="modal-overlay">
-    <div class="modal-card modal-wide">
-      <h3>{{ targetId ? 'Edit Target' : cloneSourceId ? 'Clone Target' : 'New Target' }}</h3>
+  <div v-if="show" class="modal-overlay" :class="{ 'help-on': help.on, 'help-wide': help.on && wide }"
+    data-help-scope="form" data-help-page="targetForm">
+    <LazyHelpBar v-if="help.on" />
+    <LazyRuleCard v-if="help.on && wide" class="form-rule-card" :conditions="form.conditions"
+      :target-name="form.name" :recipient-count="recipientCount" />
+    <div class="modal-card modal-wide" :data-help-margin="help.on && wide ? '' : null">
+      <div class="modal-title-row">
+        <h3>{{ targetId ? 'Edit Target' : cloneSourceId ? 'Clone Target' : 'New Target' }}</h3>
+        <button type="button" class="btn btn-sm btn-form-help" :class="{ 'is-on': help.on }"
+          :aria-pressed="help.on ? 'true' : 'false'" @click="toggleHelp">
+          <span class="form-help-icon" aria-hidden="true"></span>Help
+        </button>
+      </div>
       <div v-if="formError" class="error-msg" style="margin-bottom: 0.75rem;">{{ formError }}</div>
       <form @submit.prevent="saveTarget">
         <!-- Target fields -->
         <div class="form-row">
-          <div class="form-group">
+          <div class="form-group" data-help="targetForm.name">
             <label class="required">Name</label>
             <input v-model="form.name" required placeholder="e.g. Web Server" />
           </div>
-          <div class="form-group">
+          <div class="form-group" data-help="targetForm.host">
             <label class="required">Host</label>
             <input v-model="form.host" required placeholder="e.g. google.com" />
           </div>
@@ -314,14 +347,14 @@ watch(() => props.show, async (val) => {
           <label>Description</label>
           <input v-model="form.description" placeholder="Optional description" />
         </div>
-        <div class="form-group">
+        <div class="form-group" data-help="targetForm.category">
           <label class="required">Category</label>
           <select v-model="form.category" required>
             <option value="" disabled>Select category</option>
             <option v-for="c in categoryOptions" :key="c.id" :value="c.value">{{ c.value }}</option>
           </select>
         </div>
-        <div v-if="form.conditions.length > 1" class="form-group">
+        <div v-if="form.conditions.length > 1" class="form-group" data-help="targetForm.preferred">
           <label>Preferred Check (for SLA &amp; dashboard)</label>
           <select v-model="form.preferred_check_type">
             <option v-for="t in availableCheckTypes" :key="t.value" :value="t.value">{{ t.label }}</option>
@@ -330,47 +363,55 @@ watch(() => props.show, async (val) => {
         </div>
 
         <!-- Notes & Contacts -->
-        <div class="form-group form-group-wide">
-          <label>Notes</label>
-          <textarea v-model="form.notes" rows="4" placeholder="Optional notes about this target"></textarea>
-        </div>
-        <div class="form-group form-group-wide">
-          <label>Contacts</label>
-          <textarea v-model="form.contacts" rows="4" placeholder="Optional contact information"></textarea>
+        <div data-help="targetForm.notes">
+          <div class="form-group form-group-wide">
+            <label>Notes</label>
+            <textarea v-model="form.notes" rows="4" placeholder="Optional notes about this target"></textarea>
+          </div>
+          <div class="form-group form-group-wide">
+            <label>Contacts</label>
+            <textarea v-model="form.contacts" rows="4" placeholder="Optional contact information"></textarea>
+          </div>
         </div>
 
         <!-- Project & Location tags -->
-        <div class="form-row">
-          <div class="form-group">
-            <label>Project</label>
-            <select v-model="form.project">
-              <option value="">— none —</option>
-              <option v-for="t in projectOptions" :key="t.id" :value="t.value">{{ t.value }}</option>
-            </select>
+        <div data-help="targetForm.filters">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Project</label>
+              <select v-model="form.project">
+                <option value="">— none —</option>
+                <option v-for="t in projectOptions" :key="t.id" :value="t.value">{{ t.value }}</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Location</label>
+              <select v-model="form.location">
+                <option value="">— none —</option>
+                <option v-for="t in locationOptions" :key="t.id" :value="t.value">{{ t.value }}</option>
+              </select>
+            </div>
           </div>
-          <div class="form-group">
-            <label>Location</label>
-            <select v-model="form.location">
-              <option value="">— none —</option>
-              <option v-for="t in locationOptions" :key="t.id" :value="t.value">{{ t.value }}</option>
-            </select>
+
+          <div class="form-group form-group-wide">
+            <label>Tags</label>
+            <TagChipInput v-model="form.tags" :options="tagOptions" placeholder="Type to add (e.g. P1)" />
           </div>
         </div>
 
-        <div class="form-group form-group-wide">
-          <label>Tags</label>
-          <TagChipInput v-model="form.tags" :options="tagOptions" placeholder="Type to add (e.g. P1)" />
-        </div>
-
-        <div class="form-group checkbox-group">
+        <div class="form-group checkbox-group" data-help="targetForm.enabled">
           <label class="checkbox-label"><input type="checkbox" v-model="form.enabled" /> Enabled</label>
         </div>
+
+        <!-- The plain-words card, in help mode below 1280px -->
+        <LazyRuleCard v-if="help.on && !wide" class="form-rule-card-inline" :conditions="form.conditions"
+          :target-name="form.name" :recipient-count="recipientCount" />
 
         <!-- Condition Groups section -->
         <div class="conditions-section">
           <div class="conditions-header">
-            <strong>Condition Groups</strong>
-            <button type="button" class="btn btn-sm btn-primary" @click="addGroup">+ Add Group or Condition</button>
+            <strong data-help="targetForm.groups">Condition Groups</strong>
+            <button type="button" class="btn btn-sm btn-primary" data-help="targetForm.addgroup" @click="addGroup">+ Add Group or Condition</button>
           </div>
 
           <div v-if="form.conditions.length === 0" class="validation-warning">
@@ -379,16 +420,16 @@ watch(() => props.show, async (val) => {
 
           <template v-for="(group, gIdx) in conditionGroups" :key="group.groupIdx">
             <!-- OR divider between groups -->
-            <div v-if="gIdx > 0" class="or-divider"><span class="or-pill">OR</span></div>
+            <div v-if="gIdx > 0" class="or-divider"><span class="or-pill" data-help="targetForm.or">OR</span></div>
 
             <div class="group-card">
               <div class="group-header">
-                <span class="group-label">Group {{ gIdx + 1 }}</span>
-                <div v-if="group.conditions.length > 1" class="operator-toggle">
+                <span class="group-label" data-help="targetForm.group">Group {{ gIdx + 1 }}</span>
+                <div v-if="group.conditions.length > 1" class="operator-toggle" data-help="targetForm.andor">
                   <button type="button" :class="['op-btn', { active: group.operator === 'AND' }]" @click="setGroupOperator(group.groupIdx, 'AND')">AND</button>
                   <button type="button" :class="['op-btn', { active: group.operator === 'OR' }]" @click="setGroupOperator(group.groupIdx, 'OR')">OR</button>
                 </div>
-                <button type="button" class="btn btn-sm btn-danger" @click="removeGroup(group.groupIdx)">Remove Group</button>
+                <button type="button" class="btn btn-sm btn-danger" data-help="targetForm.remove" @click="removeGroup(group.groupIdx)">Remove Group</button>
               </div>
 
               <template v-for="(cond, cIdx) in group.conditions" :key="cond.check_id || cIdx">
@@ -398,12 +439,12 @@ watch(() => props.show, async (val) => {
                 <div class="condition-card">
                   <div class="condition-card-header">
                     <span class="condition-num">{{ cond.check_type.toUpperCase() }}</span>
-                    <button type="button" class="btn btn-sm btn-danger" @click="removeCondition(cond)">Remove</button>
+                    <button type="button" class="btn btn-sm btn-danger" data-help="targetForm.remove" @click="removeCondition(cond)">Remove</button>
                   </div>
 
                   <!-- Check fields -->
                   <div class="form-row">
-                    <div class="form-group">
+                    <div class="form-group" data-help="targetForm.type">
                       <label>Check Type</label>
                       <select v-model="cond.check_type" @change="onConditionTypeChange(cond)" :disabled="!!cond.check_id">
                         <option v-for="t in checkTypes" :key="t.value" :value="t.value">{{ t.label }}</option>
@@ -414,7 +455,7 @@ watch(() => props.show, async (val) => {
                       <input v-model="cond.check_name" required placeholder="e.g. HTTPS Check" />
                     </div>
                   </div>
-                  <div class="form-group">
+                  <div class="form-group" data-help="targetForm.int">
                     <label>Interval (seconds)</label>
                     <input type="number" v-model.number="cond.interval_s" min="10" max="86400" style="max-width: 120px;"
                       @change="onIntervalChange(cond)" />
@@ -440,17 +481,17 @@ watch(() => props.show, async (val) => {
                         <label>Endpoint</label>
                         <input v-model="cond.config.endpoint" placeholder="/" />
                       </div>
-                      <div class="form-group">
+                      <div class="form-group" data-help="targetForm.expect">
                         <label>Expected Status</label>
                         <input type="number" v-model.number="cond.config.expect_status" />
                       </div>
                     </div>
                     <div class="form-row">
-                      <div class="form-group">
+                      <div class="form-group" data-help="targetForm.timeout">
                         <label>Timeout (s)</label>
                         <input type="number" v-model.number="cond.config.timeout_s" min="1" max="60" />
                       </div>
-                      <div class="form-group checkbox-group">
+                      <div class="form-group checkbox-group" data-help="targetForm.skiptls">
                         <label class="checkbox-label"><input type="checkbox" v-model="cond.config.skip_tls_verify" /> Skip TLS Verify</label>
                       </div>
                     </div>
@@ -462,12 +503,12 @@ watch(() => props.show, async (val) => {
                         <label>Port</label>
                         <input type="number" v-model.number="cond.config.port" min="1" max="65535" required />
                       </div>
-                      <div class="form-group">
+                      <div class="form-group" data-help="targetForm.timeout">
                         <label>Timeout (s)</label>
                         <input type="number" v-model.number="cond.config.timeout_s" min="1" max="60" />
                       </div>
                     </div>
-                    <div class="form-group checkbox-group">
+                    <div class="form-group checkbox-group" data-help="targetForm.closed">
                       <label class="checkbox-label"><input type="checkbox" v-model="cond.config.expect_closed" /> Port must stay closed</label>
                     </div>
                     <p v-if="cond.config.expect_closed" class="text-muted input-hint">Up while the port is closed or does not answer, down when it accepts a connection. The usual Status equals down then alerts when the port opens.</p>
@@ -475,11 +516,11 @@ watch(() => props.show, async (val) => {
 
                   <template v-if="cond.check_type === 'ping'">
                     <div class="form-row">
-                      <div class="form-group">
+                      <div class="form-group" data-help="targetForm.pingcount">
                         <label>Ping Count</label>
                         <input type="number" v-model.number="cond.config.count" min="1" max="10" />
                       </div>
-                      <div class="form-group">
+                      <div class="form-group" data-help="targetForm.timeout">
                         <label>Timeout (s)</label>
                         <input type="number" v-model.number="cond.config.timeout_s" min="1" max="30" />
                       </div>
@@ -503,11 +544,11 @@ watch(() => props.show, async (val) => {
                       </div>
                     </div>
                     <div class="form-row">
-                      <div class="form-group">
+                      <div class="form-group" data-help="targetForm.dnsexpect">
                         <label>Expected Value (optional)</label>
                         <input v-model="cond.config.expect_value" placeholder="e.g. 1.2.3.4" />
                       </div>
-                      <div class="form-group">
+                      <div class="form-group" data-help="targetForm.dnsns">
                         <label>Nameserver (optional)</label>
                         <input v-model="cond.config.nameserver" placeholder="e.g. 8.8.8.8" />
                       </div>
@@ -528,7 +569,7 @@ watch(() => props.show, async (val) => {
                         <input v-model="cond.config.endpoint" placeholder="/" />
                       </div>
                     </div>
-                    <div class="form-group">
+                    <div class="form-group" data-help="targetForm.baseline">
                       <label>Baseline Hash (empty = auto-capture)</label>
                       <input v-model="cond.config.baseline_hash" placeholder="Leave empty to auto-capture" />
                     </div>
@@ -540,7 +581,7 @@ watch(() => props.show, async (val) => {
                         <label>Port</label>
                         <input type="number" v-model.number="cond.config.port" min="1" max="65535" />
                       </div>
-                      <div class="form-group">
+                      <div class="form-group" data-help="targetForm.warn">
                         <label>Warning Days</label>
                         <input type="number" v-model.number="cond.config.warn_days" min="1" />
                       </div>
@@ -553,16 +594,16 @@ watch(() => props.show, async (val) => {
                         <label>Port</label>
                         <input type="number" v-model.number="cond.config.port" placeholder="161" />
                       </div>
-                      <div class="form-group">
+                      <div class="form-group" data-help="targetForm.timeout">
                         <label>Timeout (s)</label>
                         <input type="number" v-model.number="cond.config.timeout_s" placeholder="5" />
                       </div>
                     </div>
-                    <p class="text-muted input-hint">SNMP credentials are configured globally in Settings.</p>
+                    <p class="text-muted input-hint" data-help="targetForm.snmp">SNMP credentials are configured globally in Settings.</p>
                   </template>
 
                   <!-- Alert criteria divider -->
-                  <div class="alert-divider">Alert when...</div>
+                  <div class="alert-divider" data-help="targetForm.when">Alert when...</div>
                   <div class="form-row form-row-5">
                     <div class="form-group">
                       <label>Field</label>
@@ -587,12 +628,14 @@ watch(() => props.show, async (val) => {
                       <input v-model="cond.value" :placeholder="valuePlaceholder[cond.field] || 'down'"
                         v-custom-validity="valueError(cond)" />
                     </div>
-                    <div class="form-group">
+                    <div class="form-group" data-help="targetForm.fc"
+                      :data-help-args="JSON.stringify({ fail_count: cond.fail_count, interval_s: cond.interval_s })">
                       <label>Fail Count</label>
                       <input type="number" v-model.number="cond.fail_count" min="1" max="100"
                         @change="onFailCountChange(cond)" />
                     </div>
-                    <div class="form-group">
+                    <div class="form-group" data-help="targetForm.tw"
+                      :data-help-args="JSON.stringify({ fail_count: cond.fail_count, interval_s: cond.interval_s })">
                       <label>Time Window</label>
                       <input type="number" v-model.number="cond.fail_window"
                         v-custom-validity="failWindowError(cond)"
@@ -605,7 +648,7 @@ watch(() => props.show, async (val) => {
                 </div>
               </template>
 
-              <button type="button" class="btn btn-sm btn-add-cond" @click="addConditionToGroup(group.groupIdx)">+ Add condition to group</button>
+              <button type="button" class="btn btn-sm btn-add-cond" data-help="targetForm.addcond" @click="addConditionToGroup(group.groupIdx)">+ Add condition to group</button>
             </div>
           </template>
         </div>
@@ -613,7 +656,7 @@ watch(() => props.show, async (val) => {
         <!-- Alert recipients -->
         <div class="recipients-section">
           <div class="conditions-header">
-            <strong>Alert Recipients</strong>
+            <strong data-help="targetForm.rcp">Alert Recipients</strong>
           </div>
           <p v-if="allUsersError" class="text-muted" style="font-size: 0.85rem; color: #dc2626;">Could not load users.</p>
           <p v-else-if="allUsers.length === 0" class="text-muted" style="font-size: 0.85rem;">No users available.</p>
@@ -626,7 +669,7 @@ watch(() => props.show, async (val) => {
           </div>
         </div>
 
-        <div class="form-actions">
+        <div class="form-actions" data-help="targetForm.save">
           <button type="submit" class="btn btn-primary" :disabled="form.conditions.length === 0">Save</button>
           <button type="button" class="btn" @click="close">Cancel</button>
         </div>
@@ -658,6 +701,72 @@ watch(() => props.show, async (val) => {
 }
 .modal-card h3 { margin-bottom: 1rem; }
 .modal-wide { max-width: 640px; }
+.modal-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.modal-card .modal-title-row h3 { margin-bottom: 0; }
+
+/* In-app help (design in_app_help.md §4.5). "? Help" is help's turquoise outline
+   button, never the app's orange. While help is on, its bar runs across the top
+   of the overlay and the form sits under it; the plain-words card goes above
+   Condition Groups, or at 1280px and wider (help-wide) left of the form, with the
+   right margin kept for notes. */
+.btn-form-help {
+  gap: 6px;
+  border-color: var(--help);
+  color: var(--help-dk);
+  font-weight: 600;
+}
+.btn-form-help:hover,
+.btn-form-help.is-on { background: var(--help-tint); }
+.form-help-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--help-dk);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 800;
+  line-height: 1;
+}
+.form-help-icon::before { content: '?'; }
+.modal-overlay.help-on {
+  display: block;
+  padding-top: 0;
+}
+.modal-overlay.help-on > .help-bar { margin: 0 -1rem 2rem; }
+.modal-overlay.help-on > .modal-card { margin: 0 auto; }
+.modal-overlay.help-wide {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 640px) minmax(0, 1fr);
+  column-gap: 24px;
+  align-items: start;
+}
+.modal-overlay.help-wide > .help-bar { grid-column: 1 / -1; }
+.modal-overlay.help-wide > .form-rule-card {
+  grid-column: 1;
+  grid-row: 2;
+  justify-self: end;
+  width: 100%;
+  max-width: 340px;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  position: sticky;
+  top: 1rem;
+}
+.modal-overlay.help-wide > .modal-card {
+  grid-column: 2;
+  grid-row: 2;
+  margin: 0;
+}
+.form-rule-card-inline { margin-top: 1rem; }
 
 .form-group-wide {
   width: 75%;
@@ -875,4 +984,11 @@ watch(() => props.show, async (val) => {
   border-color: #fca5a5;
 }
 .btn-danger:hover { background: #fee2e2; }
+</style>
+
+<style>
+/* While the target form shows help, its own help bar is the one in use: the
+   page's bar under the header would show through the overlay's dim backdrop as
+   a second bar, so it is hidden (keeping its place, so nothing under it moves). */
+body:has(.modal-overlay.help-on) .layout-v > .help-bar { visibility: hidden; }
 </style>

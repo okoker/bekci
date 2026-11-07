@@ -13,7 +13,11 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { help, openNote, closeNote, stepNote } from './useHelp.js'
 import { pages } from './content/index.js'
-import { anchorBox, argsOf, findAnchors, findScope, keepClear, leaderLine, markPosition, placeNote } from './locate.js'
+import { HEADER_PAGE } from './anchors.js'
+import {
+  anchorBox, argsOf, findAnchors, findScope, keepClear, leaderLine, marginSlot, markBox, markPosition, placeInMargin,
+  placeNote,
+} from './locate.js'
 
 // The windows a note's link can open, by name. A link shows only once its
 // window is listed here: the rule lesson and the recipes come in later tasks.
@@ -23,12 +27,14 @@ const root = ref(null)
 const noteEl = ref(null)
 const marks = shallowRef([])       // [{ uid, id, n, title, x, y }]
 const noteAt = shallowRef(null)    // { left, top, maxHeight } once the open note is placed
-const line = shallowRef(null)      // { x1, y1, x2, y2 } from the note to its control
+const noteWidth = shallowRef(null) // the note's width in the target form's right margin (null: its CSS width)
+const line = shallowRef(null)      // the leader line's points [[x, y], …], from the note to the dot on its control
 const noteArgs = shallowRef({})    // the open note's control's data-help-args
 const openMark = shallowRef('')    // the uid of the mark whose note is open
 
 let anchors = []        // the documented controls on screen (locate.js findAnchors)
 let outlined = null     // the open note's control, outlined
+let control = null      // the control the open note was opened on (for a key with a mark on every instance)
 let placement = null    // where the open note sits: { side, dx, dy, maxHeight } from its control
 let pointerClosed = false
 let focusNote = false   // move focus into the note once it is placed (a hidden note can't take it)
@@ -46,8 +52,17 @@ const note = computed(() => {
     rows: value('rows') ?? [],
     tip: value('tip'),
     link: LINKS[item.link],
+    timeline: value('timeline'),
   }
 })
+const noteStyle = computed(() => ({
+  ...(noteAt.value
+    ? { left: `${noteAt.value.left}px`, top: `${noteAt.value.top}px`, maxHeight: noteAt.value.maxHeight ? `${noteAt.value.maxHeight}px` : null }
+    : { left: '0px', top: '0px', visibility: 'hidden' }),
+  width: noteWidth.value ? `${noteWidth.value}px` : null,
+}))
+const linePoints = computed(() => line.value?.map(p => p.join(',')).join(' '))
+const dot = computed(() => line.value?.[line.value.length - 1])
 const at = computed(() => help.items.findIndex(item => item.id === help.current?.id))
 const count = computed(() => help.items.length)
 const previous = computed(() => help.items[(at.value - 1 + count.value) % count.value]?.title)
@@ -73,22 +88,44 @@ function refresh() {
   if (anchors.map(a => a.id).join() !== help.items.map(item => item.id).join()) {
     help.items = anchors.map(a => ({ id: a.id, title: a.note.title }))
   }
-  marks.value = anchors.flatMap(a => a.els.map((el, n) => ({
-    uid: `${a.id}#${n}`, id: a.id, n, title: a.note.title, ...markPosition(anchorBox(el, a.note), a.note.place),
-  })))
+  marks.value = inPageOrder(anchors.flatMap(a => a.els.map((el, n) => ({ a, el, n })))).map(({ a, el, n }) => ({
+    uid: `${a.id}#${n}`, id: a.id, n, title: a.note.title, ...markPosition(markBox(el, a.note), a.note.place),
+  }))
   observeAnchors()
   if (!help.current) return
   const open = anchors.find(a => a.id === help.current.id)
-  if (!open) {
-    closeNote() // its control has gone: a row folded, a tab switched
+  const el = open && openControl(open)
+  if (!el) {
+    closeNote() // its control has gone: a row folded, a tab switched, a condition removed
     return
   }
-  const n = open.els[help.current.n] ? help.current.n : 0
-  const el = open.els[n]
-  openMark.value = `${open.id}#${n}`
+  openMark.value = `${open.id}#${help.current.n}`
   readArgs(el)
   outline(el)
   placeOpenNote(el, open.note, keep, scope)
+}
+
+// The control the open note describes. For a key with a mark on every instance
+// (a field of each condition in the target form) it is the one the note was
+// opened on, wherever it now sits among them (a condition above it removed):
+// help.current.n follows it, so focus can go back to its mark. If that one has
+// gone itself, there is none, and the note closes.
+function openControl(open) {
+  if (!open.note.each) return open.els[0]
+  control ??= open.els[help.current.n] ?? null
+  const n = open.els.indexOf(control)
+  if (n < 0) return null
+  if (help.current.n !== n) help.current.n = n
+  return control
+}
+
+// Marks in page order, so Tab goes through them as the page reads; a key with a
+// mark on every instance (the target form's fields) has them among the others.
+// The header's come last, after the page's.
+const byPageOrder = (x, y) => (x.el === y.el ? 0 : x.el.compareDocumentPosition(y.el) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1)
+function inPageOrder(list) {
+  const header = list.filter(m => m.a.page === HEADER_PAGE)
+  return [...list.filter(m => m.a.page !== HEADER_PAGE).sort(byPageOrder), ...header]
 }
 
 // A note written from its control's figures follows them while it is open
@@ -112,7 +149,18 @@ function placeOpenNote(el, item, keep, scope) {
   const view = document.documentElement
   const inView = box.bottom > 0 && box.top < view.clientHeight && box.right > 0 && box.left < view.clientWidth
   if (!placement || (!keep && inView)) {
-    const p = placeNote(box, width, height, aim, keepClear(scope))
+    // In the target form's right margin the note takes the margin's width:
+    // measure it at that width before placing it
+    const slot = marginSlot(scope)
+    if ((slot?.width ?? null) !== noteWidth.value) {
+      noteWidth.value = slot?.width ?? null
+      relayout = true
+      nextTick(() => schedule())
+      return
+    }
+    const p = slot
+      ? placeInMargin(box, slot, height, keepClear(scope))
+      : placeNote(box, width, height, aim, keepClear(scope))
     placement = { side: p.side, dx: p.left - box.left, dy: p.top - box.top, maxHeight: p.maxHeight }
   }
   const left = box.left + placement.dx
@@ -171,12 +219,28 @@ function bringIntoView(el) {
 }
 
 // A click on the page outside help closes the note (help stays on); dragging
-// the window's scrollbar doesn't
+// the window's scrollbar doesn't. Neither does a click into the control the note
+// describes: typing into the target form's Fail Count, its note follows the figures.
 function onPointerDown(e) {
-  if (!help.current || e.target === document.documentElement) return
+  if (!help.current || onScrollbar(e)) return
   if (e.target.closest?.('.help-note, .help-mark, .help-bar')) return
+  if (outlined?.contains(e.target)) return
   pointerClosed = true
   closeNote()
+}
+
+// A press on a scrollbar: the window's (its target is <html>), or that of an
+// element that scrolls, such as the target form's overlay (outside the element's
+// client area, on its right or bottom edge)
+function onScrollbar(e) {
+  const el = e.target
+  if (el === document.documentElement) return true
+  if (!(el instanceof Element)) return false
+  const style = getComputedStyle(el)
+  const scrolls = overflow => overflow === 'auto' || overflow === 'scroll'
+  const box = el.getBoundingClientRect()
+  return (scrolls(style.overflowY) && e.clientX >= box.left + el.clientLeft + el.clientWidth)
+    || (scrolls(style.overflowX) && e.clientY >= box.top + el.clientTop + el.clientHeight)
 }
 
 // Focus goes into a note when it opens, and back to its mark when it closes,
@@ -189,16 +253,21 @@ watch(() => help.current, (now, before) => {
   placement = null
   if (!now) {
     noteAt.value = null
+    noteWidth.value = null
     line.value = null
     openMark.value = ''
     focusNote = false
+    control = null
     outline(null)
+    // Back to the note's mark; if that one has gone with its control, to another of its key's
     if (before && focusInNote && !byPointer) {
-      nextTick(() => root.value?.querySelector(`[data-help-mark="${before.id}"][data-help-n="${before.n}"]`)?.focus())
+      nextTick(() => (root.value?.querySelector(`[data-help-mark="${before.id}"][data-help-n="${before.n}"]`)
+        ?? root.value?.querySelector(`[data-help-mark="${before.id}"]`))?.focus())
     }
     return
   }
   const el = controlOf(now.id, now.n)
+  control = el ?? null
   openMark.value = el ? `${now.id}#${now.n}` : ''
   argsText = el?.dataset.helpArgs ?? ''
   noteArgs.value = argsOf(el)
@@ -240,8 +309,9 @@ onUnmounted(() => {
   <Teleport to="body">
     <div ref="root" class="help-layer">
       <svg v-if="line" class="help-lines" aria-hidden="true">
-        <line :x1="line.x1" :y1="line.y1" :x2="line.x2" :y2="line.y2" />
-        <circle :cx="line.x2" :cy="line.y2" r="5" />
+        <line v-if="line.length === 2" :x1="line[0][0]" :y1="line[0][1]" :x2="line[1][0]" :y2="line[1][1]" />
+        <polyline v-else :points="linePoints" />
+        <circle :cx="dot[0]" :cy="dot[1]" r="5" />
       </svg>
       <button
         v-for="m in marks"
@@ -265,9 +335,7 @@ onUnmounted(() => {
         role="dialog"
         aria-labelledby="help-note-title"
         tabindex="-1"
-        :style="noteAt
-          ? { left: `${noteAt.left}px`, top: `${noteAt.top}px`, maxHeight: noteAt.maxHeight ? `${noteAt.maxHeight}px` : null }
-          : { left: '0px', top: '0px', visibility: 'hidden' }"
+        :style="noteStyle"
       >
         <h3 id="help-note-title" class="help-note-title">{{ note.title }}</h3>
         <p v-for="(sentence, i) in note.text" :key="i" class="help-note-text">{{ sentence }}</p>
@@ -276,6 +344,17 @@ onUnmounted(() => {
             <span class="help-note-control"><span :class="row.control.className">{{ row.control.label }}</span></span>
             <span>{{ row.text }}</span>
           </div>
+        </div>
+        <div v-if="note.timeline" class="help-timeline">
+          <p class="help-timeline-caption">{{ note.timeline.caption }}</p>
+          <ol class="help-timeline-steps">
+            <li v-for="(step, i) in note.timeline.steps" :key="i">
+              <span :class="['help-timeline-result', `is-${step.result}`]" role="img"
+                :aria-label="step.result === 'ok' ? 'passed' : 'failed'">{{ step.result === 'ok' ? '✓' : '✕' }}</span>
+              <span :class="['help-timeline-label', { 'is-down': step.label === 'down' }]">{{ step.label }}</span>
+            </li>
+          </ol>
+          <p class="help-timeline-summary">{{ note.timeline.summary }}</p>
         </div>
         <p v-if="note.tip" class="help-note-tip">{{ note.tip }}</p>
         <button v-if="note.link" type="button" class="help-note-link" @click="note.link.open">{{ note.link.label }}</button>
@@ -327,7 +406,8 @@ onUnmounted(() => {
   overflow: visible;
   pointer-events: none;
 }
-.help-lines line { stroke: var(--help); stroke-width: 1.8; }
+.help-lines line,
+.help-lines polyline { fill: none; stroke: var(--help); stroke-width: 1.8; }
 .help-lines circle { fill: var(--help); stroke: #fff; stroke-width: 2; }
 
 .help-note {
@@ -366,6 +446,42 @@ onUnmounted(() => {
   font-size: 0.95rem;
   line-height: 1.5;
 }
+/* The Fail Count timeline: eight check results, the running count under each */
+.help-timeline {
+  margin-top: 12px;
+  padding: 10px 6px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+.help-timeline-caption { padding: 0 6px; font-size: 0.9rem; line-height: 1.4; color: #64748b; }
+.help-timeline-steps {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  margin-top: 8px;
+  list-style: none;
+}
+.help-timeline-steps li { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.help-timeline-result {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 22px;
+  text-align: center;
+}
+.help-timeline-result.is-ok { background: #dcfce7; color: #166534; }
+.help-timeline-result.is-fail { background: #fee2e2; color: #991b1b; }
+.help-timeline-label {
+  min-height: 16px;
+  font-size: 0.65rem;
+  line-height: 16px;
+  letter-spacing: -0.01em;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+.help-timeline-label.is-down { color: #991b1b; font-weight: 600; }
+.help-timeline-summary { margin-top: 8px; padding: 0 6px; font-size: 0.95rem; line-height: 1.5; }
 .help-note-link {
   margin-top: 10px;
   padding: 0;
@@ -418,6 +534,17 @@ onUnmounted(() => {
 .badge-action-delete { background: #fee2e2; color: #991b1b; }
 .badge-action-default { background: #f1f5f9; color: #475569; }
 .status-ok { color: #16a34a; font-weight: 600; font-size: 0.8rem; }
+/* The target form's AND / OR switch (TargetEditModal.vue), the chosen side */
+.op-btn {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 4px;
+  background: #fff;
+  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.op-btn.active { background: #3b82f6; color: #fff; }
 .status-fail { color: #dc2626; font-weight: 600; font-size: 0.8rem; }
 </style>
 

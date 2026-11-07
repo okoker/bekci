@@ -7,6 +7,9 @@ import { HEADER_PAGE } from './anchors.js'
 export const MARK = 18   // a ? mark's diameter
 const EDGE = 12          // a note keeps this far from the window's edges
 const GAP = 28           // from a control to its note: room for the mark and the leader line
+const NOTE_WIDTH = 400   // a note's width where there is room (HelpLayer.vue's CSS)
+const MARGIN_MIN = 240   // a margin narrower than this holds no note: it opens beside its control
+const RUN = 11           // a margin note's line runs this far under its field
 
 // The scope on screen: the last element in document order that names one
 // (anchors.js explains why the last).
@@ -71,9 +74,20 @@ export function findAnchors(scope, page, pages) {
 }
 
 // The box a mark goes beside and a leader line points at: the control's, or
-// with `box: 'content'` the box around its text and children. (A note keeps
-// clear of the control's whole box, which is the part outlined.)
+// with `box: 'content'` the box around its text and children, or for a form
+// field (`box: 'label'`) the box around its label's text and its inputs, as
+// narrow as the input may be. (A note keeps clear of the control's whole box,
+// which is the part outlined.)
 export function anchorBox(el, note) {
+  if (note.box === 'label') {
+    const parts = [labelBox(el), ...[...el.querySelectorAll('input, select, textarea')].map(c => c.getBoundingClientRect())]
+      .filter(r => r && r.width > 0 && r.height > 0)
+    if (parts.length) {
+      const left = Math.min(...parts.map(r => r.left))
+      const top = Math.min(...parts.map(r => r.top))
+      return new DOMRect(left, top, Math.max(...parts.map(r => r.right)) - left, Math.max(...parts.map(r => r.bottom)) - top)
+    }
+  }
   if (note.box === 'content') {
     const range = document.createRange()
     range.selectNodeContents(el)
@@ -81,6 +95,34 @@ export function anchorBox(el, note) {
     if (box.width > 0 && box.height > 0) return box
   }
   return el.getBoundingClientRect()
+}
+
+// The box a mark goes beside: the control's (anchorBox), or with `box: 'label'`
+// (a form field) the text of its label, so the mark sits just past it.
+export function markBox(el, note) {
+  return (note.box === 'label' && labelBox(el)) || anchorBox(el, note)
+}
+
+// The text of a form field's first label, including what the app's CSS adds
+// after it (the " *" of a required field); null without one
+function labelBox(el) {
+  const label = el.querySelector('label')
+  if (!label) return null
+  const range = document.createRange()
+  range.selectNodeContents(label)
+  const box = range.getBoundingClientRect()
+  return box.width > 0 && box.height > 0 ? new DOMRect(box.left, box.top, box.width + afterWidth(label), box.height) : null
+}
+
+// The width of an element's ::after text (a pseudo-element has no box to measure)
+let pen = null
+function afterWidth(el) {
+  const style = getComputedStyle(el, '::after')
+  const text = /^"(.*)"$/.exec(style.content)?.[1]
+  if (!text) return 0
+  pen ??= document.createElement('canvas').getContext('2d')
+  pen.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`
+  return pen.measureText(text).width
 }
 
 // The mark's top-left corner, in window coordinates. It stays inside the
@@ -147,18 +189,55 @@ export function placeNote(box, width, height, aim = box, avoid = []) {
   return { side: 'above', left: x, top: aboveBottom - maxHeight, maxHeight }
 }
 
+// The target form at full width keeps the right margin for notes (design §4.4):
+// right of the element marked data-help-margin (the form's card). The slot a
+// note takes there, { left, width }, or null with no margin or too narrow a one.
+export function marginSlot(scope) {
+  const el = scope?.querySelector('[data-help-margin]')
+  const box = el?.getBoundingClientRect()
+  if (!box || box.width <= 0) return null
+  const left = box.right + GAP
+  const width = Math.floor(Math.min(NOTE_WIDTH, document.documentElement.clientWidth - EDGE - left))
+  return width >= MARGIN_MIN ? { left, width } : null
+}
+
+// A note of `height` in the margin `slot`: a little above the line that runs
+// under the control's `box`, inside the window and clear of `avoid` (keepClear),
+// scrolling inside (maxHeight) when it doesn't fit. It can't cover the control:
+// the margin is beside the form.
+export function placeInMargin(box, slot, height, avoid = []) {
+  const view = document.documentElement.clientHeight
+  let top = clamp(box.bottom + RUN - 90, EDGE, view - height - EDGE)
+  for (let n = 0; n < avoid.length; n++) {
+    const r = avoid.find(r => slot.left < r.right && r.left < slot.left + slot.width && top < r.bottom && r.top < top + height)
+    if (!r) break
+    top = r.bottom + EDGE
+  }
+  const room = view - EDGE - top
+  return { side: 'margin', left: slot.left, top, maxHeight: height > room ? Math.max(room, 120) : null }
+}
+
 // The leader line from the note (`rect`, on `side` of the control) to the
 // control's `box`, ending in a dot on its edge, level with the middle of `aim`
-// (anchorBox: the control's content, for a full-width bar).
+// (anchorBox: the control's content, for a full-width bar). Its points, the
+// last one the dot. From the margin it runs under the field and turns up into
+// it at a right angle, so it never crosses an input; where the note sits lower
+// or higher than that run, it first steps across in the gap beside the note.
 export function leaderLine(side, rect, box, aim = box) {
   const cx = aim.left + aim.width / 2
   const cy = aim.top + aim.height / 2
   const alongX = clamp(cx, rect.left + 24, rect.right - 24)
   const alongY = clamp(cy, rect.top + 20, rect.bottom - 20)
-  if (side === 'below') return { x1: alongX, y1: rect.top, x2: cx, y2: box.bottom + 4 }
-  if (side === 'above') return { x1: alongX, y1: rect.bottom, x2: cx, y2: box.top - 4 }
-  if (side === 'right') return { x1: rect.left, y1: alongY, x2: box.right + 4, y2: cy }
-  return { x1: rect.right, y1: alongY, x2: box.left - 4, y2: cy }
+  if (side === 'below') return [[alongX, rect.top], [cx, box.bottom + 4]]
+  if (side === 'above') return [[alongX, rect.bottom], [cx, box.top - 4]]
+  if (side === 'right') return [[rect.left, alongY], [box.right + 4, cy]]
+  if (side === 'left') return [[rect.right, alongY], [box.left - 4, cy]]
+  const run = box.bottom + RUN
+  const end = [cx, box.bottom + 4]
+  const start = clamp(run, rect.top + 20, rect.bottom - 20)
+  if (start === run) return [[rect.left, run], [cx, run], end]
+  const step = rect.left - GAP / 2
+  return [[rect.left, start], [step, start], [step, run], [cx, run], end]
 }
 
 // The parsed data-help-args of a control: what a note written as a function

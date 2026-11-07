@@ -131,6 +131,13 @@ export const LazyHelpBar = defineAsyncComponent({
   errorComponent: HelpLoadError,
 })
 
+// The target form's plain-words card, fetched the first time help is on in the
+// form. If its code can't be fetched, the same message as the bar's takes its place.
+export const LazyRuleCard = defineAsyncComponent({
+  loader: () => import('./RuleCard.vue'),
+  errorComponent: HelpLoadError,
+})
+
 // The ? marks and their notes, fetched with the bar. When it can't be fetched
 // the bar's own message says so, so this shows nothing.
 export const LazyHelpLayer = defineAsyncComponent({
