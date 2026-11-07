@@ -57,7 +57,7 @@ export function outageDelay(failCount, intervalS) {
   const n = Math.floor(Number(failCount))
   const i = Number(intervalS)
   if (!(n > 1) || !(i > 0)) return null
-  return `${delayRange(n, i)} into an outage, at ${everyPhrase([i])}`
+  return `${delayRange(n, i)} after it starts, at ${everyPhrase([i])}`
 }
 
 const SAMPLE = [true, false, false, true, false, false, false, false] // true = the check passed
@@ -87,7 +87,7 @@ export function failCountTimeline(failCount, intervalS, sample = SAMPLE) {
     const never = n === 2 ? 'A single failure never alerts.'
       : n === 3 ? 'One or two failures in a row never alert.'
         : `Up to ${n - 1} failures in a row never alert.`
-    summary = `${never} A real outage alerts on the ${ordinal(n)} failed check, ${delayRange(n, interval)} in.`
+    summary = `${never} A real problem alerts on the ${ordinal(n)} failed check, ${delayRange(n, interval)} after it starts.`
   }
   return { steps, summary, failCount: n, interval }
 }
@@ -199,7 +199,7 @@ function groupSentence(conds, op) {
 }
 
 // One delay line per group, from the first check to the alert. Each condition alerts
-// between (N-1) and N intervals into an outage (Fail Count 1: 0 to one interval).
+// between (N-1) and N intervals after it starts (Fail Count 1: 0 to one interval).
 // AND waits for every member: largest low to largest high. OR fires on the first
 // member: smallest low to smallest high.
 function groupDelay(conds, op) {
@@ -207,7 +207,7 @@ function groupDelay(conds, op) {
   const lows = conds.map((c) => (failCountOf(c) - 1) * intervalOf(c))
   const highs = conds.map((c) => failCountOf(c) * intervalOf(c))
   const pick = op === 'OR' ? Math.min : Math.max
-  return `${rangeText(pick(...lows), pick(...highs))} into an outage, at ${everyPhrase(conds.map(intervalOf))}`
+  return `${rangeText(pick(...lows), pick(...highs))} after it starts, at ${everyPhrase(conds.map(intervalOf))}`
 }
 
 // The rule's groups as the engine reads them: by condition_group ascending,

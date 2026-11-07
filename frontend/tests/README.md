@@ -179,7 +179,7 @@ sets what Bekci watches…"; the page's bar under the header is hidden meanwhile
 and the form's turquoise "? Help" turns help off and on. Every condition's Fail Count (and each other
 per-condition or per-group control) has a mark, while the stepper counts each key once; a Fail Count
 note uses its own condition's numbers in its text and eight-result timeline ("…on the second failed
-check, 5 to 10 minutes in." for 300 seconds, Fail Count 2), Time Window shows Fail Count × Interval, and
+check, 5 to 10 minutes after it starts." for 300 seconds, Fail Count 2), Time Window shows Fail Count × Interval, and
 AND / OR draws the form's own buttons; an interval of 5 seconds is shown as the 10 Bekci runs. The plain-words
 card follows the form (for a ping alone in its group, Fail Count 1→3 reads "3 checks in a row" and drops the
 single-failure warning; a ping on the latest check AND'd with the web page isn't warned about; groups are

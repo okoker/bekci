@@ -17,7 +17,7 @@ test('B1: ping, 3 in a row, every minute', () => {
   const r = explainRule([cond({ fail_count: 3, fail_window: 180 })], 'Core switch', 1)
   assert.equal(r.opening, 'Core switch counts as down when:')
   assert.match(sentence(r), /ping has failed 3 checks in a row$/)
-  assert.equal(r.groups[0].delay, '2 to 3 minutes into an outage, at one check a minute')
+  assert.equal(r.groups[0].delay, '2 to 3 minutes after it starts, at one check a minute')
   assert.equal(r.closing, 'It counts as up again on the first check where this is no longer true.')
 })
 
@@ -39,12 +39,12 @@ test('two groups close with "none of these is true"', () => {
 })
 
 test('delays: whole minutes or seconds', () => {
-  assert.equal(outageDelay(3, 45), '90 to 135 seconds into an outage, at one check every 45 seconds')
-  assert.equal(outageDelay(2, 300), '5 to 10 minutes into an outage, at one check every 5 minutes')
-  assert.equal(outageDelay(3, 60), '2 to 3 minutes into an outage, at one check a minute')
+  assert.equal(outageDelay(3, 45), '90 to 135 seconds after it starts, at one check every 45 seconds')
+  assert.equal(outageDelay(2, 300), '5 to 10 minutes after it starts, at one check every 5 minutes')
+  assert.equal(outageDelay(3, 60), '2 to 3 minutes after it starts, at one check a minute')
   assert.equal(outageDelay(1, 60), null)
   const r = explainRule([cond({ fail_count: 3, interval_s: 45, fail_window: 135 })], 'T', 1)
-  assert.equal(r.groups[0].delay, '90 to 135 seconds into an outage, at one check every 45 seconds')
+  assert.equal(r.groups[0].delay, '90 to 135 seconds after it starts, at one check every 45 seconds')
 })
 
 test('AND group of ping and web page', () => {
@@ -170,7 +170,7 @@ test('fail count timeline', () => {
   const t = failCountTimeline(3, 60)
   assert.deepEqual(t.steps.map((s) => s.result), ['ok', 'fail', 'fail', 'ok', 'fail', 'fail', 'fail', 'fail'])
   assert.deepEqual(t.steps.map((s) => s.label), ['', '1', '2', 'reset', '1', '2', 'down', 'down'])
-  assert.equal(t.summary, 'One or two failures in a row never alert. A real outage alerts on the third failed check, 2 to 3 minutes in.')
+  assert.equal(t.summary, 'One or two failures in a row never alert. A real problem alerts on the third failed check, 2 to 3 minutes after it starts.')
   assert.deepEqual(failCountTimeline(1, 60).steps.map((s) => s.label), ['', 'down', 'down', '', 'down', 'down', 'down', 'down'])
 })
 
@@ -260,13 +260,13 @@ test('only Status equals up is exempt from the single-failure checks', () => {
 test('mixed intervals: AND = largest bounds, OR = smallest bounds', () => {
   const a = cond(fc(3, 60), 0, 'AND')
   const b = cond({ check_type: 'http', ...fc(2, 100) }, 0, 'AND')
-  assert.equal(explainRule([a, b], 'T', 1).groups[0].delay, '120 to 200 seconds into an outage, at checks every 60 and 100 seconds')
+  assert.equal(explainRule([a, b], 'T', 1).groups[0].delay, '120 to 200 seconds after it starts, at checks every 60 and 100 seconds')
   const a2 = { ...a, group_operator: 'OR' }
   const b2 = { ...b, group_operator: 'OR' }
-  assert.equal(explainRule([a2, b2], 'T', 1).groups[0].delay, '100 to 180 seconds into an outage, at checks every 60 and 100 seconds')
+  assert.equal(explainRule([a2, b2], 'T', 1).groups[0].delay, '100 to 180 seconds after it starts, at checks every 60 and 100 seconds')
   // a Fail Count 1 member counts as 0 to its interval
   const one = cond({ check_type: 'http', ...fc(1, 60) }, 0, 'AND')
-  assert.equal(explainRule([cond(fc(3, 60), 0, 'AND'), one], 'T', 1).groups[0].delay, '2 to 3 minutes into an outage, at one check a minute')
+  assert.equal(explainRule([cond(fc(3, 60), 0, 'AND'), one], 'T', 1).groups[0].delay, '2 to 3 minutes after it starts, at one check a minute')
   assert.equal(explainRule([cond(fc(1)), cond({ check_type: 'http', ...fc(1) })], 'T', 1).groups[0].delay, null)
 })
 
@@ -367,7 +367,7 @@ test('R14: two pings AND\'d, both Fail Count 1, are the same test: both are warn
 test('the timeline uses the interval Bekci runs (10 to 86400 seconds) and gives the figures it used', () => {
   const t = failCountTimeline(3, 5)
   assert.deepEqual([t.failCount, t.interval], [3, 10])
-  assert.ok(t.summary.endsWith('A real outage alerts on the third failed check, 20 to 30 seconds in.'), t.summary)
+  assert.ok(t.summary.endsWith('A real problem alerts on the third failed check, 20 to 30 seconds after it starts.'), t.summary)
   assert.equal(failCountTimeline(2, 100000).interval, 86400)
   assert.equal(failCountTimeline(2, '').interval, 60)
   assert.deepEqual([failCountTimeline('', 60).failCount, failCountTimeline(0, 60).failCount, failCountTimeline(2.7, 60).failCount], [1, 1, 2])
@@ -411,14 +411,14 @@ test('R14: Page Hash on the latest check AND\'d with "web page answers" is still
 // 60 when blank), as the Fail Count note does, so the two never disagree.
 test('the card\'s delay uses the interval Bekci runs, so it matches the Fail Count note', () => {
   const r = explainRule([cond(fc(3, 5))], 'T', 1)
-  assert.equal(r.groups[0].delay, '20 to 30 seconds into an outage, at one check every 10 seconds')
-  assert.ok(failCountTimeline(3, 5).summary.endsWith('A real outage alerts on the third failed check, 20 to 30 seconds in.'))
+  assert.equal(r.groups[0].delay, '20 to 30 seconds after it starts, at one check every 10 seconds')
+  assert.ok(failCountTimeline(3, 5).summary.endsWith('A real problem alerts on the third failed check, 20 to 30 seconds after it starts.'))
   // 5 and 10 seconds both run every 10, so the group reads as one shared phrase and one interval
   const and = explainRule([cond(fc(3, 5)), cond({ check_type: 'http', ...fc(3, 10) })], 'T', 1)
   assert.equal(sentence(and), 'ping and the web page have both failed 3 checks in a row')
-  assert.equal(and.groups[0].delay, '20 to 30 seconds into an outage, at one check every 10 seconds')
+  assert.equal(and.groups[0].delay, '20 to 30 seconds after it starts, at one check every 10 seconds')
   assert.equal(explainRule([cond({ ...fc(3), interval_s: '' })], 'T', 1).groups[0].delay,
-    '2 to 3 minutes into an outage, at one check a minute')
+    '2 to 3 minutes after it starts, at one check a minute')
 })
 
 // A "what happens" phrase that ends in a number (or N ms) or in an "or …" clause is
@@ -448,4 +448,17 @@ test('the count phrase stays apart from a phrase ending in a number or an "or" c
   assert.equal(one({ check_type: 'tcp', config: { port: 25, timeout_s: 5, expect_closed: false }, ...fc(3) }), 'port 25 has refused connections 3 checks in a row')
   assert.equal(sentence(explainRule([cond(fc(3)), cond({ check_type: 'http', ...fc(3) })], 'T', 1)),
     'ping and the web page have both failed 3 checks in a row')
+})
+
+// User's decision 07/11/2026: timing lines say "after it starts"; a security rule's trigger isn't an outage.
+test('no delay line or timeline summary says "outage"', () => {
+  for (const n of [1, 2, 3, 5]) {
+    for (const i of [10, 45, 60, 300]) {
+      assert.ok(!String(outageDelay(n, i)).includes('outage'), `${n}/${i}`)
+      assert.ok(!failCountTimeline(n, i).summary.includes('outage'), `${n}/${i}`)
+      assert.ok(!String(explainRule([cond(fc(n, i))], 'T', 1).groups[0].delay).includes('outage'), `${n}/${i}`)
+    }
+  }
+  const a = cond(fc(2, 60)); const b = cond({ check_type: 'http', ...fc(2, 100) })
+  assert.ok(!explainRule([a, b], 'T', 1).groups[0].delay.includes('outage'))
 })

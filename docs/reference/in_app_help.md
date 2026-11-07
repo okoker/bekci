@@ -224,7 +224,7 @@ targetName, recipientCount)` (`help/explainRule.js:230-312`) is pure and returns
   (TCP refused/accepted swapped by Port must stay closed), and the count: "on the latest check" at
   Fail Count 1, "N checks in a row" above, kept apart from a phrase that ends in a number or an "or …"
   clause ("…not answered with 200 on 3 checks in a row"; `withCount`, `help/explainRule.js:162-168`). Fail Count > 1 adds a
-  delay line, "(N−1)×interval to N×interval into an outage, at one check every <interval>", at the
+  delay line, "(N−1)×interval to N×interval after it starts, at one check every <interval>", at the
   interval Bekci runs (`help/explainRule.js:23-25`).
 - **False-alarm checks**, in this order (`help/explainRule.js:245-304`); ✓ green when met, ! amber when not:
 
