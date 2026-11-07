@@ -169,7 +169,7 @@ Measured from the build in `cmd/bekci/frontend_dist/assets/` on 07/11/2026 (v3.5
 
 | Asset | Size (raw) | Size (gzipped) |
 |-------|-----------|----------------|
-| index-*.js (main, the one `index.html` loads) | 332.53 kB | 106.21 kB |
+| index-*.js (main, the one `index.html` loads) | 332.53 kB | 106.20 kB |
 | index-*.css | 54.61 kB | 10.04 kB |
 | SearchView-*.js | 16.04 kB | 5.48 kB |
 | SearchView-*.css | 5.69 kB | 1.58 kB |

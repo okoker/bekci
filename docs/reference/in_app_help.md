@@ -213,7 +213,7 @@ Help is not modal, so other windows can be open under or over it. Each press clo
 ## The plain-words card (`help/RuleCard.vue`, `help/explainRule.js`)
 
 Shown in the target form only while help is on; it follows the form as it changes. `explainRule(conditions,
-targetName, recipientCount)` (`help/explainRule.js:230-310`) is pure and returns plain strings.
+targetName, recipientCount)` (`help/explainRule.js:230-312`) is pure and returns plain strings.
 
 - **Reading.** "<name> counts as down when:" ("This target" while Name is empty), one sentence per
   group, groups joined by slate OR pills, and "It counts as up again on the first check where this is
@@ -226,7 +226,7 @@ targetName, recipientCount)` (`help/explainRule.js:230-310`) is pure and returns
   clause ("…not answered with 200 on 3 checks in a row"; `withCount`, `help/explainRule.js:162-168`). Fail Count > 1 adds a
   delay line, "(N−1)×interval to N×interval into an outage, at one check every <interval>", at the
   interval Bekci runs (`help/explainRule.js:23-25`).
-- **False-alarm checks**, in this order (`help/explainRule.js:245-302`); ✓ green when met, ! amber when not:
+- **False-alarm checks**, in this order (`help/explainRule.js:245-304`); ✓ green when met, ! amber when not:
 
 | Shown when | Text |
 |---|---|
@@ -240,14 +240,15 @@ targetName, recipientCount)` (`help/explainRule.js:230-310`) is pure and returns
 | A DNS condition has no Expected Value | ! The DNS check only fails if the lookup fails, not if the answer changes. |
 | No alert recipients are ticked | (no sign) No one is ticked, so this target sends no email or Signal. The webhook, if it is switched on, still sends. |
 
-  **Which conditions can flicker** (`help/explainRule.js:252-274`): every condition except Status equals up (a passing
+  **Which conditions can flicker** (`help/explainRule.js:252-276`): every condition except Status equals up (a passing
   test, used to rule out outages, such as the S2 canary), so Response (ms) and Packet loss
   conditions count too. Left out is a condition in an AND group with a condition of **another check
-  type that is not Status equals up**: that failing test must agree first, so one blip can't page on
-  its own (a ping on the latest check AND'd with the web page on 2 in a row pages only once the web
-  page has failed twice). A partner that must be passing confirms nothing: Page Hash on the latest
-  check AND'd with "web page answers" is still warned about. Two Fail Count 1 down conditions of
-  different types AND'd confirm each other.
+  type that is not Status equals up and has Fail Count 2 or more**: that failing test must agree
+  first, so one blip can't page on its own (a ping on the latest check AND'd with the web page on 2
+  in a row pages only once the web page has failed twice). A partner that must be passing confirms
+  nothing: Page Hash on the latest check AND'd with "web page answers" is still warned about. Two
+  Fail Count 1 down conditions of different types AND'd confirm nothing, because a short network
+  drop fails both at once: both are warned about, and the ✓ is not shown.
 - An empty rule shows "No conditions yet." A name like `<b>x</b>` shows as typed.
 - Buttons: "Rule recipes: ready-made rules" and "Learn alert rules: the full lesson".
 

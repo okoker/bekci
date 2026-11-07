@@ -318,6 +318,26 @@ test('R14: a Fail Count 1 ping AND\'d with a web page on 2 in a row is confirmed
   ])
 })
 
+test('R14 tightened: two AND\'d Fail Count 1 tests of different types do not confirm each other, so both are warned about', () => {
+  const r = explainRule([
+    cond({ check_name: 'Ping', ...fc(1) }, 0, 'AND'),
+    cond({ check_type: 'http', check_name: 'Web page', ...fc(1, 300) }, 0, 'AND'),
+  ], 'T', 1)
+  assert.deepEqual(r.checks, [
+    { level: 'ok', text: 'Group 1 needs two different tests to agree before it alerts.' },
+    { level: 'warn', text: PING_WARN('Ping') },
+    { level: 'warn', text: PING_WARN('Web page') },
+  ])
+  assert.ok(!texts(r).includes(NO_FLICKER))
+  // a partner that needs 3 in a row confirms just as 2 does
+  const three = explainRule([
+    cond({ check_name: 'Ping', ...fc(1) }, 0, 'AND'),
+    cond({ check_type: 'http', check_name: 'Web page', ...fc(3, 300) }, 0, 'AND'),
+  ], 'T', 1)
+  assert.ok(!three.checks.some((c) => c.level === 'warn'))
+  assert.ok(texts(three).includes(NO_FLICKER))
+})
+
 test('R14: a Fail Count 1 ping alone, in an OR group, or in a group of its own is still warned about', () => {
   const alone = explainRule([cond({ check_name: 'Ping', ...fc(1) })], 'T', 1)
   assert.ok(texts(alone).includes(PING_WARN('Ping')))

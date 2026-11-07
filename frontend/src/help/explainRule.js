@@ -251,15 +251,17 @@ export function explainRule(conditions, targetName, recipientCount) {
 
   // Everything except Status equals up can flicker (up is a passing test that rules
   // out outages), unless a failing test of another type in its AND group must
-  // agree first: that test confirms it (ruling R14). A ping on the latest check
-  // AND'd with a web page on 2 in a row pages only once the web page has failed
-  // twice. A partner that must be passing (Status equals up) is the normal state
+  // agree first and itself needs 2 or more failures in a row: that test confirms
+  // it (ruling R14, tightened 07/11/2026). A ping on the latest check AND'd with a
+  // web page on 2 in a row pages only once the web page has failed twice; two
+  // Fail Count 1 tests fail together on a short network drop, so they confirm
+  // nothing. A partner that must be passing (Status equals up) is the normal state
   // and confirms nothing: Page Hash on the latest check AND "web page answers"
   // still pages on one changed page.
   const groupOf = new Map(groups.flatMap((g) => g.conds.map((c) => [c, g])))
   const confirmed = (c) => {
     const g = groupOf.get(c)
-    return g.op === 'AND' && g.conds.some((o) => o.check_type !== c.check_type && !isStatus(o, 'up'))
+    return g.op === 'AND' && g.conds.some((o) => o.check_type !== c.check_type && !isStatus(o, 'up') && failCountOf(o) >= 2)
   }
   const downs = list.filter((c) => !isStatus(c, 'up'))
   const alone = downs.filter((c) => !confirmed(c))

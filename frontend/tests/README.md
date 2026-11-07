@@ -168,8 +168,8 @@ clause: "not answered with 200 on 3 checks in a row", "…, or could not be chec
 while "ping has failed 3 checks in a row" stays) and the delay line in minutes or seconds, at the interval
 Bekci runs (5 seconds reads as 10, as in the Fail Count note), and the fallback wording for a field or comparator the form doesn't offer. It also pins each
 false-alarm check's text, level and order (no-recipient is a neutral note; a Fail Count 1 condition AND'd
-with a failing test of another type is confirmed by it and not warned about, while one alone, in an OR group,
-AND'd with its own type or only with a test that must pass (Status equals up) is), the Fail Count lane labels,
+with a failing test of another type that needs Fail Count 2 or more is confirmed by it and not warned about, while one alone, in an OR group,
+AND'd with its own type, with another Fail Count 1 test, or only with a test that must pass (Status equals up) is), the Fail Count lane labels,
 summary and the figures it used (an interval under
 10 seconds runs every 10), and that a name like `<b>x</b>` comes back unchanged as a plain string.
 
