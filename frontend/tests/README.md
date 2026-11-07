@@ -146,3 +146,12 @@ help page (`data-help-page`; Settings per tab), and the bar follows a tab change
 the Help item is orange. When the bar's code can't be fetched (an old tab after a deploy; tried as a
 404 and as the index.html a built Bekci serves for a missing file), it says "Help could not load:
 reload the page." and the page keeps working.
+
+`explain-rule.test.mjs` covers `explainRule`, `outageDelay` and `failCountTimeline` in `src/help/explainRule.js`
+(pure functions, Node only, no browser). It pins the plain-words reading of a rule: the opening (with
+"This target" for an empty name), one sentence per group (AND "have both", OR "any one of", the last
+condition's operator winning), the subject and verb per check type for Status equals down and up (TCP
+refused or accepted, swapped by Port must stay closed), the count phrase and the delay line in minutes or
+seconds, and the fallback wording for a field or comparator the form doesn't offer. It also pins each
+false-alarm check's text, level and order (no-recipient is a neutral note), the Fail Count lane labels
+and summary, and that a name like `<b>x</b>` comes back unchanged as a plain string.
