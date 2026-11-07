@@ -59,6 +59,10 @@ Value is a number from 0 to 100, and the hint gives the steps for the Ping Count
 greater than 30 = 1 or more lost). Leaving ping resets the rule to Status equals down. Response (ms)
 gets the same greater than / number rule, also for a saved rule whose value is not a number.
 
+`condition-rules.test.mjs` (Node only, no browser) pins the target form's pure validation rules in
+`src/conditionRules.js`: the TCP default config, the failure-window minimum and its error text, the
+number check for Response (ms) and Packet loss (%), and the packet-loss hint.
+
 `targets-tag-filter.test.mjs` covers the Targets filter bar: a Tags chip has only its Remove button
 (no pin), and tags, Location and Project combine so each one narrows the list; removing a chip
 widens it again.
