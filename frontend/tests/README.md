@@ -11,6 +11,11 @@ CHROME_PATH=/path/to/chromium npm run test:ui
 Tests start and stop their own Vite server and browser. All API calls use fixture
 responses; no backend service or credentials are needed and no live data changes.
 
+Run the files one at a time for a full run: `node --test --test-concurrency=1 tests/*.test.mjs`
+(or one file: `node --test --test-concurrency=1 tests/<file>.test.mjs`). `npm run test:ui` runs
+them in parallel, and parallel files share Vite's dependency cache, which can make them fail or hang
+when Vite rebuilds it (`ENOTEMPTY … deps_temp_*`).
+
 `failure-window.test.mjs` covers SR-13's descriptive native browser popup on Save,
 the submission guard, corrections, existing invalid edits/clones and single-failure
 checks. Save stays clickable for invalid thresholds. Set `SR13_SCREENSHOT_PATH`

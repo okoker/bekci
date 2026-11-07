@@ -165,18 +165,32 @@ The public landing page (the "Sentinel" design) lives in `_website/` (`index.htm
 Versions above are the `package.json` ranges. `package-lock.json` resolves vue 3.5.28 and @vitejs/plugin-vue 6.0.4; every other package resolves to the version shown.
 
 ### Frontend Build Output
-Measured from the build in `cmd/bekci/frontend_dist/assets/` on 07/11/2026 (A-071 packet-loss rule field, after v3.4.6) (raw bytes; gzip -9; kB = 1000 bytes). Figures change with every frontend build.
+Measured from the build in `cmd/bekci/frontend_dist/assets/` on 07/11/2026 (v3.5.0, in-app help) (raw bytes; gzip -9; kB = 1000 bytes). Figures change with every frontend build.
 
 | Asset | Size (raw) | Size (gzipped) |
 |-------|-----------|----------------|
-| index-*.js | 315.80 kB | 101.04 kB |
-| index-*.css | 49.56 kB | 9.03 kB |
-| SearchView-*.js | 15.65 kB | 5.39 kB |
+| index-*.js (main, the one `index.html` loads) | 332.53 kB | 106.21 kB |
+| index-*.css | 54.61 kB | 10.04 kB |
+| SearchView-*.js | 16.04 kB | 5.48 kB |
 | SearchView-*.css | 5.69 kB | 1.58 kB |
-| SlaView-*.js | 239.72 kB | 82.91 kB |
+| SlaView-*.js | 239.93 kB | 82.97 kB |
 | SlaView-*.css | 3.72 kB | 1.11 kB |
 
 SearchView and SlaView are lazy-loaded (code-split). Lazy-loading SlaView keeps its ~240 kB chunk (SLA view + Chart.js) out of the main bundle; it loads on demand.
+
+**In-app help chunks** (all lazy; see `reference/in_app_help.md`). The main bundle holds only the help state (`useHelp.js`), `anchors.js`, `applyConditions.js` and the target form's own help parts; from v3.4.6's build it grew 16.73 kB raw / 5.16 kB gzipped. The rest loads the first time help, the recipes window or the lesson is opened, and never on the SOC wall.
+
+| Asset | Size (raw) | Size (gzipped) | Holds |
+|-------|-----------|----------------|-------|
+| index-*.js (named after `help/content/index.js`) | 34.71 kB | 11.80 kB | every page's notes |
+| HelpLayer-*.js / .css | 13.83 kB / 4.89 kB | 5.52 kB / 1.39 kB | marks, notes, leader lines |
+| HelpBar-*.js / .css | 1.61 kB / 0.72 kB | 0.86 kB / 0.39 kB | the help bar |
+| RuleCard-*.js / .css | 1.97 kB / 2.35 kB | 1.00 kB / 0.77 kB | the plain-words card |
+| explainRule-*.js | 7.40 kB | 3.24 kB | the rule reading, shared by the card and the lesson |
+| RecipesWindow-*.js / .css | 18.24 kB / 6.71 kB | 6.63 kB / 1.69 kB | the recipes window and the 12 recipes |
+| RuleDiagram-*.js / .css | 1.16 kB / 1.03 kB | 0.70 kB / 0.44 kB | the rule diagram |
+| LessonPanel-*.js / .css | 6.75 kB / 4.98 kB | 2.94 kB / 1.32 kB | the rule lesson |
+| version-*.js | 0.03 kB | 0.07 kB | `HELP_VERSION` |
 
 ### SOC Page Performance
 - **Poll interval:** 30 seconds (status refresh only; history loaded on page load/navigation, not polls)

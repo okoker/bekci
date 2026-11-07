@@ -1560,7 +1560,7 @@ Public liveness check.
 ```json
 {
   "status": "ok",
-  "version": "1.2.0"
+  "version": "3.5.0"
 }
 ```
 
@@ -1571,7 +1571,7 @@ Returns network connectivity (ICMP ping to 1.1.1.1), disk usage, CPU load, and s
 **Response (200):**
 ```json
 {
-  "version": "3.3.1",
+  "version": "3.5.0",
   "net": {
     "status": "ok",
     "latency_ms": 12
@@ -1609,7 +1609,7 @@ Admin-only details for **Settings > System Health**. Kept separate from `/api/sy
   "cpu": { "load1": 0.03, "load5": 0.01, "load15": 0, "num_cpu": 2 },
   "uptime": { "system_sec": 9258214, "process_sec": 1820 },
   "server_ip": "192.0.2.20",
-  "version": "3.4.2",
+  "version": "3.5.0",
   "build": { "commit": "19b66d6", "time": "2026-10-07T01:00:00Z" },
   "go_version": "go1.27.1",
   "database": { "status": "ok", "size_bytes": 438202368, "wal_bytes": 65227872, "schema_version": 27 },
