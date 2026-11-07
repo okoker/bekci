@@ -99,6 +99,14 @@ const parsed = conditions => conditions.map(c => ({ ...c, config: JSON.parse(c.c
 // Lets Vue update and any request leave
 const settle = page => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
 
+// The element with focus: inside the recipes window, on "Start from a recipe", or neither
+const focusIs = page => page.evaluate(() => {
+  const el = document.activeElement
+  if (el?.closest('.recipes-window')) return 'window'
+  if (el?.textContent === 'Start from a recipe') return 'start'
+  return `${el?.tagName}.${el?.className}`
+})
+
 // A field's validity as the browser sees it on Save
 const validity = locator => locator.evaluate(el => ({
   message: el.validationMessage, customError: el.validity.customError, focused: el === document.activeElement,
@@ -266,6 +274,9 @@ test('the diagram: groups in blue boxes, AND between conditions, slate OR pills 
   assert.deepEqual(await w.locator('.rd-chip.is-passing').allInnerTexts(), ['Internet canary\nlatest check'])
   assert.equal(await w.locator('.rd-chip.is-passing').evaluate(el => getComputedStyle(el).backgroundColor), 'rgb(240, 253, 244)')
   assert.equal(await w.locator('.recipe-legend').innerText(), legend)
+  // The legend's swatch is the green chip it explains: its fill and its border
+  const look = el => [getComputedStyle(el).backgroundColor, getComputedStyle(el).borderTopColor]
+  assert.deepEqual(await w.locator('.recipe-legend-swatch').evaluate(look), await w.locator('.rd-chip.is-passing').evaluate(look))
   // A field the person fills in shows as its placeholder, marked in turquoise
   assert.deepEqual(await w.locator('.recipe-table .recipe-need').allInnerTexts(), ['your public address', 'your public address'])
 
@@ -416,6 +427,8 @@ test('Edit with 2 conditions: asks first; Cancel keeps them; Replace replaces; U
   await ask.getByRole('button', { name: 'Replace', exact: true }).click()
   await ask.waitFor({ state: 'detached' })
   await banner(modal).waitFor()
+  await page.waitForFunction(() => document.activeElement?.textContent === 'Start from a recipe', null, { timeout: 2000 })
+    .catch(async () => assert.fail(`focus back on "Start from a recipe" after Replace, not ${await focusIs(page)}`))
   assert.deepEqual(await names(), ['Remote desktop port'])
   assert.equal(await condField(modal, 'Port').inputValue(), '3389')
 
@@ -438,9 +451,11 @@ test('✕, Close and Esc close the window and change nothing in the form', async
   }
   for (const [name, close] of Object.entries(closers)) {
     await openRecipes(modal)
+    assert.equal(await focusIs(page), 'window', `${name}: focus goes into the window`)
     await pick(page, 'S3')
     await close()
     await win(page).waitFor({ state: 'detached' })
+    assert.equal(await focusIs(page), 'start', `${name}: focus back on "Start from a recipe"`)
     assert.equal(await confirmBox(page).count(), 0, `${name}: nothing asked`)
     assert.equal(await banner(modal).count(), 0, `${name}: no banner`)
     assert.equal(await cards(modal).count(), 2, `${name}: the form's conditions stay`)
@@ -483,9 +498,10 @@ test('with help on, the window and the replace question hide the form\'s marks; 
   await page.waitForFunction(() => document.querySelectorAll('.help-mark').length === 0, null, { timeout: 2000 })
   await confirmBox(page).getByRole('button', { name: 'Cancel', exact: true }).click()
   await marks.first().waitFor()
+  await page.waitForFunction(() => document.activeElement?.textContent === 'Start from a recipe', null, { timeout: 2000 })
+    .catch(async () => assert.fail(`focus back on "Start from a recipe" after Cancel, not ${await focusIs(page)}`))
 
   // The next Esc turns help off
-  await startButton(modal).focus()
   await page.keyboard.press('Escape')
   await page.locator('.help-bar').first().waitFor({ state: 'detached' })
   assert.equal(await page.locator('.help-bar').count(), 0)
@@ -555,5 +571,67 @@ test('when the recipes code cannot be fetched, the window says to reload, Close 
     await condField(modal, 'Check Name').fill('Ping')
     const body = await save(modal, writes, 'POST')
     assert.equal(body.conditions.length, 1, file)
+  }
+})
+
+test('ruling R17: one condition in the form is asked about in the singular', async t => {
+  const { page, modal } = await openForm(t)
+  await useRecipe(modal, 'B1')
+  await banner(modal).waitFor()
+  await useRecipe(modal, 'S3')
+  const ask = confirmBox(page)
+  await ask.waitFor()
+  assert.equal(await ask.locator('.recipe-confirm-text').innerText(),
+    'Replace the 1 condition in this form with this recipe? On a saved target, Save then deletes the replaced checks and their history, SLA included.')
+  await ask.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await ask.waitFor({ state: 'detached' })
+})
+
+test('a recipe can\'t be used while Edit or Clone is still loading the target; once its conditions show, it works and Undo brings them back', async t => {
+  for (const button of ['Edit', 'Clone']) {
+    const { page, writes } = await openPage(t, app, '/targets', {
+      role: 'operator', viewport: { width: 1440, height: 900 }, delays: { '/api/targets/t2': 1500 },
+    })
+    const row = page.locator('tbody tr', { hasText: 'Web shop' })
+    await row.waitFor()
+    await row.getByRole('button', { name: button, exact: true }).click()
+    const modal = page.locator('.modal-overlay').filter({ has: page.locator('.modal-wide') }).locator('.modal-card')
+    await modal.waitFor()
+    // Still loading: no conditions yet, and "Start from a recipe" can't be pressed
+    assert.equal(await cards(modal).count(), 0, `${button}: still loading`)
+    assert.equal(await startButton(modal).isDisabled(), true, `${button}: "Start from a recipe" waits for the target`)
+    await settle(page)
+    assert.equal(await cards(modal).count(), 0, `${button}: still loading`)
+    assert.equal(await startButton(modal).isDisabled(), true, `${button}: still waiting`)
+    // Opened some other way meanwhile (as the plain-words card will), the window can't fill the
+    // form: the form registers itself only once loaded. (The app's own help state, from Vite.)
+    await page.evaluate(async () => (await import('/src/help/useHelp.js')).openRecipes())
+    await win(page).waitFor()
+    assert.equal(await useButton(page).count(), 0, `${button}: no "Use this recipe" while the form loads`)
+    await page.keyboard.press('Escape')
+    await win(page).waitFor({ state: 'detached' })
+    assert.equal(await cards(modal).count(), 0, `${button}: still loading after the window closed`)
+
+    // Loaded: it works, asks about the 2 conditions it loaded, and Undo puts those back
+    await cards(modal).nth(1).waitFor()
+    assert.equal(await startButton(modal).isDisabled(), false, `${button}: usable once loaded`)
+    await useRecipe(modal, 'S3')
+    const ask = confirmBox(page)
+    await ask.waitFor()
+    assert.match(await ask.locator('.recipe-confirm-text').innerText(), /^Replace the 2 conditions in this form/)
+    await ask.getByRole('button', { name: 'Replace', exact: true }).click()
+    await banner(modal).waitFor()
+    assert.equal(await cards(modal).count(), 1)
+    await banner(modal).getByRole('button', { name: 'Undo', exact: true }).click()
+    await banner(modal).waitFor({ state: 'detached' })
+    assert.equal(await cards(modal).count(), 2, `${button}: Undo brings back the loaded conditions`)
+    if (button === 'Edit') {
+      const body = await save(modal, writes, 'PUT')
+      assert.deepEqual(body.conditions, EDIT_CONDITIONS, 'the loaded conditions, check ids included')
+    } else {
+      await topField(modal, 'Host').fill('copy.example.com')
+      const body = await save(modal, writes, 'POST')
+      assert.deepEqual(body.conditions, EDIT_CONDITIONS.map(({ check_id, ...c }) => c), 'the cloned conditions, as new checks')
+    }
   }
 })

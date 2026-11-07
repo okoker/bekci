@@ -363,7 +363,7 @@ onBeforeUnmount(() => {
   height: 12px;
   border: 1px solid #86efac;
   border-radius: 4px;
-  background: #bbf7d0;
+  background: #f0fdf4; /* the green chip it explains (RuleDiagram .rd-chip.is-passing) */
 }
 
 .recipe-boxes {

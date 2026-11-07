@@ -214,9 +214,14 @@ const recipientCount = computed(() => (allUsersError.value
 // (store/targets.go UpdateTargetWithConditions; ON DELETE CASCADE). Nothing is
 // sent until Save, and Undo puts back what the form had.
 const conditionsSection = ref(null)
+const recipeStart = ref(null)
 const recipeCancel = ref(null)
 const pendingRecipe = ref(null) // the recipe waiting for Replace or Cancel
 const recipeBanner = ref(null)  // after a recipe went in: { name, fill, previous } (previous is for Undo)
+// Edit and Clone load the target into the form, replacing it whole. Until that is
+// done a recipe can't be used: it would be overwritten, and Undo would bring back
+// the form from before the load.
+const loading = ref(false)
 
 function useRecipe(recipe) {
   if (form.value.conditions.length) {
@@ -227,6 +232,9 @@ function useRecipe(recipe) {
   }
 }
 
+// Focus goes back to "Start from a recipe" when the question closes (its buttons go with it)
+const backToRecipeStart = () => nextTick(() => recipeStart.value?.focus({ preventScroll: true }))
+
 // applyConditions replaces the conditions (never merges) with copies of the
 // recipe's, sets Preferred Check, and returns what the form had
 function putRecipe(recipe) {
@@ -234,6 +242,12 @@ function putRecipe(recipe) {
   const previous = applyConditions(form.value, recipe.conditions, recipe.preferred, recipe.needs)
   recipeBanner.value = { name: recipe.name, fill: recipe.needs.length > 0, previous }
   nextTick(() => conditionsSection.value?.scrollIntoView({ block: 'start' }))
+  backToRecipeStart()
+}
+
+function cancelRecipe() {
+  pendingRecipe.value = null
+  backToRecipeStart()
 }
 
 // The conditions and Preferred Check from before the recipe, check ids
@@ -245,8 +259,10 @@ function undoRecipe() {
   recipeBanner.value = null
 }
 
-watch(() => props.show, (open) => {
-  if (open) help.formApply = useRecipe
+// The window's "Use this recipe" button can fill this form only while it is open
+// and has finished loading
+watch(() => props.show && !loading.value, (ready) => {
+  if (ready) help.formApply = useRecipe
   else if (help.formApply === useRecipe) help.formApply = null
 })
 onUnmounted(() => {
@@ -357,18 +373,23 @@ watch(() => props.show, async (val) => {
   recipeBanner.value = null
   loadAllUsers()
   loadTagOptions()
-  if (props.targetId) {
-    await loadTargetDetail(props.targetId)
-  } else if (props.cloneSourceId) {
-    await loadTargetDetail(props.cloneSourceId)
-    // Clear IDs so save creates new target + new checks
-    form.value.name = 'Clone of ' + form.value.name
-    form.value.host = ''
-    form.value.conditions = form.value.conditions.map(c => ({ ...c, check_id: '' }))
-    selectedRecipients.value = []
-  } else {
-    form.value = getEmptyForm()
-    selectedRecipients.value = []
+  loading.value = true
+  try {
+    if (props.targetId) {
+      await loadTargetDetail(props.targetId)
+    } else if (props.cloneSourceId) {
+      await loadTargetDetail(props.cloneSourceId)
+      // Clear IDs so save creates new target + new checks
+      form.value.name = 'Clone of ' + form.value.name
+      form.value.host = ''
+      form.value.conditions = form.value.conditions.map(c => ({ ...c, check_id: '' }))
+      selectedRecipients.value = []
+    } else {
+      form.value = getEmptyForm()
+      selectedRecipients.value = []
+    }
+  } finally {
+    loading.value = false
   }
 })
 </script>
@@ -469,7 +490,7 @@ watch(() => props.show, async (val) => {
           <div class="conditions-header">
             <strong data-help="targetForm.groups">Condition Groups</strong>
             <span class="conditions-buttons">
-              <button type="button" class="btn btn-sm btn-recipe" @click="openRecipes">Start from a recipe</button>
+              <button ref="recipeStart" type="button" class="btn btn-sm btn-recipe" :disabled="loading" @click="openRecipes">Start from a recipe</button>
               <button type="button" class="btn btn-sm btn-primary" data-help="targetForm.addgroup" @click="addGroup">+ Add Group or Condition</button>
             </span>
           </div>
@@ -750,12 +771,12 @@ watch(() => props.show, async (val) => {
 
     <!-- Asked before a recipe replaces the form's conditions (design §4.7). A
          dialog scope, so help's marks for the form under it are not drawn. -->
-    <div v-if="pendingRecipe" class="recipe-confirm" data-help-scope="dialog" @click.self="pendingRecipe = null">
+    <div v-if="pendingRecipe" class="recipe-confirm" data-help-scope="dialog" @click.self="cancelRecipe">
       <div class="recipe-confirm-card" role="alertdialog" aria-modal="true" aria-labelledby="recipe-confirm-text">
         <p id="recipe-confirm-text" class="recipe-confirm-text">Replace the {{ form.conditions.length }} condition{{ form.conditions.length === 1 ? '' : 's' }} in this form with this recipe? On a saved target, Save then deletes the replaced checks and their history, SLA included.</p>
         <div class="recipe-confirm-actions">
           <button type="button" class="btn btn-danger" @click="putRecipe(pendingRecipe)">Replace</button>
-          <button ref="recipeCancel" type="button" class="btn" @click="pendingRecipe = null">Cancel</button>
+          <button ref="recipeCancel" type="button" class="btn" @click="cancelRecipe">Cancel</button>
         </div>
       </div>
     </div>

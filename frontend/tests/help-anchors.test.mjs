@@ -93,7 +93,7 @@ const staticImports = file => [...readFileSync(file, 'utf8').matchAll(STATIC_IMP
 // one help module in the main bundle) and anchors.js (plain data a view may need).
 const IMPORTABLE = ['useHelp.js', 'anchors.js', 'applyConditions.js']
 
-test('outside src/help/, only useHelp.js and anchors.js are imported from it; the rest loads on first use', () => {
+test('outside src/help/, only useHelp.js, anchors.js and applyConditions.js are imported from it; the rest loads on first use', () => {
   const offending = []
   for (const file of sources.filter(file => !file.startsWith(helpDir))) {
     for (const spec of staticImports(file)) {

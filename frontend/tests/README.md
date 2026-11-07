@@ -209,6 +209,11 @@ no conditions, the form scrolled to Condition Groups) and the POST sends exactly
 needs the service's port here." until 22 is typed (the marking clears with a value), also when the browser's
 own check is bypassed; S4 refuses the admin path `admin` and sends `/admin`. Edit with two conditions asks
 "Replace the 2 conditions in this form with this recipe? …" first: Cancel keeps them, Replace replaces, and
-Undo puts the originals back so the PUT sends their check ids. No POST or PUT carries a `needs` key. Changing a
-recipe check's type drops its fields to fill in; when the window's code can't be fetched, it says to reload and
-Close closes it; nothing is orange. `needError` and `needOf` are also checked in Node.
+Undo puts the originals back so the PUT sends their check ids; one condition is asked about in the singular
+("Replace the 1 condition …"). While Edit or Clone is still loading the target (its answer held back), "Start
+from a recipe" is disabled and a window opened another way has no "Use this recipe"; once the conditions show
+it works, and Undo brings back the loaded ones. Focus goes into the window when it opens, and back to "Start
+from a recipe" after ✕, Close, Esc, and the question's Replace or Cancel. No POST or PUT carries a `needs` key.
+Changing a recipe check's type drops its fields to fill in; when the window's code can't be fetched, it says to
+reload and Close closes it; nothing is orange, and the legend's swatch is the green chip it explains.
+`needError` and `needOf` are also checked in Node.
