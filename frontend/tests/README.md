@@ -180,3 +180,14 @@ second Chrome started without `--hide-scrollbars`) doesn't close it. Removing a 
 open keeps the note on its own condition (focus goes back to its mark) or closes it when that condition
 goes. Nothing in the card or the form's help is orange. Outside a field, a click on the control a note describes
 closes the note: the header's health dots (the popover opens) and a Dashboard row (its checks unfold).
+
+`recipes.test.mjs` pins the twelve ready-made alert rules (`src/help/recipes.js`) and `applyConditions`
+(`src/help/applyConditions.js`) in Node, with no browser. Every recipe condition has exactly the form's 12 keys
+and its type's config keys, passes the form's own fail-window and value checks, and has a unique check name;
+the PRIMARY check (first of the preferred type by name, in byte order) is the one the spec names; and the three
+fields left for the person (B3's port, S2's public address on two checks, S4's admin path) are empty with their
+exact messages. It spot-checks the settings (B4, S3, the S2 canary, C4) and asserts that `explainRule`, with the
+needs filled in, raises no warning for any recipe. `applyConditions` is shown to replace and never merge, return
+the previous conditions and Preferred Check for Undo, blank `check_id`, put `needs` on the condition and not in
+`config`, and give fresh copies each time: editing an applied condition (and the `needs` on it) leaves `recipes`
+unchanged.
