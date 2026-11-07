@@ -404,8 +404,8 @@ onUnmounted(() => {
 .help-note-pos { color: #64748b; white-space: nowrap; }
 
 /* Pictures of the app's own controls in a note's rows. Their classes are
-   scoped to the views (Targets, Search, Alerts), so the few that main.css
-   doesn't have are copied here, in the app's real colours. */
+   scoped to the views (Targets, Search, Alerts, the Audit Log), so the few
+   that main.css doesn't have are copied here, in the app's real colours. */
 .badge-paused { background: #e0e7ff; color: #4338ca; }
 .badge-firing { background: #fee2e2; color: #991b1b; }
 .badge-recovery { background: #dcfce7; color: #166534; }
@@ -413,6 +413,12 @@ onUnmounted(() => {
 .btn-pause { color: #4338ca; border-color: #c7d2fe; }
 .btn-unpause { color: #166534; border-color: #bbf7d0; }
 .btn-danger { color: #991b1b; border-color: #fca5a5; }
+.badge-action-auth { background: #dbeafe; color: #1d4ed8; }
+.badge-action-create { background: #dcfce7; color: #166534; }
+.badge-action-delete { background: #fee2e2; color: #991b1b; }
+.badge-action-default { background: #f1f5f9; color: #475569; }
+.status-ok { color: #16a34a; font-weight: 600; font-size: 0.8rem; }
+.status-fail { color: #dc2626; font-weight: 600; font-size: 0.8rem; }
 </style>
 
 <style>

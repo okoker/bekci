@@ -67,7 +67,7 @@ test('every help note has a ? anchor in a view, and every anchor has a note', as
   const notes = await contentIds()
   assert.ok(anchors.size > 0, 'no data-help anchor found in src/**/*.vue: the scan is broken')
   assert.ok(notes.length > 0, 'no help notes found in src/help/content: the scan is broken')
-  for (const id of anchors.keys()) assert.match(id, /^[a-zA-Z]+\.[a-zA-Z0-9]+$/, `data-help="${id}" is not <page>.<key>`)
+  for (const id of anchors.keys()) assert.match(id, /^[a-zA-Z][a-zA-Z0-9]*\.[a-zA-Z0-9]+$/, `data-help="${id}" is not <page>.<key>`)
   assert.deepEqual(notes.filter(id => !anchors.has(id)), [], 'notes no view anchors')
   assert.deepEqual([...anchors].filter(([id]) => !notes.includes(id)).map(([id, files]) => `${id} (${files.join(', ')})`), [],
     'anchors with no note')

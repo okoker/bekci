@@ -1,9 +1,9 @@
 // The help notes of the pages after the Dashboard (design in_app_help.md §7.3 and
-// §7.5-7.8): per page, which controls get a ? mark, that every mark opens a note
+// §7.5-7.11): per page, which controls get a ? mark, that every mark opens a note
 // with its title, that role-limited controls get no mark for people who can't see
 // them, that a page's own dialog hides the page's marks, and that help's own
 // chrome stays turquoise. The Dashboard and the header are in help-marks.test.mjs.
-// Task 6 adds Settings, Users and Audit Log here, a section each.
+// Sections: Targets, Search, SLA, Alerts, Profile, Audit Log, Users, Settings.
 import assert from 'node:assert/strict'
 import { after, before, test } from 'node:test'
 import { apiFixtures, moreTargets, openPage, orangeIn, startApp, stopApp, turnHelpOn } from './help-fixtures.mjs'
@@ -344,4 +344,283 @@ test('Profile as a viewer has the same marks', async t => {
   const { page } = await withHelp(t, '/profile', { role: 'viewer' }, page => page.locator('input[type=tel]').waitFor())
   await waitForMarks(page, PROFILE.length + HEADER.length)
   assert.deepEqual(await markIds(page), [...PROFILE.map(([id]) => id), ...HEADER])
+})
+
+// Waits until the marks on screen are exactly `ids` (in order); fails showing the difference.
+const waitForIds = (page, ids) => page.waitForFunction(ids => JSON.stringify(
+  [...document.querySelectorAll('.help-mark')].map(e => e.dataset.helpMark)) === JSON.stringify(ids), ids, { timeout: 2000 })
+  .catch(async () => assert.deepEqual(await markIds(page), ids))
+const idsOf = list => list.map(([id]) => id)
+
+// ── Audit Log ────────────────────────────────────────────────────────────────
+
+const AUDIT = [['auditLog.audit', 'Events'], ['auditLog.q', 'Search'], ['auditLog.user', 'User'],
+  ['auditLog.action', 'Action'], ['auditLog.res', 'Resource'], ['auditLog.status', 'Status'], ['auditLog.ip', 'IP'],
+  ['auditLog.row', 'Audit entries']]
+const auditReady = page => page.locator('.audit-row').first().waitFor()
+
+// One entry per colour of the Action column, and a failure
+const auditFixture = () => {
+  const entry = (id, username, action, status) => ({
+    id, user_id: `u-${username}`, username, action, resource_type: 'user', resource_id: 'a1b2c3d4-0000-4000-8000-000000000000',
+    detail: '', ip_address: '192.0.2.10', status, created_at: new Date(Date.now() - id * 60_000).toISOString(),
+  })
+  const entries = [entry(1, 'admin', 'login', 'success'), entry(2, 'mallory', 'login_failed', 'failure'),
+    entry(3, 'admin', 'create_user', 'success'), entry(4, 'admin', 'delete_tag', 'success'),
+    entry(5, 'operator', 'pause_target', 'success')]
+  return { entries, total: entries.length, page: 1, limit: 50 }
+}
+
+test('Audit Log as an operator: the bar says what it is; a mark for the count, the search box, each column and the first row', async t => {
+  const { page } = await withHelp(t, '/audit-log', {}, auditReady)
+  assert.match(await bar(page), /^Audit Log is a read-only record of who did what and when/)
+  await checkMarks(page, AUDIT)
+})
+
+test('Audit Log: the Action note draws the table\'s badge colours, the Status note its words', async t => {
+  const { page } = await withHelp(t, '/audit-log', { fixtures: { '/api/audit-log': auditFixture() } }, auditReady)
+  const colours = el => `${getComputedStyle(el).backgroundColor} ${getComputedStyle(el).color}`
+  await mark(page, 'auditLog.action').click()
+  await waitForTitle(page, 'Action')
+  for (const action of ['login_failed', 'login', 'create_user', 'delete_tag', 'pause_target']) {
+    const drawn = note(page).locator('.help-note-row .badge', { hasText: new RegExp(`^${action}$`) })
+    const table = page.locator('tbody .badge', { hasText: new RegExp(`^${action}$`) })
+    assert.equal(await drawn.evaluate(colours), await table.evaluate(colours), action)
+  }
+  const background = action => note(page).locator('.badge', { hasText: new RegExp(`^${action}$`) })
+    .evaluate(el => getComputedStyle(el).backgroundColor)
+  assert.equal(await background('login_failed'), 'rgb(254, 226, 226)', 'login_failed is red')
+  assert.equal(await background('login'), 'rgb(219, 234, 254)', 'login is blue')
+  await page.keyboard.press('Escape')
+  await note(page).waitFor({ state: 'detached' })
+  await mark(page, 'auditLog.status').click()
+  await waitForTitle(page, 'Status')
+  for (const status of ['success', 'failure']) {
+    const drawn = note(page).locator('.help-note-control > span', { hasText: new RegExp(`^${status}$`) })
+    const table = page.locator('tbody td > span', { hasText: new RegExp(`^${status}$`) }).first()
+    assert.equal(await drawn.evaluate(colours), await table.evaluate(colours), status)
+  }
+  assert.equal(await note(page).locator('.status-fail').evaluate(el => getComputedStyle(el).color), 'rgb(220, 38, 38)')
+})
+
+test('Audit Log: an entry\'s window hides the page\'s marks; closing it brings them back', async t => {
+  const { page } = await withHelp(t, '/audit-log', {}, auditReady)
+  const marks = AUDIT.length + HEADER.length
+  await waitForMarks(page, marks)
+  await page.locator('.audit-row .detail-cell').first().click()
+  await page.locator('.modal-card h3', { hasText: 'Audit Event' }).waitFor()
+  await waitForMarks(page, 0)
+  assert.equal(await page.locator('[aria-label^="Help: "]').count(), 0, 'no mark over the entry')
+  await page.locator('.modal-card .modal-close').click()
+  await waitForMarks(page, marks)
+})
+
+test('Audit Log is for operators and admins: a viewer is sent to the Dashboard and has no Audit Log marks', async t => {
+  const { page } = await openPage(t, app, '/audit-log', { role: 'viewer' })
+  await page.locator('.target-card').first().waitFor()
+  assert.equal(new URL(page.url()).pathname, '/')
+  await turnHelpOn(page)
+  await mark(page, 'header.user').waitFor()
+  assert.deepEqual((await markIds(page)).filter(id => id.startsWith('auditLog.')), [])
+})
+
+// ── Users ────────────────────────────────────────────────────────────────────
+
+const USERS = [['users.create', 'Create User'], ['users.role', 'Role'], ['users.status', 'Status'], ['users.edit', 'Edit'],
+  ['users.suspend', 'Suspend and Activate'], ['users.priv', 'Role privileges']]
+const API_ACCESS = [['apiAccess.name', 'Token name'], ['apiAccess.prefix', 'Prefix'], ['apiAccess.used', 'Last used'],
+  ['apiAccess.revoke', 'Revoke']]
+const usersReady = page => page.locator('tbody tr', { hasText: 'operator@example.com' }).waitFor()
+const tokensReady = page => page.locator('tbody tr', { hasText: 'grafana' }).waitFor()
+
+test('Users: the bar says what Humans is for; a mark for Create User, the role and status badges, Edit, Suspend and the privileges', async t => {
+  const { page } = await withHelp(t, '/users', { role: 'admin' }, usersReady)
+  assert.match(await bar(page), /^Users is where admins create accounts/)
+  await checkMarks(page, USERS)
+  await mark(page, 'users.role').click()
+  await waitForTitle(page, 'Role')
+  // The role badges are the table's own
+  const drawn = await note(page).locator('.badge', { hasText: /^operator$/ }).evaluate(el => getComputedStyle(el).backgroundColor)
+  assert.equal(drawn, await page.locator('tbody .badge', { hasText: /^operator$/ }).evaluate(el => getComputedStyle(el).backgroundColor))
+})
+
+test('Users: the API Access sub-tab swaps the summary and the marks, each opens its note; Humans swaps them back', async t => {
+  const { page } = await withHelp(t, '/users', { role: 'admin' }, usersReady)
+  await waitForIds(page, [...idsOf(USERS), ...HEADER])
+  await page.getByRole('button', { name: 'API Access', exact: true }).click()
+  await page.locator('.help-bar[data-for-page="apiAccess"]').waitFor()
+  assert.match(await bar(page), /^API Access issues tokens that let other systems, such as Grafana or Zabbix, read Bekci's machine API/)
+  await tokensReady(page)
+  await checkMarks(page, API_ACCESS)
+  await page.getByRole('button', { name: 'Humans', exact: true }).click()
+  await page.locator('.help-bar[data-for-page="users"]').waitFor()
+  assert.match(await bar(page), /^Users is where admins create accounts/)
+  await waitForIds(page, [...idsOf(USERS), ...HEADER])
+})
+
+test('API Access: a new token\'s card gets the New token mark', async t => {
+  const plaintext = `bk_${'9f8e7d6c'.repeat(8)}`
+  const { page, writes } = await withHelp(t, '/users', {
+    role: 'admin',
+    fixtures: { 'POST /api/api-tokens': { token: { id: 'k2', name: 'zabbix', prefix: plaintext.slice(0, 11) }, plaintext } },
+  }, async page => {
+    await usersReady(page)
+    await page.getByRole('button', { name: 'API Access', exact: true }).click()
+    await tokensReady(page)
+  })
+  await waitForIds(page, [...idsOf(API_ACCESS), ...HEADER])
+  await page.locator('.page-header .btn', { hasText: 'Create Token' }).click()
+  await page.getByPlaceholder('e.g. grafana-prod, zabbix-dr').fill('zabbix')
+  await page.locator('form .btn', { hasText: /^Create$/ }).click()
+  await page.locator('.token-reveal').waitFor()
+  await waitForIds(page, ['apiAccess.once', ...idsOf(API_ACCESS), ...HEADER])
+  await mark(page, 'apiAccess.once').click()
+  await waitForTitle(page, 'New token')
+  assert.match(await note(page).innerText(), /shown this once/)
+  assert.deepEqual(writes, [{ method: 'POST', path: '/api/api-tokens', body: { name: 'zabbix' } }])
+})
+
+test('Users: the Edit and Suspend windows hide the page\'s marks; they come back when it closes', async t => {
+  const { page, writes } = await withHelp(t, '/users', { role: 'admin' }, usersReady)
+  const marks = USERS.length + HEADER.length
+  await dialogHidesMarks(page, 'tbody .actions', 'Edit', 'Edit admin', marks)
+  await dialogHidesMarks(page, 'tbody .actions', 'Suspend', 'Suspend admin?', marks)
+  assert.deepEqual(writes, [], 'Cancel changes nothing')
+})
+
+test('Users and Settings are for admins: an operator is sent to the Dashboard and has none of their marks', async t => {
+  for (const path of ['/users', '/settings']) {
+    const { page } = await openPage(t, app, path, { role: 'operator' })
+    await page.locator('.target-card').first().waitFor()
+    assert.equal(new URL(page.url()).pathname, '/', path)
+    await turnHelpOn(page)
+    await mark(page, 'header.user').waitFor()
+    assert.deepEqual((await markIds(page)).filter(id => /^(users|apiAccess|settings)/.test(id)), [], path)
+  }
+})
+
+// ── Settings ─────────────────────────────────────────────────────────────────
+
+const GENERAL = [['settingsGeneral.session', 'Session Timeout'], ['settingsGeneral.history', 'History Retention'],
+  ['settingsGeneral.auditret', 'Audit Log Retention'], ['settingsGeneral.copies', 'Backup Copies to Keep'],
+  ['settingsGeneral.soc', 'SOC View Public Access'], ['settingsGeneral.rate', 'API Rate Limit'],
+  ['settingsGeneral.snmp', 'SNMP Credentials']]
+const TAGS = [['settingsTags.free', 'Free Tags'], ['settingsTags.proj', 'Project and Location Tags'],
+  ['settingsTags.cat', 'Categories']]
+const SLA_GOALS = [['settingsSla.goal', 'Category goal'], ['settingsSla.save', 'Save'], ['settingsSla.guide', 'Badge guide']]
+const ALERTING = [['settingsAlerting.method', 'Alert Method'], ['settingsAlerting.cool', 'Cooldown'],
+  ['settingsAlerting.realert', 'Re-alert Interval'], ['settingsAlerting.sections', 'Save (each section)'],
+  ['settingsAlerting.system', 'System Alerts']]
+const BACKUP = [['settingsBackup.auto', 'Automated Backups'], ['settingsBackup.config', 'Download Config Backup'],
+  ['settingsBackup.full', 'Full Database Backup'], ['settingsBackup.restore', 'Config Restore']]
+const FAIL2BAN = [['settingsFail2ban.refresh', 'Updated and Refresh'], ['settingsFail2ban.active', 'Active Bans'],
+  ['settingsFail2ban.total', 'Bans (total)'], ['settingsFail2ban.failed', 'Failed (window) and (total)']]
+const HEALTH = [['settingsHealth.refresh', 'Refresh'], ['settingsHealth.disk', 'Disk Space'],
+  ['settingsHealth.load', 'CPU Load'], ['settingsHealth.updates', 'OS Updates'], ['settingsHealth.backup', 'Last Backup'],
+  ['settingsHealth.sched', 'Scheduler'], ['settingsHealth.email', 'Email']]
+
+// tab: [page id, the bar's summary, its marks, what shows once its data is in]
+const SETTINGS_TABS = {
+  'General': ['settingsGeneral', /^General settings are the system-wide limits: how long sign-ins last/, GENERAL,
+    page => page.locator('input[type=number]').first().waitFor()],
+  'Tags': ['settingsTags', /^Tags are the pick-lists used to label targets/, TAGS,
+    page => page.locator('.tag-item').first().waitFor()],
+  'SLA': ['settingsSla', /^SLA goals set the uptime each category should reach over 90 days/, SLA_GOALS,
+    page => page.locator('.sla-input').first().waitFor()],
+  'Alerting': ['settingsAlerting', /^Alerting sets how Bekci tells people a target went down or recovered/, ALERTING,
+    page => page.locator('.collapsible-body.open select').first().waitFor()],
+  'Backup & Restore': ['settingsBackup', /^Backup & Restore schedules automatic backups/, BACKUP,
+    page => page.getByRole('button', { name: 'Download Config Backup', exact: true }).waitFor()],
+  'Fail2Ban': ['settingsFail2ban', /^Fail2Ban is a read-only view of the server's fail2ban jails/, FAIL2BAN,
+    page => page.locator('.f2b-summary-table').waitFor()],
+  'System Health': ['settingsHealth', /^System Health shows the health of the server running Bekci/, HEALTH,
+    page => page.locator('.sh-grid').first().waitFor()],
+}
+const tabButton = (page, tab) => page.locator('.tabs').getByRole('button', { name: tab, exact: true })
+const settingsTab = tab => async page => {
+  await tabButton(page, 'General').waitFor()
+  if (tab !== 'General') await tabButton(page, tab).click()
+  await SETTINGS_TABS[tab][3](page)
+}
+
+for (const [tab, [, summary, marks]] of Object.entries(SETTINGS_TABS)) {
+  test(`Settings › ${tab}: the bar says what the tab is for; a mark for each documented control, each opens its note`, async t => {
+    const { page } = await withHelp(t, '/settings', { role: 'admin' }, settingsTab(tab))
+    assert.match(await bar(page), summary)
+    await checkMarks(page, marks)
+  })
+}
+
+test('Settings: switching tab while help is on swaps the summary and the marks; Fail2Ban and System Health have a Refresh each', async t => {
+  const { page } = await withHelp(t, '/settings', { role: 'admin' }, settingsTab('General'))
+  for (const tab of ['General', 'Tags', 'Fail2Ban', 'System Health', 'SLA', 'General']) {
+    const [id, summary, marks, ready] = SETTINGS_TABS[tab]
+    await tabButton(page, tab).click()
+    await ready(page)
+    await page.locator(`.help-bar[data-for-page="${id}"]`).waitFor()
+    assert.match(await bar(page), summary, tab)
+    await waitForIds(page, [...idsOf(marks), ...HEADER])
+  }
+})
+
+const TEST_NOTE = 'Each test sends a real message. Test Email goes to the address in the box, or to your own Profile email '
+  + 'if the box is empty. Test Signal goes to the number in the box. Test Webhook sends a test event named \'Bekci Test\' '
+  + 'to the saved URL; a receiving system such as a SOAR may open a ticket for it, so tell its owners first. Every test '
+  + 'is recorded in the Audit Log.'
+const TEST_HINT = 'Uses the saved settings, not what is typed: save first.'
+
+test('Settings › Alerting: a closed section\'s fields have no marks until it opens; the test note is the agreed text, not the hint', async t => {
+  const { page } = await withHelp(t, '/settings', { role: 'admin' }, settingsTab('Alerting'))
+  const first = idsOf(ALERTING).slice(0, 4) // method, cooldown, re-alert, the first section's Save
+  const system = 'settingsAlerting.system'
+  await waitForIds(page, [...idsOf(ALERTING), ...HEADER])
+  const section = name => page.locator('.collapsible-header', { hasText: name })
+
+  // Email closed: no From mark; opened: From and the test button
+  await section('Email Alerting').click()
+  await waitForIds(page, [...first, 'settingsAlerting.from', 'settingsAlerting.test', system, ...HEADER])
+  await mark(page, 'settingsAlerting.test').click()
+  await waitForTitle(page, 'Send Test')
+  assert.equal((await note(page).locator('.help-note-text').allInnerTexts()).join(' '), TEST_NOTE)
+  assert.equal(await page.locator('.collapsible-body.open .test-hint').first().innerText(), TEST_HINT, 'the hint is on the page')
+  assert.ok(!(await note(page).innerText()).includes(TEST_HINT), 'the note does not repeat the hint')
+  await page.keyboard.press('Escape')
+  await note(page).waitFor({ state: 'detached' })
+  await section('Email Alerting').click()
+  await waitForIds(page, [...idsOf(ALERTING), ...HEADER])
+
+  // Signal, then Webhook, on their own: their fields, and their own test button
+  for (const [name, id, title] of [['Signal Alerting', 'settingsAlerting.signal', 'Signal fields'],
+    ['Webhook Alerting', 'settingsAlerting.hook', 'Webhook']]) {
+    await section(name).click()
+    await waitForIds(page, [...first, id, 'settingsAlerting.test', system, ...HEADER])
+    await mark(page, id).click()
+    await waitForTitle(page, title)
+    await page.keyboard.press('Escape')
+    await note(page).waitFor({ state: 'detached' })
+    await section(name).click()
+    await waitForIds(page, [...idsOf(ALERTING), ...HEADER])
+  }
+})
+
+test('Settings › Backup & Restore: opening Full Database Backup adds its marks; the restore dialog hides the marks', async t => {
+  const { page, writes } = await withHelp(t, '/settings', { role: 'admin' }, settingsTab('Backup & Restore'))
+  const marks = BACKUP.length + HEADER.length
+  await waitForIds(page, [...idsOf(BACKUP), ...HEADER])
+  const full = page.locator('.collapsible-header', { hasText: 'Full Database Backup' })
+  await full.click()
+  await waitForIds(page, ['settingsBackup.auto', 'settingsBackup.config', 'settingsBackup.full', 'settingsBackup.enc',
+    'settingsBackup.saved', 'settingsBackup.restore', ...HEADER])
+  for (const [id, title] of [['settingsBackup.enc', 'Encrypt backup'], ['settingsBackup.saved', 'Saved Backups']]) {
+    await mark(page, id).click()
+    await waitForTitle(page, title)
+    await page.keyboard.press('Escape')
+    await note(page).waitFor({ state: 'detached' })
+  }
+  await full.click()
+  await waitForIds(page, [...idsOf(BACKUP), ...HEADER])
+  // A config file chosen, Restore asks first in a window of the page's own
+  await page.locator('input[type=file]').setInputFiles({ name: 'bekci-config.json', mimeType: 'application/json', buffer: Buffer.from('{}') })
+  await dialogHidesMarks(page, '.restore-section', 'Restore from backup', 'Restore Backup', marks)
+  assert.deepEqual(writes.filter(w => w.path === '/api/backup/restore'), [], 'Cancel restores nothing')
 })

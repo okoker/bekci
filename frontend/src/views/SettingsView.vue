@@ -4,6 +4,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import api from '../api'
 import SystemHealthTab from '../components/SystemHealthTab.vue'
+import { settingsGeneralAnchors } from '../help/anchors.js'
 
 const props = defineProps({
   initialTab: { type: String, default: '' }
@@ -1182,6 +1183,7 @@ onUnmounted(() => {
       <button
         v-if="activeTab === 'users' && auth.isAdmin && usersSubTab === 'humans'"
         class="btn btn-primary"
+        data-help="users.create"
         @click="userShowCreate = !userShowCreate"
       >
         {{ userShowCreate ? 'Cancel' : 'Create User' }}
@@ -1252,6 +1254,7 @@ onUnmounted(() => {
                 v-if="boolSettings.has(key)"
                 v-model="settings[key]"
                 :disabled="!auth.isAdmin"
+                :data-help="'settingsGeneral.' + settingsGeneralAnchors[key]"
               >
                 <option value="true">Yes</option>
                 <option value="false">No</option>
@@ -1263,6 +1266,7 @@ onUnmounted(() => {
                 min="1"
                 :max="key === 'backup_max_copies' ? 50 : key === 'api_rate_limit_per_min' ? 10000 : undefined"
                 :disabled="!auth.isAdmin"
+                :data-help="'settingsGeneral.' + settingsGeneralAnchors[key]"
               />
             </div>
           </template>
@@ -1278,7 +1282,7 @@ onUnmounted(() => {
         <div class="collapsible-header" @click="snmpExpanded = !snmpExpanded">
           <div class="collapsible-title-row">
             <span class="collapse-arrow" :class="{ open: snmpExpanded }">&#9654;</span>
-            <h3 style="margin: 0;">SNMP Credentials</h3>
+            <h3 style="margin: 0;" data-help="settingsGeneral.snmp">SNMP Credentials</h3>
           </div>
           <span class="collapsible-hint">{{ snmpExpanded ? 'collapse' : 'expand' }}</span>
         </div>
@@ -1373,6 +1377,7 @@ onUnmounted(() => {
                   step="0.1"
                   :disabled="!auth.isAdmin"
                   class="sla-input"
+                  data-help="settingsSla.goal"
                 />
                 <span class="sla-unit">%</span>
               </div>
@@ -1381,7 +1386,7 @@ onUnmounted(() => {
 
           <div class="sla-footer">
             <p class="text-muted sla-hint">Set to <strong>0</strong> to disable SLA tracking for a category.</p>
-            <button v-if="auth.isAdmin" type="submit" class="btn btn-primary" :disabled="loading">
+            <button v-if="auth.isAdmin" type="submit" class="btn btn-primary" :disabled="loading" data-help="settingsSla.save">
               {{ loading ? 'Saving...' : 'Save' }}
             </button>
             <p v-else class="text-muted">Only admins can modify SLA settings.</p>
@@ -1389,7 +1394,7 @@ onUnmounted(() => {
         </form>
 
         <div class="privileges-bar">
-          <button type="button" class="privileges-btn" @click="showSlaInfo = !showSlaInfo">
+          <button type="button" class="privileges-btn" data-help="settingsSla.guide" @click="showSlaInfo = !showSlaInfo">
             <span class="privileges-btn-icon">?</span>
             {{ showSlaInfo ? 'Hide badge guide' : 'Badge guide' }}
             <span class="privileges-chevron" :class="{ open: showSlaInfo }">&#9662;</span>
@@ -1431,7 +1436,7 @@ onUnmounted(() => {
     <!-- ── Audit Log Tab ── -->
     <div v-if="activeTab === 'audit' && auth.isOperator">
       <div class="audit-header">
-        <span class="text-muted">{{ auditTotal }} events</span>
+        <span class="text-muted" data-help="auditLog.audit">{{ auditTotal }} events</span>
         <input
           ref="auditSearchInput"
           v-model="auditSearch"
@@ -1439,6 +1444,7 @@ onUnmounted(() => {
           type="text"
           class="audit-search"
           placeholder="Search audit log..."
+          data-help="auditLog.q"
         />
       </div>
 
@@ -1449,12 +1455,12 @@ onUnmounted(() => {
           <thead>
             <tr>
               <th>Timestamp</th>
-              <th>User</th>
-              <th>Action</th>
-              <th>Resource</th>
+              <th><span data-help="auditLog.user">User</span></th>
+              <th><span data-help="auditLog.action">Action</span></th>
+              <th><span data-help="auditLog.res">Resource</span></th>
               <th>Detail</th>
-              <th>Status</th>
-              <th>IP</th>
+              <th><span data-help="auditLog.status">Status</span></th>
+              <th><span data-help="auditLog.ip">IP</span></th>
             </tr>
           </thead>
           <tbody>
@@ -1465,7 +1471,7 @@ onUnmounted(() => {
               <td colspan="7" style="text-align:center; color:#94a3b8;">No audit events</td>
             </tr>
             <tr v-for="e in auditEntries" :key="e.id" class="audit-row" @click="openAuditEntry(e)">
-              <td class="nowrap">{{ fmtDate(e.created_at) }}</td>
+              <td class="nowrap"><span data-help="auditLog.row">{{ fmtDate(e.created_at) }}</span></td>
               <td>{{ e.username }}</td>
               <td><span class="badge" :class="actionClass(e.action)">{{ e.action }}</span></td>
               <td>{{ e.resource_type }}<span v-if="e.resource_id" class="text-muted"> #{{ e.resource_id.slice(0, 8) }}</span></td>
@@ -1484,7 +1490,7 @@ onUnmounted(() => {
       </div>
 
       <!-- Audit entry detail modal -->
-      <div v-if="auditSelected" class="modal-overlay" @click.self="closeAuditEntryFromBackdrop">
+      <div v-if="auditSelected" class="modal-overlay" data-help-scope="dialog" @click.self="closeAuditEntryFromBackdrop">
         <div class="modal-card" style="max-width: 640px;">
           <div class="audit-modal-header">
             <h3>Audit Event</h3>
@@ -1578,11 +1584,11 @@ onUnmounted(() => {
               <td>{{ u.username }}</td>
               <td>{{ u.email || '-' }}</td>
               <td>{{ u.phone || '-' }}</td>
-              <td><span :class="'badge badge-' + u.role">{{ u.role }}</span></td>
-              <td><span :class="'badge badge-' + u.status">{{ u.status }}</span></td>
+              <td><span :class="'badge badge-' + u.role" data-help="users.role">{{ u.role }}</span></td>
+              <td><span :class="'badge badge-' + u.status" data-help="users.status">{{ u.status }}</span></td>
               <td class="actions">
-                <button class="btn btn-sm" @click="openEditUser(u)">Edit</button>
-                <button class="btn btn-sm" @click="confirmSuspend(u)">
+                <button class="btn btn-sm" data-help="users.edit" @click="openEditUser(u)">Edit</button>
+                <button class="btn btn-sm" data-help="users.suspend" @click="confirmSuspend(u)">
                   {{ u.status === 'active' ? 'Suspend' : 'Activate' }}
                 </button>
               </td>
@@ -1592,7 +1598,7 @@ onUnmounted(() => {
       </div>
 
       <!-- Suspend/Activate Confirmation Modal -->
-      <div v-if="suspendingUser" class="modal-overlay" @click.self="suspendingUser = null">
+      <div v-if="suspendingUser" class="modal-overlay" data-help-scope="dialog" @click.self="suspendingUser = null">
         <div class="modal-card">
           <h3>{{ suspendingUser.status === 'active' ? 'Suspend' : 'Activate' }} {{ suspendingUser.username }}?</h3>
           <p v-if="suspendingUser.status === 'active'">This user will be <strong>locked out</strong> and unable to log in until reactivated.</p>
@@ -1605,7 +1611,7 @@ onUnmounted(() => {
       </div>
 
       <!-- Edit User Modal -->
-      <div v-if="editingUser" class="modal-overlay" @click.self="closeEditModal">
+      <div v-if="editingUser" class="modal-overlay" data-help-scope="dialog" @click.self="closeEditModal">
         <div class="modal-card" style="max-width: 480px;">
           <h3>Edit {{ editingUser.username }}</h3>
           <div class="form-group">
@@ -1640,7 +1646,7 @@ onUnmounted(() => {
       </div>
 
       <div class="privileges-bar">
-        <button type="button" class="privileges-btn" @click="showPrivileges = !showPrivileges">
+        <button type="button" class="privileges-btn" data-help="users.priv" @click="showPrivileges = !showPrivileges">
           <span class="privileges-btn-icon">?</span>
           {{ showPrivileges ? 'Hide privileges' : 'Role privileges' }}
           <span class="privileges-chevron" :class="{ open: showPrivileges }">&#9662;</span>
@@ -1742,7 +1748,7 @@ onUnmounted(() => {
              While this card is visible, the Create flow is hidden below so
              the admin has one obvious next step: copy + dismiss. -->
         <div v-if="apiTokenJustCreated" class="card token-reveal">
-          <h3 style="margin: 0 0 0.5rem;">New token — copy now</h3>
+          <h3 style="margin: 0 0 0.5rem;"><span data-help="apiAccess.once">New token — copy now</span></h3>
           <p class="text-muted" style="margin: 0 0 0.5rem;">
             This is the only time the plaintext value for <strong>{{ apiTokenJustCreated.name }}</strong> will be shown. Store it immediately in your consumer's config (Grafana, Zabbix, script, etc.).
           </p>
@@ -1775,10 +1781,10 @@ onUnmounted(() => {
           <table>
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Prefix</th>
+                <th><span data-help="apiAccess.name">Name</span></th>
+                <th><span data-help="apiAccess.prefix">Prefix</span></th>
                 <th>Created</th>
-                <th>Last used</th>
+                <th><span data-help="apiAccess.used">Last used</span></th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
@@ -1794,7 +1800,7 @@ onUnmounted(() => {
                   <span v-else class="badge badge-active">Active</span>
                 </td>
                 <td class="actions">
-                  <button v-if="!t.revoked_at" class="btn btn-sm btn-danger" @click="revokeAPIToken(t.id, t.name)">Revoke</button>
+                  <button v-if="!t.revoked_at" class="btn btn-sm btn-danger" data-help="apiAccess.revoke" @click="revokeAPIToken(t.id, t.name)">Revoke</button>
                 </td>
               </tr>
               <tr v-if="apiTokens.length === 0">
@@ -1811,7 +1817,7 @@ onUnmounted(() => {
       <div v-if="error" class="error-msg">{{ error }}</div>
 
       <div class="card backup-card" style="margin-bottom: 1rem;">
-        <h3>Automated Backups</h3>
+        <h3><span data-help="settingsBackup.auto">Automated Backups</span></h3>
         <p class="text-muted" style="margin: 0 0 1rem;">Schedule unencrypted full backups. Each one starts some time within the chosen hour. Respects the max backup copies setting. Backup files are stored with owner-only permissions (0600).</p>
         <div v-if="autoBackupError" class="error-msg">{{ autoBackupError }}</div>
         <div v-if="autoBackupSuccess" class="success-msg" @click="autoBackupSuccess = ''">{{ autoBackupSuccess }}</div>
@@ -1842,14 +1848,14 @@ onUnmounted(() => {
       <div class="card backup-card" style="margin-bottom: 1rem;">
         <h3>Config Backup</h3>
         <p class="text-muted" style="margin: 0 0 1rem;">Download a snapshot of all configuration data (users, targets, checks, rules, settings). Historical check results are not included.</p>
-        <button class="btn btn-primary" @click="downloadBackup">Download Config Backup</button>
+        <button class="btn btn-primary" data-help="settingsBackup.config" @click="downloadBackup">Download Config Backup</button>
       </div>
 
       <div class="card backup-card collapsible-card" :class="{ expanded: fullBackupExpanded }" style="margin-bottom: 1rem;">
         <div class="collapsible-header" @click="fullBackupExpanded = !fullBackupExpanded">
           <div class="collapsible-title-row">
             <span class="collapse-arrow" :class="{ open: fullBackupExpanded }">&#9654;</span>
-            <h3 style="margin: 0;">Full Database Backup</h3>
+            <h3 style="margin: 0;" data-help="settingsBackup.full">Full Database Backup</h3>
           </div>
           <span class="collapsible-hint">{{ fullBackupExpanded ? 'collapse' : 'expand' }}</span>
         </div>
@@ -1864,7 +1870,7 @@ onUnmounted(() => {
             <div class="full-backup-options">
               <label class="toggle-label">
                 <input type="checkbox" v-model="fullBackupEncrypt" />
-                <span>Encrypt backup</span>
+                <span data-help="settingsBackup.enc">Encrypt backup</span>
               </label>
 
               <div v-if="fullBackupEncrypt" class="passphrase-section">
@@ -1895,7 +1901,7 @@ onUnmounted(() => {
             </div>
 
             <div class="saved-backups-section">
-              <h4 style="margin: 0 0 0.5rem;">Saved Backups</h4>
+              <h4 style="margin: 0 0 0.5rem;"><span data-help="settingsBackup.saved">Saved Backups</span></h4>
               <div v-if="savedBackupsLoading" class="text-muted">Loading...</div>
               <div v-else-if="savedBackups.length" class="saved-backups-list">
                 <table class="saved-backups-table">
@@ -1929,7 +1935,7 @@ onUnmounted(() => {
       </div>
 
       <div class="card backup-card">
-        <h3>Config Restore</h3>
+        <h3><span data-help="settingsBackup.restore">Config Restore</span></h3>
         <p class="text-muted" style="margin: 0 0 1rem;">Upload a previously exported backup file to replace all current configuration. This is a destructive operation.</p>
 
         <div class="restore-section">
@@ -1954,7 +1960,7 @@ onUnmounted(() => {
       </div>
 
       <!-- Restore confirmation modal -->
-      <div v-if="showRestoreConfirm" class="modal-overlay" @click.self="showRestoreConfirm = false">
+      <div v-if="showRestoreConfirm" class="modal-overlay" data-help-scope="dialog" @click.self="showRestoreConfirm = false">
         <div class="modal-card">
           <h3>Restore Backup</h3>
           <p>This will <strong>WIPE all current data</strong> and replace it with the backup. All users will be logged out. This cannot be undone.</p>
@@ -1984,7 +1990,7 @@ onUnmounted(() => {
             <div class="collapsible-inner">
           <div class="form-group">
             <label>Alert Method</label>
-            <select v-model="alertForm.alert_method">
+            <select v-model="alertForm.alert_method" data-help="settingsAlerting.method">
               <option value="">Disabled</option>
               <option value="email">Email</option>
               <option value="signal">Signal</option>
@@ -1995,18 +2001,18 @@ onUnmounted(() => {
           <div class="form-row">
             <div class="form-group">
               <label>Cooldown (minutes)</label>
-              <input type="number" :value="Math.round(alertForm.alert_cooldown_s / 60)" @input="alertForm.alert_cooldown_s = $event.target.value * 60" min="0" />
+              <input type="number" :value="Math.round(alertForm.alert_cooldown_s / 60)" @input="alertForm.alert_cooldown_s = $event.target.value * 60" min="0" data-help="settingsAlerting.cool" />
               <span class="text-muted input-hint">Min wait between alerts for same target</span>
             </div>
             <div class="form-group">
               <label>Re-alert Interval (minutes)</label>
-              <input type="number" :value="Math.round(alertForm.alert_realert_s / 60)" @input="alertForm.alert_realert_s = $event.target.value * 60" min="0" />
+              <input type="number" :value="Math.round(alertForm.alert_realert_s / 60)" @input="alertForm.alert_realert_s = $event.target.value * 60" min="0" data-help="settingsAlerting.realert" />
               <span class="text-muted input-hint">Repeat alert if still down (0 = disabled)</span>
             </div>
           </div>
 
           <div class="form-actions">
-            <button type="button" class="btn btn-primary" :disabled="alertSaving" @click="saveAlertGeneral">
+            <button type="button" class="btn btn-primary" :disabled="alertSaving" data-help="settingsAlerting.sections" @click="saveAlertGeneral">
               {{ alertSaving ? 'Saving...' : 'Save' }}
             </button>
           </div>
@@ -2069,18 +2075,18 @@ onUnmounted(() => {
 
           <div class="form-group">
             <label>From Email Address</label>
-            <input v-model="alertForm.alert_from_email" type="email" placeholder="alerts@yourdomain.com" />
+            <input v-model="alertForm.alert_from_email" type="email" placeholder="alerts@yourdomain.com" data-help="settingsAlerting.from" />
           </div>
 
           <div class="form-actions">
-            <button type="button" class="btn btn-primary" :disabled="alertSaving" @click="saveEmailSettings">
+            <button type="button" class="btn btn-primary" :disabled="alertSaving" data-help="settingsAlerting.sections" @click="saveEmailSettings">
               {{ alertSaving ? 'Saving...' : 'Save' }}
             </button>
           </div>
           <hr class="section-divider" />
           <div class="form-actions">
             <input v-model="emailTestRecipient" type="email" placeholder="recipient@example.com" class="test-phone-input" />
-            <button type="button" class="btn" :disabled="alertTesting" @click="sendTestEmail">
+            <button type="button" class="btn" :disabled="alertTesting" data-help="settingsAlerting.test" @click="sendTestEmail">
               {{ alertTesting ? 'Sending...' : 'Send Test Email' }}
             </button>
             <span class="text-muted test-hint">Uses the saved settings, not what is typed: save first.</span>
@@ -2105,7 +2111,7 @@ onUnmounted(() => {
 
           <div class="form-group">
             <label>Send Endpoint URL</label>
-            <input v-model="alertForm.signal_api_url" type="text" placeholder="https://signal-api.example.com/v2/send" />
+            <input v-model="alertForm.signal_api_url" type="text" placeholder="https://signal-api.example.com/v2/send" data-help="settingsAlerting.signal" />
           </div>
 
           <div class="form-group">
@@ -2135,14 +2141,14 @@ onUnmounted(() => {
           </div>
 
           <div class="form-actions">
-            <button type="button" class="btn btn-primary" :disabled="alertSaving" @click="saveSignalSettings">
+            <button type="button" class="btn btn-primary" :disabled="alertSaving" data-help="settingsAlerting.sections" @click="saveSignalSettings">
               {{ alertSaving ? 'Saving...' : 'Save' }}
             </button>
           </div>
           <hr class="section-divider" />
           <div class="form-actions">
             <input v-model="signalTestPhone" type="tel" placeholder="+1234567890" class="test-phone-input" />
-            <button type="button" class="btn" :disabled="signalTesting || !signalTestPhone" @click="sendTestSignal">
+            <button type="button" class="btn" :disabled="signalTesting || !signalTestPhone" data-help="settingsAlerting.test" @click="sendTestSignal">
               {{ signalTesting ? 'Sending...' : 'Send Test Signal' }}
             </button>
             <span class="text-muted test-hint">Uses the saved settings, not what is typed: save first.</span>
@@ -2190,7 +2196,7 @@ onUnmounted(() => {
           <div class="form-group">
             <label>Webhook URL</label>
             <input type="text" v-model="alertForm.webhook_url"
-              placeholder="https://soar.example.com/webhook" />
+              placeholder="https://soar.example.com/webhook" data-help="settingsAlerting.hook" />
           </div>
 
           <template v-if="alertForm.webhook_auth_type === 'bearer'">
@@ -2231,13 +2237,13 @@ onUnmounted(() => {
           </div>
 
           <div class="form-actions">
-            <button type="button" class="btn btn-primary" :disabled="alertSaving" @click="saveWebhookSettings">
+            <button type="button" class="btn btn-primary" :disabled="alertSaving" data-help="settingsAlerting.sections" @click="saveWebhookSettings">
               {{ alertSaving ? 'Saving...' : 'Save' }}
             </button>
           </div>
           <hr class="section-divider" />
           <div class="form-actions">
-            <button type="button" class="btn"
+            <button type="button" class="btn" data-help="settingsAlerting.test"
               @click="sendTestWebhook"
               :disabled="webhookTesting || alertForm.webhook_enabled !== 'true' || !alertForm.webhook_url">
               {{ webhookTesting ? 'Sending...' : 'Send Test Webhook' }}
@@ -2254,7 +2260,7 @@ onUnmounted(() => {
           <div class="collapsible-header" @click="alertSections.system = !alertSections.system">
             <div class="collapsible-title-row">
               <span class="collapse-arrow" :class="{ open: alertSections.system }">&#9654;</span>
-              <h3 style="margin: 0;">System Alerts</h3>
+              <h3 style="margin: 0;" data-help="settingsAlerting.system">System Alerts</h3>
             </div>
             <span class="collapsible-hint">{{ alertSections.system ? 'collapse' : 'expand' }}</span>
           </div>
@@ -2286,7 +2292,7 @@ onUnmounted(() => {
           </div>
 
           <div class="form-actions">
-            <button type="button" class="btn btn-primary" :disabled="alertSaving" @click="saveSystemAlertSettings">
+            <button type="button" class="btn btn-primary" :disabled="alertSaving" data-help="settingsAlerting.sections" @click="saveSystemAlertSettings">
               {{ alertSaving ? 'Saving...' : 'Save' }}
             </button>
           </div>
@@ -2305,7 +2311,7 @@ onUnmounted(() => {
           <h3>Fail2Ban Jail Status</h3>
           <div class="f2b-actions">
             <span v-if="f2bFetchedAt" class="f2b-updated">Updated: {{ fmtDate(f2bFetchedAt) }}</span>
-            <button class="btn btn-sm" :disabled="f2bLoading" @click="loadFail2Ban">
+            <button class="btn btn-sm" :disabled="f2bLoading" data-help="settingsFail2ban.refresh" @click="loadFail2Ban">
               {{ f2bLoading ? 'Loading...' : 'Refresh' }}
             </button>
           </div>
@@ -2319,13 +2325,13 @@ onUnmounted(() => {
               <th>Jail</th>
               <th class="f2b-clickable" @click="toggleF2BDetail('active', null)"
                   :class="{ 'f2b-col-active': f2bDetailView?.type === 'active' && f2bDetailView?.jail === null }">
-                Active Bans
+                <span data-help="settingsFail2ban.active">Active Bans</span>
               </th>
               <th class="f2b-clickable" @click="toggleF2BDetail('history', null)"
                   :class="{ 'f2b-col-active': f2bDetailView?.type === 'history' && f2bDetailView?.jail === null }">
-                Bans (total)
+                <span data-help="settingsFail2ban.total">Bans (total)</span>
               </th>
-              <th>Failed (window)</th>
+              <th><span data-help="settingsFail2ban.failed">Failed (window)</span></th>
               <th>Failed (total)</th>
             </tr>
           </thead>
@@ -2405,7 +2411,7 @@ onUnmounted(() => {
         <div class="collapsible-header" @click="tagSections.tag = !tagSections.tag">
           <div class="collapsible-title-row">
             <span class="collapse-arrow" :class="{ open: tagSections.tag }">&#9654;</span>
-            <h3 style="margin: 0;">Free Tags</h3>
+            <h3 style="margin: 0;" data-help="settingsTags.free">Free Tags</h3>
           </div>
           <span class="collapsible-hint">{{ tagSections.tag ? 'collapse' : 'expand' }}</span>
         </div>
@@ -2431,7 +2437,7 @@ onUnmounted(() => {
         <div class="collapsible-header" @click="tagSections.project = !tagSections.project">
           <div class="collapsible-title-row">
             <span class="collapse-arrow" :class="{ open: tagSections.project }">&#9654;</span>
-            <h3 style="margin: 0;">Project Tags</h3>
+            <h3 style="margin: 0;" data-help="settingsTags.proj">Project Tags</h3>
           </div>
           <span class="collapsible-hint">{{ tagSections.project ? 'collapse' : 'expand' }}</span>
         </div>
@@ -2457,7 +2463,7 @@ onUnmounted(() => {
         <div class="collapsible-header" @click="tagSections.location = !tagSections.location">
           <div class="collapsible-title-row">
             <span class="collapse-arrow" :class="{ open: tagSections.location }">&#9654;</span>
-            <h3 style="margin: 0;">Location Tags</h3>
+            <h3 style="margin: 0;" data-help="settingsTags.proj">Location Tags</h3>
           </div>
           <span class="collapsible-hint">{{ tagSections.location ? 'collapse' : 'expand' }}</span>
         </div>
@@ -2483,7 +2489,7 @@ onUnmounted(() => {
         <div class="collapsible-header" @click="tagSections.category = !tagSections.category">
           <div class="collapsible-title-row">
             <span class="collapse-arrow" :class="{ open: tagSections.category }">&#9654;</span>
-            <h3 style="margin: 0;">Categories</h3>
+            <h3 style="margin: 0;" data-help="settingsTags.cat">Categories</h3>
           </div>
           <span class="collapsible-hint">{{ tagSections.category ? 'collapse' : 'expand' }}</span>
         </div>

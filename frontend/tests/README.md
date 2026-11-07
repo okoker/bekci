@@ -114,18 +114,27 @@ at 1280×800 and 1440×900. Marks appear for rows that arrive after help was tur
 answer is held back until the header marks are drawn), and the stale-scheduler banner has a mark only
 while it shows.
 
-`help-pages.test.mjs` covers the notes of the pages after the Dashboard, a section per page (Task 6
-adds Settings, Users and Audit Log): Targets, Search, SLA, Alerts and Profile. Per page, the ? marks on
-screen equal the expected list in page order (then the header's), each named "Help: <title>", each
-opens a note with that title (one at a time, its control outlined), the bar says the page's summary,
-and none of help's own parts is orange. Role limits: a viewer on Targets has no + Target and no
-Actions mark; a viewer sent from Search to the Dashboard has no Search marks. Drawn controls: the
-State and Type notes' badges and the Actions note's buttons have the app's own colours (checked
-against the table's own). Controls that appear later get marks then: PRIMARY after unfolding a Targets
-row, the pagination with 51 targets, Save and the result columns once a Search has results, Last 4
-hours after unfolding a result, Saved searches with a saved search in localStorage. A page's own
-dialog (Pause, Unpause, Delete on Targets and Search; the SLA zoom) takes the page's marks away while
-it is open (`data-help-scope="dialog"`) and they come back when it closes.
+`help-pages.test.mjs` covers the notes of the pages after the Dashboard, a section per page:
+Targets, Search, SLA, Alerts, Profile, the Audit Log, Users (Humans and API Access) and every
+Settings tab (General, Tags, SLA, Alerting, Backup & Restore, Fail2Ban, System Health). Per page or
+tab, the ? marks on screen equal the expected list in page order (then the header's), each named
+"Help: <title>", each opens a note with that title (one at a time, its control outlined), the bar
+says the page's summary, and none of help's own parts is orange. Switching a Settings tab or a Users
+sub-tab while help is on swaps the summary and the marks (Fail2Ban and System Health each have their
+own Refresh). Role limits: a viewer on Targets has no + Target and no Actions mark; a viewer sent
+from Search or the Audit Log, and an operator sent from Users or Settings, to the Dashboard has none
+of their marks. Drawn controls: the State, Type, Action, Status and Role notes' badges and the
+Actions note's buttons have the app's own colours (checked against the table's own; the Audit Log
+case lays its own five entries over the default answer). Controls that appear later get marks then:
+PRIMARY after unfolding a Targets row, the pagination with 51 targets, Save and the result columns
+once a Search has results, Last 4 hours after unfolding a result, Saved searches with a saved search
+in localStorage, a new API token's card, and a closed Settings section's fields once it is opened
+(Alerting's Email, Signal and Webhook; Backup's Full Database Backup). The Alerting test note is
+the agreed wording and doesn't repeat the hint printed beside the buttons. A page's own dialog
+(Pause, Unpause, Delete on Targets and Search; the SLA zoom; an audit entry; Edit and Suspend on
+Users; the Config Restore confirmation) takes the page's marks away while it is open
+(`data-help-scope="dialog"`) and they come back when it closes. The browser's own `confirm()`
+(token revoke, tag and saved-backup delete) is never triggered here.
 
 `help-switch.test.mjs` covers Help in the header: it comes after the last link each role sees, is
 missing on the SOC wall and Login, and turns on a slate bar under the header (pushing the page down)

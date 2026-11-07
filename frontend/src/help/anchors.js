@@ -16,3 +16,14 @@
 // code that reads the page. That lives in the help layer, which loads on first use.
 
 export const HEADER_PAGE = 'header'
+
+// Settings › General draws its fields from the settings it loads: the key of
+// each one's note, by setting name.
+export const settingsGeneralAnchors = {
+  session_timeout_hours: 'session',
+  history_days: 'history',
+  audit_retention_days: 'auditret',
+  backup_max_copies: 'copies',
+  soc_public: 'soc',
+  api_rate_limit_per_min: 'rate',
+}
