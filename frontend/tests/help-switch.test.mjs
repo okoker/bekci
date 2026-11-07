@@ -81,6 +81,49 @@ test('Done, Esc, Help again and going to another page each turn help off', async
   }
 })
 
+// Help isn't modal, so a page's own windows are used while it is on. Esc closes
+// one thing per press: the page's window first, then help.
+test('Esc closes a page window opened while help is on, and only the next Esc turns help off', async t => {
+  const windows = {
+    'SLA zoom': { path: '/sla', id: 'sla', open: page => page.locator('.sla-card').filter({ hasText: 'Network' }).click(),
+      window: '.modal-backdrop' },
+    'audit entry': { path: '/audit-log', id: 'auditLog', open: page => page.locator('.audit-row').first().click(),
+      window: '.modal-overlay' },
+  }
+  for (const [name, w] of Object.entries(windows)) {
+    const { page } = await openPage(t, app, w.path)
+    await page.locator(`[data-help-page="${w.id}"]`).waitFor()
+    await turnHelpOn(page)
+    await w.open(page)
+    const opened = page.locator(w.window)
+    await opened.waitFor()
+    await page.keyboard.press('Escape')
+    await opened.waitFor({ state: 'detached' })
+    assert.equal(await page.locator('.help-bar').count(), 1, `${name}: help still on after the window closed`)
+    assert.equal(await helpButton(page).getAttribute('aria-pressed'), 'true', name)
+    await page.keyboard.press('Escape')
+    await page.locator('.help-bar').waitFor({ state: 'detached' })
+    assert.equal(await helpButton(page).getAttribute('aria-pressed'), 'false', name)
+  }
+})
+
+test('Esc typed in a text box belongs to the box, not to help', async t => {
+  const { page } = await openPage(t, app, '/search', { role: 'operator' })
+  await page.locator('[data-help-page="search"]').waitFor()
+  await turnHelpOn(page)
+  // A search makes "+ Save" appear; its name box closes on Esc
+  await page.locator('.search-input').fill('shop')
+  await page.keyboard.press('Escape')
+  assert.equal(await page.locator('.help-bar').count(), 1, 'help still on after Esc in the search box')
+  await page.getByRole('button', { name: '+ Save', exact: true }).click()
+  const nameBox = page.locator('.save-popover-input')
+  await nameBox.click()
+  await page.keyboard.press('Escape')
+  await nameBox.waitFor({ state: 'detached' })
+  assert.equal(await page.locator('.help-bar').count(), 1, 'help still on after Esc in the name box')
+  assert.equal(await helpButton(page).getAttribute('aria-pressed'), 'true')
+})
+
 test('the SOC wall and the login page have no Help item', async t => {
   const soc = (await openPage(t, app, '/soc')).page
   await soc.locator('.soc-page').waitFor()

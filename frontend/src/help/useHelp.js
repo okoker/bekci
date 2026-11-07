@@ -28,8 +28,14 @@ function findPage() {
 // the page on screen without a route change: follow it.
 let observer = null
 
+// Esc closes one thing per press. Help isn't modal, so a page's own window
+// (the SLA zoom, an audit entry) may be open: its Esc handler, on document,
+// runs before this one, on window, and marks the key used (preventDefault).
+// Esc typed in a field belongs to the field (the Search name box closes on it).
 function onKeydown(e) {
-  if (e.key === 'Escape') closeHelp()
+  if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing) return
+  if (e.target.closest?.('input, textarea, select, [contenteditable]')) return
+  closeHelp()
 }
 
 export function toggleHelp() {
@@ -41,7 +47,7 @@ export function toggleHelp() {
   help.page = findPage()
   observer = new MutationObserver(() => { help.page = findPage() })
   observer.observe(document.body, { subtree: true, childList: true, attributeFilter: ['data-help-page'] })
-  document.addEventListener('keydown', onKeydown)
+  window.addEventListener('keydown', onKeydown)
 }
 
 export function closeHelp() {
@@ -52,7 +58,7 @@ export function closeHelp() {
   help.current = null
   observer?.disconnect()
   observer = null
-  document.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('keydown', onKeydown)
 }
 
 export function openRecipes() {

@@ -273,7 +273,7 @@ function resetZoom() {
 }
 
 function onKeydown(e) {
-  if (e.key === 'Escape' && modalCat.value) closeModal()
+  if (e.key === 'Escape' && modalCat.value) { e.preventDefault(); closeModal() }
 }
 
 onMounted(() => {

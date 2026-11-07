@@ -88,7 +88,9 @@ Bekci's orange in those elements; help never uses it).
 `help-switch.test.mjs` covers Help in the header: it comes after the last link each role sees, is
 missing on the SOC wall and Login, and turns on a slate bar under the header (pushing the page down)
 with the page's summary and "Written for Bekci <version>", plus "(running <version>)" when the server
-runs another. Done, Esc, Help again and going to another page turn it off. Each page's root names its
+runs another. Done, Esc, Help again and going to another page turn it off. Esc closes one thing per
+press: a page window open while help is on (the SLA zoom, an audit entry) closes first and help stays
+on, and Esc typed in a text box stays with the box. Each page's root names its
 help page (`data-help-page`; Settings per tab), and the bar follows a tab change. Nothing in the bar or
 the Help item is orange. When the bar's code can't be fetched (an old tab after a deploy; tried as a
 404 and as the index.html a built Bekci serves for a missing file), it says "Help could not load:

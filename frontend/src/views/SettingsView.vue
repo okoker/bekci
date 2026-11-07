@@ -369,7 +369,7 @@ function closeAuditEntryFromBackdrop() {
   if (!selectingText()) auditSelected.value = null
 }
 function onAuditKeydown(e) {
-  if (e.key === 'Escape' && auditSelected.value) auditSelected.value = null
+  if (e.key === 'Escape' && auditSelected.value) { e.preventDefault(); auditSelected.value = null }
 }
 
 function fmtDate(d) {
