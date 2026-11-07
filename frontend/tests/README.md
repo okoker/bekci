@@ -79,7 +79,8 @@ Unpause unpauses the row it was opened for.
 users, two targets (Core switch, healthy; Web shop, down, with a PRIMARY HTTP check) and the data each
 page loads. Options: `version` (what `/api/system/health` reports; defaults to `HELP_VERSION`),
 `fixtures` (answers laid over the defaults, by GET path or `"METHOD /path"`; a value, `reply(status,
-json)`, or a function of the URL), `delays` (ms to hold back a path's answer) and `viewport`. It
+json)`, or a function of the URL returning one of those or a promise of one, which the answer waits for),
+`delays` (ms to hold back a path's answer) and `viewport`. It
 returns `{ page, writes }`; writes are recorded and answered `{}`. A test fails if its page throws a
 JavaScript error or asks for an API path no fixture answers. Fixture sets to spread into `fixtures`:
 `moreTargets(count)` (a Dashboard and SOC wall with `count` more healthy targets, "Server 03" on, each
@@ -102,13 +103,15 @@ or the key.
 documented control on screen (the first row only for a control on every row), in page order and then
 the header's, each named "Help: <name>"; the bar's "Click any ? to read it" and its stepper ("12
 notes", then "n of N" counting each key once). Unfolding a target adds its PRIMARY and check-row
-marks. A mark opens its note (one at a time) with a leader line ending in a dot on the control, which
-gets a turquoise outline; the note doesn't cover it, and nothing is orange. The same mark again, or a
-click on the page, closes it. Keyboard: Tab goes mark to mark, Enter opens, ← and → step, Esc closes
+marks. A mark opens its note (one at a time) with a turquoise leader line from the note's facing edge
+to a dot on the control, which gets a turquoise outline; the note doesn't cover it, and nothing is
+orange. The same mark again, or a click on the page, closes it. Keyboard: Tab goes mark to mark, Enter opens, ← and → step, Esc closes
 the note (focus back on its mark) and then help; a text box keeps its own Esc and arrows, a checkbox
 doesn't keep Esc. Marks follow a scroll (−200 px for `scrollBy(0, 200)`), a note stays inside a
-1280×800 window, marks appear for rows that load after help was turned on (600 ms late), and the
-stale-scheduler banner has a mark only while it shows.
+1280×800 window, and a header note (the stepper's last stops) leaves the bar's ‹, › and Done clickable
+at 1280×800 and 1440×900. Marks appear for rows that arrive after help was turned on (the Dashboard's
+answer is held back until the header marks are drawn), and the stale-scheduler banner has a mark only
+while it shows.
 
 `help-switch.test.mjs` covers Help in the header: it comes after the last link each role sees, is
 missing on the SOC wall and Login, and turns on a slate bar under the header (pushing the page down)

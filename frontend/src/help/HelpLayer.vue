@@ -13,7 +13,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { help, openNote, closeNote, stepNote } from './useHelp.js'
 import { pages } from './content/index.js'
-import { anchorBox, argsOf, findAnchors, findScope, leaderLine, markPosition, placeNote } from './locate.js'
+import { anchorBox, argsOf, findAnchors, findScope, keepClear, leaderLine, markPosition, placeNote } from './locate.js'
 
 // The windows a note's link can open, by name. A link shows only once its
 // window is listed here: the rule lesson and the recipes come in later tasks.
@@ -88,7 +88,7 @@ function refresh() {
   openMark.value = `${open.id}#${n}`
   readArgs(el)
   outline(el)
-  placeOpenNote(el, open.note, keep)
+  placeOpenNote(el, open.note, keep, scope)
 }
 
 // A note written from its control's figures follows them while it is open
@@ -102,7 +102,7 @@ function readArgs(el) {
   nextTick(() => schedule())
 }
 
-function placeOpenNote(el, item, keep) {
+function placeOpenNote(el, item, keep, scope) {
   const node = noteEl.value
   if (!node) return
   const box = el.getBoundingClientRect()
@@ -112,7 +112,7 @@ function placeOpenNote(el, item, keep) {
   const view = document.documentElement
   const inView = box.bottom > 0 && box.top < view.clientHeight && box.right > 0 && box.left < view.clientWidth
   if (!placement || (!keep && inView)) {
-    const p = placeNote(box, width, height, aim)
+    const p = placeNote(box, width, height, aim, keepClear(scope))
     placement = { side: p.side, dx: p.left - box.left, dy: p.top - box.top, maxHeight: p.maxHeight }
   }
   const left = box.left + placement.dx

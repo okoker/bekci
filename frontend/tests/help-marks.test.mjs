@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict'
 import { after, before, test } from 'node:test'
 import {
-  moreTargets, openPage, orangeIn, staleScheduler, startApp, stopApp, turnHelpOn, waitForStyle,
+  apiFixtures, moreTargets, openPage, orangeIn, staleScheduler, startApp, stopApp, turnHelpOn, waitForStyle,
 } from './help-fixtures.mjs'
 
 let app
@@ -106,11 +106,16 @@ test('a mark opens its note with a leader line to the control, which is outlined
     Object.fromEntries(['x1', 'y1', 'x2', 'y2'].map(a => [a, Number(l.getAttribute(a))])))
   const dot = await page.locator('.help-lines circle').evaluate(c => ({ x: Number(c.getAttribute('cx')), y: Number(c.getAttribute('cy')) }))
   assert.ok(Math.hypot(line.x2 - line.x1, line.y2 - line.y1) > 10, 'a visible line')
-  const onEdge = (x, y, b) => x >= b.x - 1 && x <= b.x + b.width + 1 && y >= b.y - 1 && y <= b.y + b.height + 1
   const near = (x, y, b, d) => x >= b.x - d && x <= b.x + b.width + d && y >= b.y - d && y <= b.y + b.height + d
-  assert.ok(onEdge(line.x1, line.y1, noteBox), `line starts on the note (${line.x1}, ${line.y1})`)
+  // The line leaves the note from the edge that faces the badge (the note sits below it here)
+  assert.ok(noteBox.y >= box.y + box.height, 'the note is below the badge')
+  assert.ok(Math.abs(line.y1 - noteBox.y) <= 1, `line starts on the note's top edge (y ${line.y1}, note top ${noteBox.y})`)
+  assert.ok(line.x1 >= noteBox.x && line.x1 <= noteBox.x + noteBox.width, `line starts within the note's width (x ${line.x1})`)
   assert.deepEqual([dot.x, dot.y], [line.x2, line.y2], 'the dot ends the line')
   assert.ok(near(dot.x, dot.y, box, 6), `dot on the badge (${dot.x}, ${dot.y})`)
+  // Turquoise, the help colour
+  assert.equal(await page.locator('.help-lines line').evaluate(l => getComputedStyle(l).stroke), 'rgb(13, 148, 136)')
+  assert.equal(await page.locator('.help-lines circle').evaluate(c => getComputedStyle(c).fill), 'rgb(13, 148, 136)')
 
   // Help is turquoise: nothing in the marks, the note, its line or the bar is Bekci orange
   assert.deepEqual(await orangeIn(page, '.help-mark, .help-note, .help-lines, .help-bar'), [])
@@ -214,14 +219,58 @@ test('a note stays inside the window and off its control: Your account at 1280×
   assert.ok(!overlap(box, await page.locator('.user-menu-trigger').boundingBox()), 'the control stays visible')
 })
 
-// Review Focus 3: help is on while the page's data is still loading
+// The header's notes are the last stops of the stepper on every page: a note
+// opened there must leave the bar's ‹, › and Done where they can be clicked
+test('a header note leaves the bar\'s ‹, › and Done uncovered, and stays inside the window', async t => {
+  for (const viewport of [{ width: 1280, height: 800 }, { width: 1440, height: 900 }]) {
+    const { page } = await openPage(t, app, '/', { role: 'operator', viewport })
+    await page.locator('.target-card').first().waitFor()
+    await turnHelpOn(page)
+    await allMarks(page, MARKS.length)
+    const bar = page.locator('.help-bar')
+    const buttons = {
+      '‹': bar.getByRole('button', { name: 'Previous note', exact: true }),
+      '›': bar.getByRole('button', { name: 'Next note', exact: true }),
+      Done: bar.getByRole('button', { name: 'Done', exact: true }),
+    }
+    for (const [id, title] of [['header.version', 'Version'], ['header.dots', 'Server health'],
+      ['header.user', 'Your account']]) {
+      await mark(page, id).click()
+      await waitForTitle(page, title)
+      const box = await note(page).boundingBox()
+      const where = `${viewport.width}×${viewport.height}, ${title}`
+      assert.ok(box.x >= 0 && box.y >= 0 && box.x + box.width <= viewport.width && box.y + box.height <= viewport.height,
+        `${where}: note inside the window ${JSON.stringify(box)}`)
+      for (const [name, button] of Object.entries(buttons)) {
+        const hit = await button.evaluate(el => {
+          const r = el.getBoundingClientRect()
+          return document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2) === el
+        })
+        assert.ok(hit, `${where}: the bar's ${name} is uncovered`)
+      }
+    }
+    // And they work with the note open: › from the last header note goes round to the first note
+    await buttons['›'].click()
+    await waitForTitle(page, 'Updated')
+  }
+})
+
+// Review Focus 3: help is on while the page's data is still loading. The rows
+// are held back until help is on and its marks are drawn, then let through.
 test('help turned on while the Dashboard is loading marks the rows once they arrive', async t => {
-  const { page } = await openPage(t, app, '/', { role: 'operator', delays: { '/api/dashboard/status': 600 } })
+  let release
+  const held = new Promise(resolve => { release = resolve })
+  t.after(() => release())
+  const rows = apiFixtures({ role: 'operator' })['/api/dashboard/status']
+  const { page } = await openPage(t, app, '/', {
+    role: 'operator', fixtures: { '/api/dashboard/status': async () => { await held; return rows } },
+  })
   await page.getByText('Loading dashboard...').waitFor()
   await turnHelpOn(page)
   await mark(page, 'header.user').waitFor()
-  assert.equal(await page.locator('.target-card').count(), 0, 'the marks were drawn before the rows came')
+  assert.equal(await page.locator('.target-card').count(), 0, 'the rows are still held back')
   assert.equal(await mark(page, 'dashboard.row').count(), 0)
+  release()
   await mark(page, 'dashboard.row').waitFor()
   assert.ok(levelWith(await mark(page, 'dashboard.row').boundingBox(), await page.locator('.target-header').first().boundingBox()),
     'beside the first row')

@@ -101,30 +101,50 @@ export function markPosition(box, place) {
 
 const clamp = (value, low, high) => Math.min(Math.max(value, low), Math.max(low, high))
 
+// What a note must never cover, in the scope on screen: help's own bar (in the
+// layout, and in the target form's overlay its copy), whose ‹, › and Done must
+// stay clickable while a note is open. A leader line may cross it.
+export function keepClear(scope) {
+  return [...(scope?.querySelectorAll('.help-bar') ?? [])]
+    .map(el => el.getBoundingClientRect())
+    .filter(r => r.width > 0 && r.height > 0)
+}
+
 // Where a note of `width` × `height` goes beside the control's `box`: below it,
-// right of it, above it, or left of it, the first that fits in the window.
-// None covers the control. If none fits whole, the roomier of below and above,
-// with the note scrolling inside (maxHeight). The note lines up with `aim`
-// (anchorBox), the control's content for a full-width bar.
-export function placeNote(box, width, height, aim = box) {
+// right of it, above it, or left of it, the first that fits in the window
+// without covering anything in `avoid` (keepClear). A note that would cover
+// one moves past it, down (or up, above the control). None covers the control.
+// If none fits whole, the roomier of below and above, with the note scrolling
+// inside (maxHeight). The note lines up with `aim` (anchorBox), the control's
+// content for a full-width bar.
+export function placeNote(box, width, height, aim = box, avoid = []) {
   const view = { width: document.documentElement.clientWidth, height: document.documentElement.clientHeight }
   const x = clamp(aim.left - 20, EDGE, view.width - width - EDGE)
   const y = clamp(aim.top + aim.height / 2 - 40, EDGE, view.height - height - EDGE)
+  const covered = (t, h) => avoid.find(r => t.left < r.right && r.left < t.left + width && t.top < r.bottom && r.top < t.top + h)
+  const clear = (t, h, up) => {
+    for (let r = covered(t, h), n = 0; r && n < avoid.length; r = covered(t, h), n++) {
+      t = { ...t, top: up ? r.top - EDGE - h : r.bottom + EDGE }
+    }
+    return t
+  }
   const tries = [
-    { side: 'below', left: x, top: box.bottom + GAP },
-    { side: 'right', left: box.right + GAP, top: y },
-    { side: 'above', left: x, top: box.top - GAP - height },
-    { side: 'left', left: box.left - GAP - width, top: y },
+    clear({ side: 'below', left: x, top: box.bottom + GAP }, height),
+    clear({ side: 'right', left: box.right + GAP, top: y }, height),
+    clear({ side: 'above', left: x, top: box.top - GAP - height }, height, true),
+    clear({ side: 'left', left: box.left - GAP - width, top: y }, height),
   ]
   const fits = t => t.left >= EDGE && t.top >= EDGE && t.left + width <= view.width - EDGE
-    && t.top + height <= view.height - EDGE
+    && t.top + height <= view.height - EDGE && !covered(t, height)
   const fit = tries.find(fits)
   if (fit) return { ...fit, maxHeight: null }
-  const below = view.height - EDGE - (box.bottom + GAP)
-  const above = box.top - GAP - EDGE
-  if (below >= above) return { side: 'below', left: x, top: box.bottom + GAP, maxHeight: Math.max(below, 120) }
+  const belowTop = clear({ left: x, top: box.bottom + GAP }, 1).top
+  const aboveBottom = clear({ left: x, top: box.top - GAP - 1 }, 1, true).top + 1
+  const below = view.height - EDGE - belowTop
+  const above = aboveBottom - EDGE
+  if (below >= above) return { side: 'below', left: x, top: belowTop, maxHeight: Math.max(below, 120) }
   const maxHeight = Math.max(above, 120)
-  return { side: 'above', left: x, top: box.top - GAP - maxHeight, maxHeight }
+  return { side: 'above', left: x, top: aboveBottom - maxHeight, maxHeight }
 }
 
 // The leader line from the note (`rect`, on `side` of the control) to the

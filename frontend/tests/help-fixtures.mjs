@@ -173,7 +173,8 @@ class Reply {
 export const reply = (status, json = {}) => new Reply(status, json)
 
 // The default answer to every GET the pages make, by path. A value is the JSON
-// body, a Reply, or a function of the request URL returning either.
+// body, a Reply, or a function of the request URL returning either (or a
+// promise of either: the answer waits for it, so a test can hold it back).
 // `role` signs in as admin, operator or viewer (null: signed out);
 // `version` is the running Bekci version /api/system/health reports.
 export function apiFixtures({ role = 'admin', version = HELP_VERSION } = {}) {
@@ -304,7 +305,7 @@ export async function openPage(t, app, path, {
       writes.push({ method, path: url.pathname, body })
       answer = answers[`${method} ${url.pathname}`] ?? {}
     }
-    if (typeof answer === 'function') answer = answer(url, request)
+    if (typeof answer === 'function') answer = await answer(url, request)
     if (answer === undefined) {
       unexpected.push(`${method} ${url.pathname}${url.search}`)
       answer = reply(404, { error: 'No fixture for this request' })
