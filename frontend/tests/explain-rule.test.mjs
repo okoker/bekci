@@ -223,9 +223,10 @@ test('checks come out in the spec table order', () => {
     { level: 'ok', text: 'No test that can flicker alerts on a single failure.' },
     ...tail,
   ])
+  // R14: the Fail Count 1 ping is AND'd with the web page, which confirms it
   assert.deepEqual(explainRule(rows(fc(1)), 'T', 0).checks, [
     { level: 'ok', text: 'Group 1 needs two different tests to agree before it alerts.' },
-    { level: 'warn', text: 'Ping alerts on a single failed check. One blip will page people; 3 in a row is safer.' },
+    { level: 'ok', text: 'No test that can flicker alerts on a single failure.' },
     ...tail,
   ])
 })
@@ -297,4 +298,75 @@ test('interleaved groups: one sentence per group, last operator per group', () =
   assert.equal(r.groups.length, 2)
   assert.equal(sentence(r, 0), 'any one of ping or the web page has failed 3 checks in a row')
   assert.ok(sentence(r, 1).startsWith('the certificate has shown fewer than 14 days left'))
+})
+
+// Ruling R14: a Fail Count 1 condition in an AND group with a test of another
+// check type is confirmed by it (the pairing that earns the group's "two
+// different tests" tick), so it is neither warned about nor counted against the
+// "nothing flickers" tick. Everywhere else rows 2-3 apply as before.
+const PING_WARN = (name) => `${name} alerts on a single failed check. One blip will page people; 3 in a row is safer.`
+const NO_FLICKER = 'No test that can flicker alerts on a single failure.'
+
+test('R14: a Fail Count 1 ping AND\'d with a web page on 2 in a row is confirmed by it, so no single-failure warning', () => {
+  const r = explainRule([
+    cond({ check_name: 'Ping', ...fc(1) }, 0, 'AND'),
+    cond({ check_type: 'http', check_name: 'Web page', ...fc(2, 300) }, 0, 'AND'),
+  ], 'T', 1)
+  assert.deepEqual(r.checks, [
+    { level: 'ok', text: 'Group 1 needs two different tests to agree before it alerts.' },
+    { level: 'ok', text: NO_FLICKER },
+  ])
+})
+
+test('R14: a Fail Count 1 ping alone, in an OR group, or in a group of its own is still warned about', () => {
+  const alone = explainRule([cond({ check_name: 'Ping', ...fc(1) })], 'T', 1)
+  assert.ok(texts(alone).includes(PING_WARN('Ping')))
+  assert.ok(!texts(alone).includes(NO_FLICKER))
+  const or = explainRule([
+    cond({ check_name: 'Ping', ...fc(1) }, 0, 'OR'),
+    cond({ check_type: 'http', ...fc(2, 300) }, 0, 'OR'),
+  ], 'T', 1)
+  assert.ok(texts(or).includes(PING_WARN('Ping')))
+  assert.ok(!texts(or).includes(NO_FLICKER))
+  const split = explainRule([cond({ check_name: 'Ping', ...fc(1) }, 0), cond({ check_type: 'http', ...fc(2, 300) }, 1)], 'T', 1)
+  assert.ok(texts(split).includes(PING_WARN('Ping')))
+  assert.ok(!texts(split).includes(NO_FLICKER))
+})
+
+test('R14: two pings AND\'d, both Fail Count 1, are the same test: both are warned about', () => {
+  const r = explainRule([
+    cond({ check_name: 'Ping A', ...fc(1) }, 0, 'AND'),
+    cond({ check_name: 'Ping B', ...fc(1) }, 0, 'AND'),
+  ], 'T', 1)
+  assert.deepEqual(r.checks, [
+    { level: 'warn', text: PING_WARN('Ping A') },
+    { level: 'warn', text: PING_WARN('Ping B') },
+  ])
+})
+
+test('the timeline uses the interval Bekci runs (10 to 86400 seconds) and gives the figures it used', () => {
+  const t = failCountTimeline(3, 5)
+  assert.deepEqual([t.failCount, t.interval], [3, 10])
+  assert.ok(t.summary.endsWith('A real outage alerts on the third failed check, 20 to 30 seconds in.'), t.summary)
+  assert.equal(failCountTimeline(2, 100000).interval, 86400)
+  assert.equal(failCountTimeline(2, '').interval, 60)
+  assert.deepEqual([failCountTimeline('', 60).failCount, failCountTimeline(0, 60).failCount, failCountTimeline(2.7, 60).failCount], [1, 1, 2])
+  assert.deepEqual([failCountTimeline(3, 60).failCount, failCountTimeline(3, 60).interval], [3, 60])
+})
+
+test('R14 keeps the table order: the ✓ for two tests, then a single-failure warning that still stands, then the rest', () => {
+  const r = explainRule([
+    cond({ check_type: 'http', ...fc(2) }, 0, 'AND'),
+    cond({ check_type: 'tls_cert', ...fc(2, 600) }, 0, 'AND'),
+    cond({ check_name: 'Ping', ...fc(1) }, 1),
+    cond({ check_type: 'dns', ...fc(2) }, 2, 'OR'),
+    cond({ check_type: 'dns', check_name: 'DNS B', ...fc(2) }, 2, 'OR'),
+  ], 'T', 0)
+  assert.deepEqual(r.checks, [
+    { level: 'ok', text: 'Group 1 needs two different tests to agree before it alerts.' },
+    { level: 'warn', text: PING_WARN('Ping') },
+    { level: 'warn', text: 'Group 3 alerts when any one of its tests fails. If they should agree first, switch it to AND.' },
+    { level: 'warn', text: 'The DNS check only fails if the lookup fails, not if the answer changes.' },
+    { level: 'note', text: 'No one is ticked, so this target sends no email or Signal. The webhook, if it is switched on, still sends.' },
+  ])
 })

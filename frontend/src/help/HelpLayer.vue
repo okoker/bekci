@@ -219,12 +219,15 @@ function bringIntoView(el) {
 }
 
 // A click on the page outside help closes the note (help stays on); dragging
-// the window's scrollbar doesn't. Neither does a click into the control the note
-// describes: typing into the target form's Fail Count, its note follows the figures.
+// the window's scrollbar doesn't. Neither does a click into a field that the
+// outlined control holds (an input, a select, a text box or its label): typing
+// into the target form's Fail Count, its note follows the figures. Any other
+// click on the control closes the note, so it gets out of the way of what the
+// click opens (the header's health popover, a Dashboard row's checks).
 function onPointerDown(e) {
   if (!help.current || onScrollbar(e)) return
   if (e.target.closest?.('.help-note, .help-mark, .help-bar')) return
-  if (outlined?.contains(e.target)) return
+  if (outlined?.contains(e.target) && e.target.closest('input, select, textarea, label')) return
   pointerClosed = true
   closeNote()
 }

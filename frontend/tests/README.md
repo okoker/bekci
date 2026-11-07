@@ -153,8 +153,10 @@ reload the page." and the page keeps working.
 condition's operator winning), the subject and verb per check type for Status equals down and up (TCP
 refused or accepted, swapped by Port must stay closed), the count phrase and the delay line in minutes or
 seconds, and the fallback wording for a field or comparator the form doesn't offer. It also pins each
-false-alarm check's text, level and order (no-recipient is a neutral note), the Fail Count lane labels
-and summary, and that a name like `<b>x</b>` comes back unchanged as a plain string.
+false-alarm check's text, level and order (no-recipient is a neutral note; a Fail Count 1 condition AND'd
+with a test of another type is confirmed by it and not warned about, while one alone, in an OR group or
+AND'd with its own type is), the Fail Count lane labels, summary and the figures it used (an interval under
+10 seconds runs every 10), and that a name like `<b>x</b>` comes back unchanged as a plain string.
 
 `help-target-form.test.mjs` covers help inside the target form (New, Edit, Clone). With help on, on
 Targets, the form opens with help on: its own help bar across the top of the overlay ("The target form
@@ -163,8 +165,10 @@ and the form's turquoise "? Help" turns help off and on. Every condition's Fail 
 per-condition or per-group control) has a mark, while the stepper counts each key once; a Fail Count
 note uses its own condition's numbers in its text and eight-result timeline ("…on the second failed
 check, 5 to 10 minutes in." for 300 seconds, Fail Count 2), Time Window shows Fail Count × Interval, and
-AND / OR draws the form's own buttons. The plain-words card follows the form (Fail Count 1→3 reads "3
-checks in a row" and drops the single-failure warning; a second group adds a slate OR pill), says "No
+AND / OR draws the form's own buttons; an interval of 5 seconds is shown as the 10 Bekci runs. The plain-words
+card follows the form (for a ping alone in its group, Fail Count 1→3 reads "3 checks in a row" and drops the
+single-failure warning; a ping on the latest check AND'd with the web page isn't warned about; groups are
+joined by slate OR pills), says "No
 conditions yet." for an empty rule, notes a Clone's empty recipient list without a warning sign, and
 shows a name like `<b>x</b>` as typed. At 1440 the card sits left of the form and a note opens in the
 right margin, its leader line running under the field and turning up into it at a right angle, crossing
@@ -173,4 +177,5 @@ notes stay inside the window, off their field (below it when they fit). Typing i
 describes keeps the note open and its text follows; pressing the overlay's own scrollbar (drawn by a
 second Chrome started without `--hide-scrollbars`) doesn't close it. Removing a condition while a note is
 open keeps the note on its own condition (focus goes back to its mark) or closes it when that condition
-goes. Nothing in the card or the form's help is orange.
+goes. Nothing in the card or the form's help is orange. Outside a field, a click on the control a note describes
+closes the note: the header's health dots (the popover opens) and a Dashboard row (its checks unfold).

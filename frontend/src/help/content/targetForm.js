@@ -18,11 +18,6 @@
 import { failCountTimeline } from '../explainRule.js'
 import { maxFailWindow, minFailWindow } from '../../conditionRules.js'
 
-// The figures failCountTimeline uses: a whole Fail Count of at least 1, and the
-// interval (60 when it isn't a positive number)
-const failCountOf = args => Math.max(1, Math.floor(Number(args.fail_count)) || 1)
-const intervalOf = args => (Number(args.interval_s) > 0 ? Number(args.interval_s) : 60)
-
 export const targetForm = {
   summary: {
     name: 'The target form',
@@ -157,7 +152,7 @@ export const targetForm = {
     },
     baseline: {
       title: 'Baseline Hash',
-      text: ['Empty: Bekci records the page the first time it reads it, and compares every later check with that. Clear it after a planned change to record the new page.'],
+      text: ['Empty: Bekci records the page the first time it reads it (a page that is down or not 2xx records nothing), and compares every later check with that. Clear it after a planned change to record the new page.'],
       box: 'label',
       each: true,
     },
@@ -189,10 +184,11 @@ export const targetForm = {
     fc: {
       title: 'Fail Count',
       text: ['How many results in a row must fail before this condition counts; one good result starts the count again.'],
-      timeline: args => ({
-        caption: `With this condition's numbers: a check every ${intervalOf(args)} seconds, Fail Count ${failCountOf(args)}`,
-        ...failCountTimeline(args.fail_count, args.interval_s),
-      }),
+      // Written with the figures Bekci uses (an interval under 10 seconds runs every 10)
+      timeline: args => {
+        const timeline = failCountTimeline(args.fail_count, args.interval_s)
+        return { ...timeline, caption: `With this condition's numbers: a check every ${timeline.interval} seconds, Fail Count ${timeline.failCount}` }
+      },
       tip: 'Rule of thumb: 3, for almost every check. A real problem keeps failing, so waiting costs a few minutes and filters out blips. Rule recipes has ready-made rules.',
       box: 'label',
       each: true,
@@ -205,10 +201,9 @@ export const targetForm = {
         if (!least) {
           return [first, `Bekci fills it in once Fail Count is above 1: at least Fail Count × Interval, at most ${maxFailWindow}. With Fail Count 1 there is no window: only the latest result counts.`]
         }
-        // The sum as Bekci works it out, when the form's figures are the ones it uses
-        const count = Number(args.fail_count)
-        const interval = Number(args.interval_s)
-        const sum = count * interval === least ? `${count} × ${interval} = ${least}` : `${least}`
+        // The sum with the figures Bekci uses, the same as the Fail Count note's
+        const { failCount, interval } = failCountTimeline(args.fail_count, args.interval_s)
+        const sum = failCount * interval === least ? `${failCount} × ${interval} = ${least}` : `${least}`
         const lines = [first, `Bekci fills it in once Fail Count is above 1: at least Fail Count × Interval (here ${sum}), at most ${maxFailWindow}.`]
         if (least > maxFailWindow) lines.push(`${least} is more than ${maxFailWindow}, so Save is refused until Fail Count or Interval is lower.`)
         return lines

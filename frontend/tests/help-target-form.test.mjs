@@ -60,6 +60,9 @@ const web = { check_id: 'c2', check_type: 'http', check_name: 'Web page',
   interval_s: 300, field: 'status', comparator: 'eq', value: 'down', fail_count: 2, fail_window: 600,
   condition_group: 0, group_operator: 'AND' }
 const FORM_TARGET = { ...apiFixtures()['/api/targets/t2'], conditions: [ping, web] }
+// The same two checks, each in a group of its own: nothing confirms the ping,
+// so its Fail Count 1 can page on a single blip
+const SPLIT_TARGET = { ...FORM_TARGET, conditions: [ping, { ...web, condition_group: 1 }] }
 
 // The notes with a mark on this form, in page order, each key once
 const KEYS = ['name', 'host', 'category', 'preferred', 'notes', 'filters', 'enabled', 'groups', 'addgroup', 'group',
@@ -194,49 +197,61 @@ test('a mark on every condition\'s Fail Count, the stepper counting it once; eac
 })
 
 test('the plain-words card follows the form: Fail Count 1→3 reads "3 checks in a row" and drops the single-failure warning', async t => {
-  const { page, modal } = await openForm(t)
+  // The ping alone in its group: nothing confirms it, so Fail Count 1 is warned about
+  const { page, modal } = await openForm(t, { target: SPLIT_TARGET })
   await card(page).waitFor()
   assert.equal((await card(page).locator('h3').innerText()).trim(), 'Your rule in plain words')
   assert.match(await card(page).innerText(), /Rewritten from the form as you change it/)
   await textMatches(card(page), /Web shop counts as down when:/)
   let text = await card(page).innerText()
-  assert.match(text, /ping has failed on the latest check and the web page has not answered with 200 2 checks in a row/)
-  assert.match(text, /5 to 10 minutes into an outage, at checks every 1 and 5 minutes/)
-  assert.match(text, /It counts as up again on the first check where this is no longer true\./)
+  const group = card(page).locator('.rule-card-group')
+  assert.equal(await group.count(), 2)
+  assert.equal((await group.nth(0).innerText()).trim(), 'ping has failed on the latest check')
+  assert.match(await group.nth(1).innerText(), /the web page has not answered with 200 2 checks in a row\s+5 to 10 minutes into an outage, at one check every 5 minutes/)
+  assert.match(text, /It counts as up again on the first check where none of these is true\./)
   assert.match(text, /Checked for false alarms/)
-  assert.match(text, /Group 1 needs two different tests to agree before it alerts\./)
   assert.match(text, /Ping alerts on a single failed check\. One blip will page people; 3 in a row is safer\./)
   const warn = card(page).locator('.rule-card-check.is-warn .rule-card-sign')
   assert.equal(await warn.count(), 1)
   assert.equal((await warn.innerText()).trim(), '!')
   assert.equal(await warn.evaluate(el => getComputedStyle(el).color), 'rgb(180, 83, 9)', 'amber !')
   assert.equal(await warn.evaluate(el => getComputedStyle(el).backgroundColor), 'rgb(254, 243, 199)')
-  const ok = card(page).locator('.rule-card-check.is-ok .rule-card-sign').first()
-  assert.equal((await ok.innerText()).trim(), '✓')
-  assert.equal(await ok.evaluate(el => getComputedStyle(el).color), 'rgb(21, 128, 61)', 'green ✓')
-  const group = card(page).locator('.rule-card-group')
-  assert.equal(await group.count(), 1)
   assert.equal(await authored(page, '.rule-card-group', 'border-top-width'), '1.5px')
-  assert.equal(await group.evaluate(el => getComputedStyle(el).borderTopColor), 'rgb(147, 197, 253)')
+  assert.equal(await group.first().evaluate(el => getComputedStyle(el).borderTopColor), 'rgb(147, 197, 253)')
+  // The two groups have a slate OR pill between them
+  const pill = card(page).locator('.rule-card-or span')
+  assert.equal((await pill.innerText()).trim(), 'OR')
+  assert.equal(await pill.evaluate(el => getComputedStyle(el).backgroundColor), 'rgb(71, 85, 105)')
+  assert.equal(await pill.evaluate(el => getComputedStyle(el).color), 'rgb(255, 255, 255)')
 
   const failCount = field(modal, 'Fail Count', 0).locator('input')
   await failCount.fill('3')
   await failCount.press('Tab')
-  await textMatches(card(page), /ping has failed 3 checks in a row and the web page has not answered with 200 2 checks in a row/)
+  await textMatches(group.nth(0), /^ping has failed 3 checks in a row\s+2 to 3 minutes into an outage, at one check a minute$/)
   text = await card(page).innerText()
   assert.doesNotMatch(text, /on the latest check/)
   assert.doesNotMatch(text, /single failed check/)
   assert.match(text, /No test that can flicker alerts on a single failure\./)
   assert.equal(await card(page).locator('.rule-card-check.is-warn').count(), 0)
+  const ok = card(page).locator('.rule-card-check.is-ok .rule-card-sign').first()
+  assert.equal((await ok.innerText()).trim(), '✓')
+  assert.equal(await ok.evaluate(el => getComputedStyle(el).color), 'rgb(21, 128, 61)', 'green ✓')
 
-  // A second group: the card shows two group boxes with a slate OR pill between them
+  // A third group: another box and another OR pill
   await modal.getByRole('button', { name: '+ Add Group or Condition', exact: true }).click()
-  await page.waitForFunction(() => document.querySelectorAll('.rule-card-group').length === 2, null, { timeout: 2000 })
-  const pill = card(page).locator('.rule-card-or span')
-  assert.equal((await pill.innerText()).trim(), 'OR')
-  assert.equal(await pill.evaluate(el => getComputedStyle(el).backgroundColor), 'rgb(71, 85, 105)')
-  assert.equal(await pill.evaluate(el => getComputedStyle(el).color), 'rgb(255, 255, 255)')
-  assert.match(await card(page).innerText(), /where none of these is true/)
+  await page.waitForFunction(() => document.querySelectorAll('.rule-card-group').length === 3, null, { timeout: 2000 })
+  assert.equal(await pill.count(), 2)
+})
+
+test('a ping on the latest check AND\'d with a web page that fails 2 in a row is not warned about: the web page must fail too', async t => {
+  const { page } = await openForm(t)
+  await card(page).waitFor()
+  await textMatches(card(page), /ping has failed on the latest check and the web page has not answered with 200 2 checks in a row/)
+  const text = await card(page).innerText()
+  assert.match(text, /Group 1 needs two different tests to agree before it alerts\./)
+  assert.match(text, /No test that can flicker alerts on a single failure\./)
+  assert.doesNotMatch(text, /single failed check/)
+  assert.equal(await card(page).locator('.rule-card-check.is-warn').count(), 0)
 })
 
 test('the card sits left of the form at 1440, above Condition Groups at 1100', async t => {
@@ -412,4 +427,48 @@ test('removing a condition while a note is open: the note stays with its own con
   assert.equal(await page.locator('[data-help-on]').count(), 0, 'no outline left')
   assert.equal(await mark(page, 'fc').count(), 2)
   assert.equal(await page.locator('.modal-overlay .help-bar').count(), 1, 'help stays on')
+})
+
+test('the Fail Count and Time Window notes use the interval Bekci uses: 5 seconds counts as 10', async t => {
+  const { page, modal } = await openForm(t)
+  const interval = field(modal, 'Interval \\(seconds\\)', 0).locator('input')
+  await interval.fill('5')
+  await interval.press('Tab')
+  await clickMark(page, 'fc', 0)
+  await waitForTitle(page, 'Fail Count')
+  await textMatches(note(page), /a check every 10 seconds, Fail Count 1/, 'the caption gives the interval Bekci runs')
+  const failCount = field(modal, 'Fail Count', 0).locator('input')
+  await failCount.click()
+  await failCount.fill('3')
+  await textMatches(note(page), /One or two failures in a row never alert\. A real outage alerts on the third failed check, 20 to 30 seconds in\./)
+  assert.match(await note(page).innerText(), /a check every 10 seconds, Fail Count 3/)
+  await failCount.press('Tab')
+  await clickMark(page, 'tw', 0)
+  await waitForTitle(page, 'Time Window')
+  assert.match(await note(page).innerText(), /at least Fail Count × Interval \(here 3 × 10 = 30\), at most 1800/)
+})
+
+// The exception for typing into a field is the target form's: elsewhere a click
+// on the control a note describes is a click on the page, and closes the note
+test('outside a form field, a click on the control a note describes closes the note: the header dots, a Dashboard row', async t => {
+  const { page } = await openPage(t, app, '/', { role: 'operator', viewport: { width: 1440, height: 900 } })
+  await page.locator('[data-help="dashboard.row"]').first().waitFor()
+  await turnHelpOn(page)
+  const markOf = id => page.locator(`.help-mark[data-help-mark="${id}"]`)
+  // "Click for details": the dots open the health popover, and the note gets out of its way
+  await markOf('header.dots').click()
+  await waitForTitle(page, 'Server health')
+  await page.locator('.health-dots').click()
+  await note(page).waitFor({ state: 'detached' })
+  assert.equal(await page.locator('[data-help-on]').count(), 0)
+  await page.locator('.health-popover').waitFor()
+  await page.locator('.health-dots').click() // closes the popover again
+  await page.locator('.health-popover').waitFor({ state: 'detached' })
+  // A row note, then a click on that row to unfold it
+  await markOf('dashboard.row').click()
+  await waitForTitle(page, 'Target rows')
+  await page.locator('[data-help="dashboard.row"]').first().click()
+  await note(page).waitFor({ state: 'detached' })
+  await page.locator('.check-row').first().waitFor()
+  assert.equal(await page.locator('.help-bar').count(), 1, 'help stays on')
 })

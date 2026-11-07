@@ -1,5 +1,6 @@
 // Reads an alert rule back in plain words and flags settings that cause false alarms.
 // Pure: no Vue, no DOM, plain strings only (the caller renders them with {{ }}).
+import { checkInterval } from '../conditionRules.js'
 // Follows the engine (internal/engine/engine.go): groups are OR'd; inside a group
 // the operator is the LAST condition's (engine.go:76-79), empty = AND; a condition
 // with Fail Count N > 1 needs N matching results in a row, one non-match breaks the run.
@@ -60,8 +61,12 @@ export function outageDelay(failCount, intervalS) {
   return `${delayRange(n, i)} into an outage, at ${everyPhrase([i])}`
 }
 
+// The Fail Count note's eight sample results, with the figures it used: a whole
+// Fail Count of at least 1, and the interval Bekci runs (checkInterval: 10 to
+// 86400 seconds, 60 when blank), so the note's caption and delays match Bekci's.
 export function failCountTimeline(failCount, intervalS) {
   const n = Math.max(1, Math.floor(Number(failCount)) || 1)
+  const interval = checkInterval(intervalS)
   const sample = [true, false, false, true, false, false, false, false] // true = check passed
   let run = 0
   const steps = sample.map((ok) => {
@@ -80,9 +85,9 @@ export function failCountTimeline(failCount, intervalS) {
     const never = n === 2 ? 'A single failure never alerts.'
       : n === 3 ? 'One or two failures in a row never alert.'
         : `Up to ${n - 1} failures in a row never alert.`
-    summary = `${never} A real outage alerts on the ${ordinal(n)} failed check, ${delayRange(n, Number(intervalS) > 0 ? Number(intervalS) : 60)} in.`
+    summary = `${never} A real outage alerts on the ${ordinal(n)} failed check, ${delayRange(n, interval)} in.`
   }
-  return { steps, summary }
+  return { steps, summary, failCount: n, interval }
 }
 
 function subjectOf(c) {
@@ -225,12 +230,22 @@ export function explainRule(conditions, targetName, recipientCount) {
     }
   })
 
-  // Everything except Status equals up can flicker (up is a passing test that rules out outages).
+  // Everything except Status equals up can flicker (up is a passing test that rules
+  // out outages), unless a test of another type in its AND group must agree first:
+  // that test confirms it, as it earns the group its "two different tests" tick
+  // (ruling R14). A ping on the latest check AND'd with a web page on 2 in a row
+  // pages only once the web page has failed twice.
+  const groupOf = new Map(groups.flatMap((g) => g.conds.map((c) => [c, g])))
+  const confirmed = (c) => {
+    const g = groupOf.get(c)
+    return g.op === 'AND' && g.conds.some((o) => o.check_type !== c.check_type)
+  }
   const downs = list.filter((c) => !isStatus(c, 'up'))
-  if (downs.length > 0 && downs.every((c) => failCountOf(c) >= 2)) {
+  const alone = downs.filter((c) => !confirmed(c))
+  if (downs.length > 0 && alone.every((c) => failCountOf(c) >= 2)) {
     ok('No test that can flicker alerts on a single failure.')
   }
-  for (const c of downs) {
+  for (const c of alone) {
     if (failCountOf(c) === 1) {
       const label = c.check_name || TYPE_LABEL[c.check_type] || 'This check'
       warn(`${label} alerts on a single failed check. One blip will page people; 3 in a row is safer.`)

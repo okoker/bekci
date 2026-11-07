@@ -44,10 +44,16 @@ export function getDefaultCondition(conditionGroup = 0, groupOperator = 'AND') {
 
 export const maxFailWindow = 1800
 
+// The interval Bekci runs a check at: the form sends 60 for a blank one, and
+// the API keeps it within 10 to 86400 seconds (target_handlers.go).
+export function checkInterval(intervalS) {
+  return Math.min(86400, Math.max(10, Number(intervalS) || 60))
+}
+
 export function minFailWindow(cond) {
   // Match the submitted defaults and the API's count/interval bounds.
   const count = Math.min(100, Math.max(1, Number(cond.fail_count) || 1))
-  const interval = Math.min(86400, Math.max(10, Number(cond.interval_s) || 60))
+  const interval = checkInterval(cond.interval_s)
   return count > 1 ? count * interval : 0
 }
 
