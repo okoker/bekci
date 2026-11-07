@@ -29,3 +29,23 @@ export function applyConditions(form, conditions, preferred, needs = []) {
   form.preferred_check_type = preferred
   return previous
 }
+
+// The need a recipe left on this field of the condition (`field` is a path such as
+// 'config.port'), or null.
+export function needOf(cond, field) {
+  return cond?.needs?.find((need) => need.field === field) ?? null
+}
+
+// The recipe's message while the field it needs is empty, or doesn't match the need's
+// pattern (S4's admin path must start with "/"); '' once it is filled in, and for a
+// field no recipe asked for. The form sets it as the field's custom validity, so Save
+// is refused with this message until the field is filled in.
+export function needError(cond, field) {
+  const need = needOf(cond, field)
+  if (!need) return ''
+  const value = field.split('.').reduce((at, key) => at?.[key], cond)
+  const text = value == null ? '' : String(value).trim()
+  if (text === '') return need.message
+  if (need.pattern && !new RegExp(need.pattern).test(text)) return need.message
+  return ''
+}

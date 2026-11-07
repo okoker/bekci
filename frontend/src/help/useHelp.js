@@ -14,7 +14,9 @@ export const help = reactive({
   runningVersion: '', // the Bekci version the server reports (GET /api/system/health)
   recipesOpen: false, // the rule recipes window is open
   lessonOpen: false,  // the rule lesson is open
-  formApply: null,    // set by an open target form: puts a recipe's conditions into it
+  formApply: null,    // set by an open target form: formApply(recipe) puts the recipe's conditions
+                      // into it (asking first when it has some). While null, the recipes window
+                      // has no "Use this recipe" button.
 })
 
 // The help page on screen is the last element, in document order, that names
@@ -45,12 +47,16 @@ function onHelp(el) {
 // Esc closes one thing per press. Help isn't modal, so a page's own window
 // (the SLA zoom, an audit entry) may be open: its Esc handler, on document,
 // runs before this one, on window, and marks the key used (preventDefault).
-// Then the open note closes, and only then help. While a note is open, ← and →
-// step through the notes, unless focus is somewhere else on the page.
+// Then the recipes window (open with help on or off), then the open note, and
+// only then help. While a note is open, ← and → step through the notes, unless
+// focus is somewhere else on the page.
 function onKeydown(e) {
   if (e.defaultPrevented || e.isComposing || inTextField(e.target)) return
   if (e.key === 'Escape') {
-    if (help.current) {
+    if (help.recipesOpen) {
+      e.preventDefault()
+      closeRecipes()
+    } else if (help.current) {
       e.preventDefault()
       closeNote()
     } else {
@@ -72,7 +78,7 @@ export function toggleHelp() {
   help.page = findPage()
   observer = new MutationObserver(() => { help.page = findPage() })
   observer.observe(document.body, { subtree: true, childList: true, attributeFilter: ['data-help-page'] })
-  window.addEventListener('keydown', onKeydown)
+  listenForKeys()
 }
 
 export function closeHelp() {
@@ -83,7 +89,14 @@ export function closeHelp() {
   help.current = null
   observer?.disconnect()
   observer = null
-  window.removeEventListener('keydown', onKeydown)
+  listenForKeys()
+}
+
+// The keys are listened for while help is on or the recipes window is open
+// (it opens with help off too). Adding the same listener twice adds it once.
+function listenForKeys() {
+  if (help.on || help.recipesOpen) window.addEventListener('keydown', onKeydown)
+  else window.removeEventListener('keydown', onKeydown)
 }
 
 // The notes: one open at a time. `n` picks one of a key's marks when the key
@@ -106,8 +119,16 @@ export function stepNote(dir) {
   openNote(help.items[next].id)
 }
 
+// The rule recipes window (design §4.7). It opens with help on or off; the
+// target form's "Start from a recipe" opens it.
 export function openRecipes() {
   help.recipesOpen = true
+  listenForKeys()
+}
+
+export function closeRecipes() {
+  help.recipesOpen = false
+  listenForKeys()
 }
 
 export function openLesson() {
@@ -138,9 +159,32 @@ export const LazyRuleCard = defineAsyncComponent({
   errorComponent: HelpLoadError,
 })
 
-// The ? marks and their notes, fetched with the bar. When it can't be fetched
-// the bar's own message says so, so this shows nothing.
+// Shown in place of the recipes window when its code can't be fetched: the same
+// message, in a strip across the top of the window, above the target form (which
+// hides the layout's own help bar while it shows help: this strip stays visible).
+const RecipesLoadError = {
+  name: 'RecipesLoadError',
+  setup: () => () => h('div', {
+    class: 'help-bar help-bar-error', role: 'alert',
+    style: 'position: fixed; inset: 0 0 auto; z-index: 1102; visibility: visible',
+  }, [
+    h('span', { class: 'help-disc', 'aria-hidden': 'true' }),
+    h('p', { class: 'help-bar-text' }, 'Help could not load: reload the page.'),
+    h('button', { type: 'button', class: 'help-done', onClick: closeRecipes }, 'Close'),
+  ]),
+}
+
+// The ? marks and their notes, fetched with the bar, and the host of the
+// recipes window. When it can't be fetched the bar's own message says so; with
+// the recipes window open (help may be off), the window's message does.
 export const LazyHelpLayer = defineAsyncComponent({
   loader: () => import('./HelpLayer.vue'),
-  errorComponent: { name: 'HelpLayerLoadError', render: () => null },
+  errorComponent: { name: 'HelpLayerLoadError', setup: () => () => (help.recipesOpen ? h(RecipesLoadError) : null) },
+})
+
+// The rule recipes window (design §4.7), fetched the first time it opens. The
+// help layer draws it.
+export const LazyRecipesWindow = defineAsyncComponent({
+  loader: () => import('./RecipesWindow.vue'),
+  errorComponent: RecipesLoadError,
 })

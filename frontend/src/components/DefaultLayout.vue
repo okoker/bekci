@@ -3,7 +3,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useRouter, useRoute } from 'vue-router'
 import api from '../api'
-import { help, toggleHelp, closeHelp, LazyHelpBar, LazyHelpLayer } from '../help/useHelp.js'
+import { help, toggleHelp, closeHelp, closeRecipes, LazyHelpBar, LazyHelpLayer } from '../help/useHelp.js'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -117,10 +117,12 @@ function closePopover(e) {
   }
 }
 
-// Help is for the page it was turned on for: another page starts with it off
+// Help is for the page it was turned on for: another page starts with it off,
+// and with the recipes window closed
 watch(() => route.path, () => {
   showUserMenu.value = false
   closeHelp()
+  closeRecipes()
 })
 
 onMounted(() => {
@@ -137,6 +139,7 @@ onUnmounted(() => {
   // Leaving for a page without this layout (SOC, Login) unmounts it before the
   // route watcher above can run
   closeHelp()
+  closeRecipes()
 })
 </script>
 
@@ -192,7 +195,8 @@ onUnmounted(() => {
       </div>
     </nav>
     <LazyHelpBar v-if="help.on" />
-    <LazyHelpLayer v-if="help.on" />
+    <!-- The help layer also hosts the recipes window, which opens with help off too -->
+    <LazyHelpLayer v-if="help.on || help.recipesOpen" />
     <div v-if="schedulerStale" class="stale-banner" data-help="header.banner">
       Monitoring engine not responding — dashboard data may be outdated
     </div>

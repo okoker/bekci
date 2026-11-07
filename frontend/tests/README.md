@@ -96,7 +96,8 @@ doesn't find the header's orange (its positive control).
 note in `src/help/content` has a `data-help="<page>.<key>"` in some view (or a key in an
 `<page>Anchors` map in `src/help/anchors.js`), and every anchor has a note; a computed `:data-help`
 must come from such a map. It also holds the help out of the main bundle: outside `src/help/`, only
-`useHelp.js` and `anchors.js` may be imported from it statically (the rest loads with `import()`),
+`useHelp.js`, `anchors.js` and `applyConditions.js` (the target form puts recipes in with it) may be
+imported from it statically (the rest loads with `import()`),
 `useHelp.js` imports only Vue, and `anchors.js` imports nothing. A failure names the file and import
 or the key.
 
@@ -191,3 +192,23 @@ needs filled in, raises no warning for any recipe. `applyConditions` is shown to
 the previous conditions and Preferred Check for Undo, blank `check_id`, put `needs` on the condition and not in
 `config`, and give fresh copies each time: editing an applied condition (and the `needs` on it) leaves `recipes`
 unchanged.
+
+`recipes-window.test.mjs` covers rule recipes in the target form (design §4.7). "Start from a recipe" sits
+next to "+ Add Group or Condition" on New, Clone and Edit, in help's turquoise, and opens the recipes window
+with help off as well as on: over the form with 40px margins and a 2px turquoise frame, three shelves of the
+twelve recipes in order, the chosen one's shelf, name, rule diagram (blue group boxes, AND between chips,
+slate OR pills, green chips and the legend for tests that must pass), "Read it as", situations with their
+pills, "Before you use it", and the "What it puts in the form" table (S3's row "Remote desktop port", blue
+group rows, a field to fill in shown as its turquoise placeholder), and the centred main button of at least
+460px, "Use this recipe for your monitoring target!". ✕, Close and Esc close it and change nothing; with help
+on, Esc closes the window first and only the next Esc turns help off, and neither the window nor the replace
+question shows the form's marks under it; leaving the page closes it. Using a recipe: New + S3 fills the form
+(banner "Filled in from the recipe A port that must stay closed. Check the settings, then Save.", Undo back to
+no conditions, the form scrolled to Condition Groups) and the POST sends exactly the recipe's condition; New
++ B3 leaves the port empty, dashed turquoise with an italic placeholder, and Save is refused with "This recipe
+needs the service's port here." until 22 is typed (the marking clears with a value), also when the browser's
+own check is bypassed; S4 refuses the admin path `admin` and sends `/admin`. Edit with two conditions asks
+"Replace the 2 conditions in this form with this recipe? …" first: Cancel keeps them, Replace replaces, and
+Undo puts the originals back so the PUT sends their check ids. No POST or PUT carries a `needs` key. Changing a
+recipe check's type drops its fields to fill in; when the window's code can't be fetched, it says to reload and
+Close closes it; nothing is orange. `needError` and `needOf` are also checked in Node.

@@ -1,8 +1,9 @@
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import api from '../api'
 import TagChipInput from './TagChipInput.vue'
-import { help, toggleHelp, LazyHelpBar, LazyRuleCard } from '../help/useHelp.js'
+import { help, toggleHelp, openRecipes, LazyHelpBar, LazyRuleCard } from '../help/useHelp.js'
+import { applyConditions, needOf, needError } from '../help/applyConditions.js'
 import {
   checkTypes, getDefaultConfig, getDefaultCondition, maxFailWindow, minFailWindow,
   failWindowError, valueError, packetLossHint,
@@ -95,6 +96,8 @@ function onIntervalChange(cond) {
 function onConditionTypeChange(cond) {
   if (!cond.check_id) {
     cond.config = getDefaultConfig(cond.check_type)
+    // A recipe's fields to fill in belong to the type it set, whose settings just went
+    delete cond.needs
   }
   // Packet loss exists only for ping
   if (cond.field === 'metrics.packet_loss' && cond.check_type !== 'ping') {
@@ -118,6 +121,11 @@ function onFieldChange(cond) {
 const valuePlaceholder = { status: 'down', response_ms: '500', 'metrics.packet_loss': '30' }
 
 const hasValueError = computed(() => form.value.conditions.some(cond => valueError(cond)))
+
+// A field a recipe left for the person (a port, an address, a path) still empty,
+// or not in the form it needs: Save waits for it, with the recipe's message
+const hasNeedError = computed(() => form.value.conditions.some(cond =>
+  (cond.needs || []).some(need => needError(cond, need.field))))
 
 // Unique check types from current conditions — for preferred check dropdown
 const availableCheckTypes = computed(() => {
@@ -198,6 +206,53 @@ const recipientCount = computed(() => (allUsersError.value
   ? null
   : allUsers.value.filter(u => selectedRecipients.value.includes(u.id)).length))
 
+// ── Rule recipes (design in_app_help.md §4.7) ──
+// "Start from a recipe" opens the recipes window, with help on or off. While
+// the form is open it registers useRecipe, which the window's "Use this recipe"
+// button calls. A form that holds conditions asks first, because on a saved
+// target Save deletes the checks no longer in the form, with their results
+// (store/targets.go UpdateTargetWithConditions; ON DELETE CASCADE). Nothing is
+// sent until Save, and Undo puts back what the form had.
+const conditionsSection = ref(null)
+const recipeCancel = ref(null)
+const pendingRecipe = ref(null) // the recipe waiting for Replace or Cancel
+const recipeBanner = ref(null)  // after a recipe went in: { name, fill, previous } (previous is for Undo)
+
+function useRecipe(recipe) {
+  if (form.value.conditions.length) {
+    pendingRecipe.value = recipe
+    nextTick(() => recipeCancel.value?.focus())
+  } else {
+    putRecipe(recipe)
+  }
+}
+
+// applyConditions replaces the conditions (never merges) with copies of the
+// recipe's, sets Preferred Check, and returns what the form had
+function putRecipe(recipe) {
+  pendingRecipe.value = null
+  const previous = applyConditions(form.value, recipe.conditions, recipe.preferred, recipe.needs)
+  recipeBanner.value = { name: recipe.name, fill: recipe.needs.length > 0, previous }
+  nextTick(() => conditionsSection.value?.scrollIntoView({ block: 'start' }))
+}
+
+// The conditions and Preferred Check from before the recipe, check ids
+// included, so Save keeps those checks
+function undoRecipe() {
+  const { previous } = recipeBanner.value
+  form.value.conditions = previous.conditions
+  form.value.preferred_check_type = previous.preferred_check_type
+  recipeBanner.value = null
+}
+
+watch(() => props.show, (open) => {
+  if (open) help.formApply = useRecipe
+  else if (help.formApply === useRecipe) help.formApply = null
+})
+onUnmounted(() => {
+  if (help.formApply === useRecipe) help.formApply = null
+})
+
 // Load target detail for editing
 async function loadTargetDetail(id) {
   try {
@@ -242,7 +297,7 @@ async function loadTargetDetail(id) {
 // Save
 async function saveTarget() {
   formError.value = ''
-  if (hasFailWindowError.value || hasValueError.value) return
+  if (hasFailWindowError.value || hasValueError.value || hasNeedError.value) return
   try {
     const payload = {
       name: form.value.name,
@@ -298,6 +353,8 @@ function close() {
 watch(() => props.show, async (val) => {
   if (!val) return
   formError.value = ''
+  pendingRecipe.value = null
+  recipeBanner.value = null
   loadAllUsers()
   loadTagOptions()
   if (props.targetId) {
@@ -408,10 +465,18 @@ watch(() => props.show, async (val) => {
           :target-name="form.name" :recipient-count="recipientCount" />
 
         <!-- Condition Groups section -->
-        <div class="conditions-section">
+        <div ref="conditionsSection" class="conditions-section">
           <div class="conditions-header">
             <strong data-help="targetForm.groups">Condition Groups</strong>
-            <button type="button" class="btn btn-sm btn-primary" data-help="targetForm.addgroup" @click="addGroup">+ Add Group or Condition</button>
+            <span class="conditions-buttons">
+              <button type="button" class="btn btn-sm btn-recipe" @click="openRecipes">Start from a recipe</button>
+              <button type="button" class="btn btn-sm btn-primary" data-help="targetForm.addgroup" @click="addGroup">+ Add Group or Condition</button>
+            </span>
+          </div>
+
+          <div v-if="recipeBanner" class="recipe-banner" role="status">
+            <span class="recipe-banner-text">Filled in from the recipe <b>{{ recipeBanner.name }}</b>. {{ recipeBanner.fill ? 'Fill in the fields marked in turquoise, then Save.' : 'Check the settings, then Save.' }}</span>
+            <button type="button" class="recipe-undo" @click="undoRecipe">Undo</button>
           </div>
 
           <div v-if="form.conditions.length === 0" class="validation-warning">
@@ -479,7 +544,9 @@ watch(() => props.show, async (val) => {
                     <div class="form-row">
                       <div class="form-group">
                         <label>Endpoint</label>
-                        <input v-model="cond.config.endpoint" placeholder="/" />
+                        <input v-model="cond.config.endpoint" :placeholder="needOf(cond, 'config.endpoint')?.placeholder ?? '/'"
+                          :class="{ 'need-field': needOf(cond, 'config.endpoint') }"
+                          v-custom-validity="needError(cond, 'config.endpoint')" />
                       </div>
                       <div class="form-group" data-help="targetForm.expect">
                         <label>Expected Status</label>
@@ -501,7 +568,10 @@ watch(() => props.show, async (val) => {
                     <div class="form-row">
                       <div class="form-group">
                         <label>Port</label>
-                        <input type="number" v-model.number="cond.config.port" min="1" max="65535" required />
+                        <input type="number" v-model.number="cond.config.port" min="1" max="65535" required
+                          :placeholder="needOf(cond, 'config.port')?.placeholder"
+                          :class="{ 'need-field': needOf(cond, 'config.port') }"
+                          v-custom-validity="needError(cond, 'config.port')" />
                       </div>
                       <div class="form-group" data-help="targetForm.timeout">
                         <label>Timeout (s)</label>
@@ -546,7 +616,9 @@ watch(() => props.show, async (val) => {
                     <div class="form-row">
                       <div class="form-group" data-help="targetForm.dnsexpect">
                         <label>Expected Value (optional)</label>
-                        <input v-model="cond.config.expect_value" placeholder="e.g. 1.2.3.4" />
+                        <input v-model="cond.config.expect_value" :placeholder="needOf(cond, 'config.expect_value')?.placeholder ?? 'e.g. 1.2.3.4'"
+                          :class="{ 'need-field': needOf(cond, 'config.expect_value') }"
+                          v-custom-validity="needError(cond, 'config.expect_value')" />
                       </div>
                       <div class="form-group" data-help="targetForm.dnsns">
                         <label>Nameserver (optional)</label>
@@ -674,6 +746,18 @@ watch(() => props.show, async (val) => {
           <button type="button" class="btn" @click="close">Cancel</button>
         </div>
       </form>
+    </div>
+
+    <!-- Asked before a recipe replaces the form's conditions (design §4.7). A
+         dialog scope, so help's marks for the form under it are not drawn. -->
+    <div v-if="pendingRecipe" class="recipe-confirm" data-help-scope="dialog" @click.self="pendingRecipe = null">
+      <div class="recipe-confirm-card" role="alertdialog" aria-modal="true" aria-labelledby="recipe-confirm-text">
+        <p id="recipe-confirm-text" class="recipe-confirm-text">Replace the {{ form.conditions.length }} condition{{ form.conditions.length === 1 ? '' : 's' }} in this form with this recipe? On a saved target, Save then deletes the replaced checks and their history, SLA included.</p>
+        <div class="recipe-confirm-actions">
+          <button type="button" class="btn btn-danger" @click="putRecipe(pendingRecipe)">Replace</button>
+          <button ref="recipeCancel" type="button" class="btn" @click="pendingRecipe = null">Cancel</button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -809,6 +893,89 @@ watch(() => props.show, async (val) => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 0.5rem;
+}
+.conditions-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+/* Room for the ? mark help draws left of "+ Add Group or Condition" */
+.modal-overlay.help-on .conditions-buttons { gap: 32px; }
+
+/* Rule recipes (design §4.7): styled as help, because the recipes are the
+   assistant, and never Bekci's orange. A field a recipe left for the person is
+   dashed turquoise with an italic placeholder until it has a value. */
+.btn-recipe {
+  border-color: var(--help-line);
+  background: var(--help-tint);
+  color: var(--help-dk);
+  font-weight: 600;
+}
+.btn-recipe:hover {
+  border-color: var(--help);
+  background: var(--help-tint);
+}
+.recipe-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 0.5rem;
+  padding: 9px 12px;
+  border: 1px solid var(--help-line);
+  border-radius: 8px;
+  background: var(--help-tint);
+  color: var(--help-dk);
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+.recipe-banner b { color: #0f172a; }
+.recipe-undo {
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--help-dk);
+  font: inherit;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.recipe-undo:hover { text-decoration: underline; }
+.form-group input.need-field:placeholder-shown {
+  border: 1px dashed var(--help);
+  background: var(--help-tint);
+}
+.form-group input.need-field:placeholder-shown:focus {
+  border-color: var(--help);
+  box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.18);
+}
+.form-group input.need-field::placeholder {
+  color: var(--help-dk);
+  font-style: italic;
+  opacity: 1;
+}
+.recipe-confirm {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.3);
+}
+.recipe-confirm-card {
+  width: 100%;
+  max-width: 460px;
+  padding: 1.25rem 1.5rem;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+.recipe-confirm-text { font-size: 0.95rem; line-height: 1.5; color: #1e293b; }
+.recipe-confirm-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
 }
 
 /* Group card */

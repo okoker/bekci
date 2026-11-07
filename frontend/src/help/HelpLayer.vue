@@ -3,15 +3,17 @@
 // documented control on screen, and the note a mark opens, with a leader line
 // to the control and the control outlined. Teleported to <body> and drawn in
 // window coordinates, so turning help on never moves the page. It is the one
-// host for help drawn over the page: later tasks add the recipes window and the
-// rule lesson here.
+// host for help drawn over the page: it also draws the rule recipes window
+// (§4.7), which opens with help off too, so the layout mounts the layer while
+// either is needed. Marks and notes are drawn only while help is on. The window
+// names its own help scope, so while it is open the page's marks under it go.
 //
 // Marks follow their controls: the layer re-measures on scroll (any element's,
 // caught on the way down), window resize, size changes (ResizeObserver) and DOM
 // changes (MutationObserver), at most once per frame. A scroll keeps an open
 // note where it was relative to its control; anything else places it afresh.
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
-import { help, openNote, closeNote, stepNote } from './useHelp.js'
+import { help, openNote, closeNote, stepNote, LazyRecipesWindow } from './useHelp.js'
 import { pages } from './content/index.js'
 import { HEADER_PAGE } from './anchors.js'
 import {
@@ -83,6 +85,13 @@ function refresh() {
   frame = 0
   const keep = !relayout
   relayout = false
+  if (!help.on) {
+    // Mounted for the recipes window alone: no marks, and help's notes list is left as closeHelp left it
+    anchors = []
+    marks.value = []
+    observeAnchors()
+    return
+  }
   const scope = findScope()
   anchors = scope ? findAnchors(scope, help.page, pages) : []
   if (anchors.map(a => a.id).join() !== help.items.map(item => item.id).join()) {
@@ -280,6 +289,9 @@ watch(() => help.current, (now, before) => {
 }, { flush: 'pre' })
 
 watch(() => help.page, () => schedule())
+// Help turned on or off with the layer up, and the recipes window (its own scope,
+// inside the layer, which the MutationObserver leaves out) opening or closing
+watch(() => [help.on, help.recipesOpen], () => schedule())
 
 onMounted(() => {
   mutations.observe(document.body, {
@@ -368,6 +380,7 @@ onUnmounted(() => {
           <button v-if="count > 1" type="button" class="help-note-step help-note-next" @click="stepNote(1)">{{ next }} ›</button>
         </div>
       </div>
+      <LazyRecipesWindow v-if="help.recipesOpen" />
     </div>
   </Teleport>
 </template>

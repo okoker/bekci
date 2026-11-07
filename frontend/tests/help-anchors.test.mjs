@@ -91,7 +91,7 @@ const staticImports = file => [...readFileSync(file, 'utf8').matchAll(STATIC_IMP
 
 // Outside src/help/, a file may import only these from it: the help state (the
 // one help module in the main bundle) and anchors.js (plain data a view may need).
-const IMPORTABLE = ['useHelp.js', 'anchors.js']
+const IMPORTABLE = ['useHelp.js', 'anchors.js', 'applyConditions.js']
 
 test('outside src/help/, only useHelp.js and anchors.js are imported from it; the rest loads on first use', () => {
   const offending = []
