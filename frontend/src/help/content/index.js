@@ -9,6 +9,7 @@
 //     rows?: [{ control: { label, className }, text }] | (args) => rows,
 //                                     controls drawn with the app's own classes, one line each
 //     tip?: string | (args) => string,                the grey tip box
+//     linkLabel?: string,          the link's words, if not the window's own title
 //     link?: 'lesson' | 'recipes',    shown once that window exists (HelpLayer.vue LINKS)
 //     place?: 'right' | 'left' | 'corner',            where the mark sits: right of the control
 //                                     (default), left of it, or on its top-right corner (tight spots)

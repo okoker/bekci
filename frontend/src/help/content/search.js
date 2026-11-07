@@ -36,6 +36,7 @@ export const search = {
         { control: { label: '—', className: 'text-muted' }, text: 'No checks, so there is no rule to judge it by.' },
       ],
       link: 'lesson',
+      linkLabel: 'How alert rules work',
     },
     acts: {
       title: 'Actions',

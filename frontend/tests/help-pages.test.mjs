@@ -114,7 +114,8 @@ test('Targets: the State note draws the badges of the table, the Actions note it
   // The same pictures as the table's own badges
   const table = await page.locator('tbody .badge-active').first().evaluate(el => getComputedStyle(el).backgroundColor)
   assert.equal(table, await background('healthy'))
-  assert.equal(await note(page).locator('.help-note-link').count(), 0, 'the lesson link stays hidden until the lesson exists')
+  assert.equal(await note(page).locator('.help-note-link').count(), 1, 'the lesson link shows')
+  assert.equal((await note(page).locator('.help-note-link').innerText()).trim(), 'How alert rules work')
   await mark(page, 'targets.cond').click()
   await waitForTitle(page, 'Conditions')
   assert.match(await note(page).innerText(), /How many checks this target has\./)

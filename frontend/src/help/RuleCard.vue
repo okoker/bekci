@@ -6,6 +6,7 @@
 // name with HTML in it shows as typed.
 import { computed } from 'vue'
 import { explainRule } from './explainRule.js'
+import { openLesson, openRecipes } from './useHelp.js'
 
 const props = defineProps({
   conditions: { type: Array, default: () => [] },
@@ -46,6 +47,10 @@ const SIGN = { ok: '✓', warn: '!', note: '' }
         <span class="rule-card-sign" aria-hidden="true">{{ SIGN[check.level] }}</span>
         <span>{{ check.text }}</span>
       </p>
+    </div>
+    <div class="rule-card-buttons">
+      <button type="button" class="rule-card-btn" @click="openRecipes">Rule recipes: ready-made rules</button>
+      <button type="button" class="rule-card-btn" @click="openLesson">Learn alert rules: the full lesson</button>
     </div>
   </aside>
 </template>
@@ -132,4 +137,26 @@ const SIGN = { ok: '✓', warn: '!', note: '' }
 .is-ok .rule-card-sign { color: #15803d; }
 .is-warn .rule-card-sign { background: #fef3c7; color: #b45309; }
 .is-note { color: #64748b; }
+.rule-card-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 18px 16px;
+  border-top: 1px solid var(--help-line);
+  background: var(--help-tint);
+}
+.rule-card-btn {
+  padding: 9px 14px;
+  border: 1px solid var(--help-line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--help-dk);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.rule-card-btn:hover { background: var(--help-line); }
+.rule-card-btn:focus-visible { outline: 2px solid var(--help); outline-offset: 2px; }
 </style>

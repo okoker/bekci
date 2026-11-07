@@ -217,3 +217,16 @@ from a recipe" after ✕, Close, Esc, and the question's Replace or Cancel. No P
 Changing a recipe check's type drops its fields to fill in; when the window's code can't be fetched, it says to
 reload and Close closes it; nothing is orange, and the legend's swatch is the green chip it explains.
 `needError` and `needOf` are also checked in Node.
+
+`help-lesson.test.mjs` covers the rule lesson (design §4.8) and the recipes window outside a form (§4.7). The State
+note on Targets and Search ("How alert rules work") and the Condition Groups note in the form ("Learn alert rules:
+the full lesson") open it, as do the plain-words card's two buttons ("Rule recipes: ready-made rules" and "Learn
+alert rules: the full lesson"). The lesson has the recipes window's frame (2px turquoise, 40px margins), its own
+help scope (no marks of the page under it), the six headings in order, the Mail Gateway rule drawn by the diagram
+(blue groups, slate OR pill) with "Read it as", three lanes drawn from the same ten results (Fail Count 1: "2 alerts,
+2 recoveries"; Fail Count 3: counts 1, 2, reset, 1, 2, down, "1 alert, 1 recovery"), the window sentence, the
+cooldown and reminder defaults, and the four mistakes. Its recipes button opens the window on top, read-only: no
+"Use this recipe" button, the footer "To use a recipe, press + Target, then Start from a recipe." for operators and
+admins and nothing for a viewer. From the form's card the window can apply a recipe, and using one from the lesson
+closes both. Esc closes one layer per press (recipes window, lesson, then help) and returns focus to the button
+that opened it; leaving the page closes the lesson. Nothing in the lesson or the card buttons is orange.

@@ -47,8 +47,8 @@ function onHelp(el) {
 // Esc closes one thing per press. Help isn't modal, so a page's own window
 // (the SLA zoom, an audit entry) may be open: its Esc handler, on document,
 // runs before this one, on window, and marks the key used (preventDefault).
-// Then the recipes window (open with help on or off), then the open note, and
-// only then help. While a note is open, ← and → step through the notes, unless
+// Then the recipes window (open with help on or off), the lesson under it, then
+// the open note, and only then help. While a note is open, ← and → step through the notes, unless
 // focus is somewhere else on the page.
 function onKeydown(e) {
   if (e.defaultPrevented || e.isComposing || inTextField(e.target)) return
@@ -56,6 +56,9 @@ function onKeydown(e) {
     if (help.recipesOpen) {
       e.preventDefault()
       closeRecipes()
+    } else if (help.lessonOpen) {
+      e.preventDefault()
+      closeLesson()
     } else if (help.current) {
       e.preventDefault()
       closeNote()
@@ -92,10 +95,10 @@ export function closeHelp() {
   listenForKeys()
 }
 
-// The keys are listened for while help is on or the recipes window is open
-// (it opens with help off too). Adding the same listener twice adds it once.
+// The keys are listened for while help is on or a window is open (they open
+// with help off too). Adding the same listener twice adds it once.
 function listenForKeys() {
-  if (help.on || help.recipesOpen) window.addEventListener('keydown', onKeydown)
+  if (help.on || help.recipesOpen || help.lessonOpen) window.addEventListener('keydown', onKeydown)
   else window.removeEventListener('keydown', onKeydown)
 }
 
@@ -131,8 +134,16 @@ export function closeRecipes() {
   listenForKeys()
 }
 
+// The rule lesson (design §4.8): opened from the State note, the Condition Groups
+// note and the plain-words card. Everyone can open it.
 export function openLesson() {
   help.lessonOpen = true
+  listenForKeys()
+}
+
+export function closeLesson() {
+  help.lessonOpen = false
+  listenForKeys()
 }
 
 // Shown in place of the bar when its chunk can't be fetched: typically an old
@@ -159,9 +170,14 @@ export const LazyRuleCard = defineAsyncComponent({
   errorComponent: HelpLoadError,
 })
 
-// Shown in place of the recipes window when its code can't be fetched: the same
+// Shown in place of the recipes window or the lesson when its code can't be fetched: the same
 // message, in a strip across the top of the window, above the target form (which
 // hides the layout's own help bar while it shows help: this strip stays visible).
+function closeAll() {
+  closeRecipes()
+  closeLesson()
+}
+
 const RecipesLoadError = {
   name: 'RecipesLoadError',
   setup: () => () => h('div', {
@@ -170,7 +186,7 @@ const RecipesLoadError = {
   }, [
     h('span', { class: 'help-disc', 'aria-hidden': 'true' }),
     h('p', { class: 'help-bar-text' }, 'Help could not load: reload the page.'),
-    h('button', { type: 'button', class: 'help-done', onClick: closeRecipes }, 'Close'),
+    h('button', { type: 'button', class: 'help-done', onClick: closeAll }, 'Close'),
   ]),
 }
 
@@ -179,12 +195,19 @@ const RecipesLoadError = {
 // the recipes window open (help may be off), the window's message does.
 export const LazyHelpLayer = defineAsyncComponent({
   loader: () => import('./HelpLayer.vue'),
-  errorComponent: { name: 'HelpLayerLoadError', setup: () => () => (help.recipesOpen ? h(RecipesLoadError) : null) },
+  errorComponent: { name: 'HelpLayerLoadError', setup: () => () => (help.recipesOpen || help.lessonOpen ? h(RecipesLoadError) : null) },
 })
 
 // The rule recipes window (design §4.7), fetched the first time it opens. The
 // help layer draws it.
 export const LazyRecipesWindow = defineAsyncComponent({
   loader: () => import('./RecipesWindow.vue'),
+  errorComponent: RecipesLoadError,
+})
+
+// The rule lesson (design §4.8), fetched the first time it opens. The help layer
+// draws it.
+export const LazyLessonPanel = defineAsyncComponent({
+  loader: () => import('./LessonPanel.vue'),
   errorComponent: RecipesLoadError,
 })

@@ -10,9 +10,12 @@
 // is read from their conditions. Everything is rendered with {{ }}.
 //
 // "Use this recipe" shows only while a target form is open (help.formApply):
-// the form decides whether to ask first, and fills itself in.
+// the form decides whether to ask first, and fills itself in. Outside a form (from
+// the rule lesson) the window is read-only: the footer tells operators and admins
+// where to use a recipe, and says nothing to viewers.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { help, closeRecipes } from './useHelp.js'
+import { help, closeRecipes, closeLesson } from './useHelp.js'
+import { useAuthStore } from '../stores/auth.js'
 import { recipes } from './recipes.js'
 import { HELP_VERSION } from './content/version.js'
 import { checkTypes } from '../conditionRules.js'
@@ -105,6 +108,7 @@ const alertWhen = c => `${FIELD_LABEL[c.field] ?? c.field} ${COMPARATOR_LABEL[c.
 // The form's Time Window is off at Fail Count 1
 const windowOf = c => (c.fail_count > 1 && c.fail_window ? `${c.fail_window} s` : 'off')
 
+const auth = useAuthStore()
 const dialog = ref(null)
 const detail = ref(null)
 watch(selectedId, () => nextTick(() => { if (detail.value) detail.value.scrollTop = 0 }))
@@ -113,6 +117,7 @@ watch(selectedId, () => nextTick(() => { if (detail.value) detail.value.scrollTo
 function use() {
   const apply = help.formApply
   closeRecipes()
+  closeLesson() // opened from the lesson over the form: the form is what the person wants to see
   apply?.(recipe.value)
 }
 
@@ -215,6 +220,7 @@ onBeforeUnmount(() => {
           <button type="button" class="recipes-use-btn" @click="use">Use this recipe for your monitoring target!</button>
           <p class="recipes-use-note">Puts these checks into the form. You fill in anything marked in turquoise, then Save.</p>
         </div>
+        <p v-else-if="auth.isOperator" class="recipes-readonly">To use a recipe, press + Target, then Start from a recipe.</p>
         <button type="button" class="btn recipes-close" @click="closeRecipes">Close</button>
       </footer>
     </div>
@@ -506,5 +512,6 @@ onBeforeUnmount(() => {
 }
 .recipes-use-btn:hover { background: #115e59; }
 .recipes-use-note { font-size: 13px; color: #64748b; }
+.recipes-readonly { grid-column: 2; font-size: 14px; color: #334155; text-align: center; }
 .recipes-close { grid-column: 3; justify-self: end; }
 </style>

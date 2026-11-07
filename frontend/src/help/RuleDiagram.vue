@@ -5,22 +5,10 @@
 // OR pill between groups. A condition that must be passing (Status equals up,
 // used to rule out an outage) is a green chip. Plain text only, rendered with {{ }}.
 //
-// Groups follow the engine (internal/engine/engine.go): conditions grouped by
-// condition_group, groups in ascending order and OR'd, conditions in their given
-// order, and a group's operator is its LAST condition's (engine.go:76-79), empty
-// = AND. explainRule.js groups the same way for the plain-words card.
+// Groups follow the engine; explainRule.js reads them the same way for the card.
+import { ruleGroups as groupsOf } from './explainRule.js'
 export function ruleGroups(conditions) {
-  const byGroup = new Map()
-  for (const c of Array.isArray(conditions) ? conditions : []) {
-    const g = Number(c.condition_group) || 0
-    if (!byGroup.has(g)) byGroup.set(g, [])
-    byGroup.get(g).push(c)
-  }
-  return [...byGroup.keys()].sort((a, b) => a - b).map((id, i) => {
-    const conds = byGroup.get(id)
-    const op = conds[conds.length - 1].group_operator === 'OR' ? 'OR' : 'AND'
-    return { id, conds, op, label: `Group ${i + 1}${conds.length > 1 ? `, ${op}` : ''}` }
-  })
+  return groupsOf(conditions).map((g, i) => ({ ...g, label: `Group ${i + 1}${g.conds.length > 1 ? `, ${g.op}` : ''}` }))
 }
 
 // Must be passing for the rule to fire: Status equals up

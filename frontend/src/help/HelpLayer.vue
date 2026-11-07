@@ -13,7 +13,7 @@
 // changes (MutationObserver), at most once per frame. A scroll keeps an open
 // note where it was relative to its control; anything else places it afresh.
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
-import { help, openNote, closeNote, stepNote, LazyRecipesWindow } from './useHelp.js'
+import { help, openNote, closeNote, stepNote, openLesson, openRecipes, LazyRecipesWindow, LazyLessonPanel } from './useHelp.js'
 import { pages } from './content/index.js'
 import { HEADER_PAGE } from './anchors.js'
 import {
@@ -21,9 +21,12 @@ import {
   placeNote,
 } from './locate.js'
 
-// The windows a note's link can open, by name. A link shows only once its
-// window is listed here: the rule lesson and the recipes come in later tasks.
-const LINKS = {}
+// The windows a note's link can open, by name, and the words on the link. A note
+// may word its own link (`linkLabel`): the State note says "How alert rules work".
+const LINKS = {
+  lesson: { label: 'Learn alert rules: the full lesson', open: () => openLesson() },
+  recipes: { label: 'Rule recipes: ready-made rules', open: () => openRecipes() },
+}
 
 const root = ref(null)
 const noteEl = ref(null)
@@ -53,7 +56,7 @@ const note = computed(() => {
     text: [].concat(value('text') ?? []),
     rows: value('rows') ?? [],
     tip: value('tip'),
-    link: LINKS[item.link],
+    link: LINKS[item.link] && { ...LINKS[item.link], label: item.linkLabel ?? LINKS[item.link].label },
     timeline: value('timeline'),
   }
 })
@@ -388,6 +391,7 @@ onUnmounted(() => {
           <button v-if="count > 1" type="button" class="help-note-step help-note-next" @click="stepNote(1)">{{ next }} ›</button>
         </div>
       </div>
+      <LazyLessonPanel v-if="help.lessonOpen" />
       <LazyRecipesWindow v-if="help.recipesOpen" />
     </div>
   </Teleport>

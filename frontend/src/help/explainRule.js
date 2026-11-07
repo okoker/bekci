@@ -61,13 +61,16 @@ export function outageDelay(failCount, intervalS) {
   return `${delayRange(n, i)} into an outage, at ${everyPhrase([i])}`
 }
 
+const SAMPLE = [true, false, false, true, false, false, false, false] // true = the check passed
+
 // The Fail Count note's eight sample results, with the figures it used: a whole
 // Fail Count of at least 1, and the interval Bekci runs (checkInterval: 10 to
 // 86400 seconds, 60 when blank), so the note's caption and delays match Bekci's.
-export function failCountTimeline(failCount, intervalS) {
+// `sample` (true = the check passed) defaults to the note's eight results; the rule
+// lesson passes its ten.
+export function failCountTimeline(failCount, intervalS, sample = SAMPLE) {
   const n = Math.max(1, Math.floor(Number(failCount)) || 1)
   const interval = checkInterval(intervalS)
-  const sample = [true, false, false, true, false, false, false, false] // true = check passed
   let run = 0
   const steps = sample.map((ok) => {
     if (ok) {
@@ -196,24 +199,29 @@ function groupDelay(conds, op) {
   return `${rangeText(pick(...lows), pick(...highs))} into an outage, at ${everyPhrase(conds.map(intervalOf))}`
 }
 
+// The rule's groups as the engine reads them: by condition_group ascending,
+// conditions in their given order, each group's operator the LAST condition's
+// (engine.go:76-79), empty = AND. [{ id, conds, op: 'AND' | 'OR' }]
+export function ruleGroups(conditions) {
+  const byGroup = new Map()
+  for (const c of Array.isArray(conditions) ? conditions : []) {
+    const g = Number(c.condition_group) || 0
+    if (!byGroup.has(g)) byGroup.set(g, [])
+    byGroup.get(g).push(c)
+  }
+  return [...byGroup.keys()].sort((a, b) => a - b).map((id) => {
+    const conds = byGroup.get(id)
+    const op = conds[conds.length - 1].group_operator === 'OR' ? 'OR' : 'AND'
+    return { id, conds, op }
+  })
+}
+
 export function explainRule(conditions, targetName, recipientCount) {
   const list = Array.isArray(conditions) ? conditions : []
   const name = typeof targetName === 'string' ? targetName.trim() : ''
   const opening = `${name || 'This target'} counts as down when:`
 
-  // Group like the engine: by condition_group, conditions keep their given order.
-  const byGroup = new Map()
-  for (const c of list) {
-    const g = Number(c.condition_group) || 0
-    if (!byGroup.has(g)) byGroup.set(g, [])
-    byGroup.get(g).push(c)
-  }
-  const ids = [...byGroup.keys()].sort((a, b) => a - b)
-  const groups = ids.map((id) => {
-    const conds = byGroup.get(id)
-    const op = conds[conds.length - 1].group_operator === 'OR' ? 'OR' : 'AND'
-    return { id, conds, op }
-  })
+  const groups = ruleGroups(list)
 
   const closing = groups.length === 0 ? ''
     : groups.length === 1 ? 'It counts as up again on the first check where this is no longer true.'
