@@ -15,3 +15,6 @@ frontend/tests
 **/*.db-*
 **/*.log
 **/.jwt_secret
+**/.env*
+**/*.pem
+**/*.key
