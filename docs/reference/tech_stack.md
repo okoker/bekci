@@ -167,15 +167,15 @@ The public landing page (the "Sentinel" design) lives in `_website/` (`index.htm
 Versions above are the `package.json` ranges. `package-lock.json` resolves vue 3.5.28 and @vitejs/plugin-vue 6.0.4; every other package resolves to the version shown.
 
 ### Frontend Build Output
-Measured from the build in `cmd/bekci/frontend_dist/assets/` on 08/11/2026 (v3.5.0, in-app help, the A-072, A-075, A-076, A-080, A-081 fixes and the Actions cells on API Access, Humans and Search) (raw bytes; gzip -9; kB = 1000 bytes). Figures change with every frontend build.
+Measured from the build in `cmd/bekci/frontend_dist/assets/` on 08/11/2026 (v3.5.0, in-app help, the A-072, A-075, A-076, A-080, A-081 fixes, the Actions cells on API Access, Humans and Search, and A-082's Host check and address line) (raw bytes; gzip -9; kB = 1000 bytes). Figures change with every frontend build.
 
 | Asset | Size (raw) | Size (gzipped) |
 |-------|-----------|----------------|
-| index-*.js (main, the one `index.html` loads) | 332.95 kB | 106.32 kB |
-| index-*.css | 54.73 kB | 10.06 kB |
-| SearchView-*.js | 16.10 kB | 5.50 kB |
+| index-*.js (main, the one `index.html` loads) | 334.61 kB | 107.02 kB |
+| index-*.css | 54.81 kB | 10.08 kB |
+| SearchView-*.js | 16.10 kB | 5.49 kB |
 | SearchView-*.css | 5.81 kB | 1.61 kB |
-| SlaView-*.js | 239.93 kB | 82.97 kB |
+| SlaView-*.js | 239.93 kB | 82.96 kB |
 | SlaView-*.css | 3.72 kB | 1.11 kB |
 
 SearchView and SlaView are lazy-loaded (code-split). Lazy-loading SlaView keeps its ~240 kB chunk (SLA view + Chart.js) out of the main bundle; it loads on demand.
@@ -184,12 +184,12 @@ SearchView and SlaView are lazy-loaded (code-split). Lazy-loading SlaView keeps 
 
 | Asset | Size (raw) | Size (gzipped) | Holds |
 |-------|-----------|----------------|-------|
-| index-*.js (named after `help/content/index.js`) | 34.83 kB | 11.83 kB | every page's notes |
+| index-*.js (named after `help/content/index.js`) | 35.20 kB | 11.97 kB | every page's notes |
 | HelpLayer-*.js / .css | 13.83 kB / 4.89 kB | 5.52 kB / 1.39 kB | marks, notes, leader lines |
 | HelpBar-*.js / .css | 1.60 kB / 0.72 kB | 0.86 kB / 0.39 kB | the help bar |
 | RuleCard-*.js / .css | 1.97 kB / 2.35 kB | 1.00 kB / 0.77 kB | the plain-words card |
 | explainRule-*.js | 7.42 kB | 3.25 kB | the rule reading, shared by the card and the lesson |
-| RecipesWindow-*.js / .css | 18.27 kB / 6.71 kB | 6.63 kB / 1.69 kB | the recipes window and the 12 recipes |
+| RecipesWindow-*.js / .css | 18.28 kB / 6.71 kB | 6.62 kB / 1.69 kB | the recipes window and the 12 recipes |
 | RuleDiagram-*.js / .css | 1.16 kB / 1.03 kB | 0.70 kB / 0.44 kB | the rule diagram |
 | LessonPanel-*.js / .css | 6.76 kB / 4.98 kB | 2.95 kB / 1.32 kB | the rule lesson |
 | version-*.js | 0.03 kB | 0.07 kB | `HELP_VERSION` |
