@@ -497,7 +497,7 @@ onMounted(async () => {
                   <span v-if="t.location" class="badge badge-tag-location">{{ t.location }}</span>
                   <span v-else class="text-muted">&mdash;</span>
                 </td>
-                <td class="actions" @click.stop>
+                <td class="actions-cell" @click.stop><div class="actions">
                   <template v-if="auth.isOperator">
                     <button v-if="isTargetPaused(t)" class="btn btn-sm btn-unpause" @click="unpauseTarget(t.id, $event)">Unpause</button>
                     <button v-else class="btn btn-sm btn-pause" @click="pauseTarget(t.id, $event)">Pause</button>
@@ -506,7 +506,7 @@ onMounted(async () => {
                     <button class="btn btn-sm" @click="cloneTarget(t.id)">Clone</button>
                     <button class="btn btn-sm btn-danger" @click="deleteTarget(t.id, $event)">Delete</button>
                   </template>
-                </td>
+                </div></td>
               </tr>
 
               <!-- Expanded detail -->

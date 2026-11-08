@@ -59,3 +59,28 @@ test('Search: the Delete button is red, like the Delete button on Targets', asyn
   const confirm = page.locator('.modal-card').getByRole('button', { name: 'Delete', exact: true })
   assert.deepEqual(await look(confirm), reference, 'Delete in the confirm dialog')
 })
+
+// The Actions cell is a real table cell: level with its row's other cells (so the row lines
+// under it line up), its five buttons inside the card, and no sideways scroll
+for (const [width, height] of [[1440, 900], [1100, 800]]) {
+  test(`Search: at ${width} px the Actions cell lines up with its row and its buttons stay inside the card`, async t => {
+    const { page } = await openPage(t, app, '/search', { role: 'operator', viewport: { width, height } })
+    await page.getByPlaceholder('Search by name, host, or IP...').fill('core')
+    const row = page.locator('tbody tr').filter({ hasText: 'Core switch' })
+    await row.waitFor()
+    const m = await row.evaluate(tr => {
+      const tds = [...tr.querySelectorAll(':scope > td')]
+      const first = tds[0].getBoundingClientRect(), last = tds[tds.length - 1].getBoundingClientRect()
+      const card = tr.closest('.card').getBoundingClientRect()
+      const buttons = [...tds[tds.length - 1].querySelectorAll('button')].map(b => b.getBoundingClientRect())
+      const el = document.scrollingElement
+      return { top: [first.top, last.top], bottom: [first.bottom, last.bottom], cardLeft: card.left, cardRight: card.right,
+        buttons: buttons.map(b => [b.left, b.right]), sideways: el.scrollWidth > el.clientWidth }
+    })
+    assert.equal(m.buttons.length, 5)
+    assert.ok(Math.abs(m.top[1] - m.top[0]) <= 0.5, `Actions cell top ${m.top[1]} vs row ${m.top[0]}`)
+    assert.ok(Math.abs(m.bottom[1] - m.bottom[0]) <= 0.5, `Actions cell bottom ${m.bottom[1]} vs row ${m.bottom[0]}`)
+    for (const [l, r] of m.buttons) assert.ok(l >= m.cardLeft && r <= m.cardRight, `button ${l}-${r} inside the card ${m.cardLeft}-${m.cardRight}`)
+    assert.ok(!m.sideways, 'no sideways scroll')
+  })
+}

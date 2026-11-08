@@ -31,9 +31,25 @@ test('API Access: every token row\'s Actions cell lines up with the rest of its 
     return { name: tr.querySelector('td').textContent.trim(), top: [first.top, last.top], bottom: [first.bottom, last.bottom] }
   }))
   for (const c of cells) {
-    assert.ok(Math.abs(c.top[1] - c.top[0]) <= 1, `${c.name}: Actions cell top ${c.top[1]} vs row ${c.top[0]}`)
-    assert.ok(Math.abs(c.bottom[1] - c.bottom[0]) <= 1, `${c.name}: Actions cell bottom ${c.bottom[1]} vs row ${c.bottom[0]}`)
+    assert.ok(Math.abs(c.top[1] - c.top[0]) <= 0.5, `${c.name}: Actions cell top ${c.top[1]} vs row ${c.top[0]}`)
+    assert.ok(Math.abs(c.bottom[1] - c.bottom[0]) <= 0.5, `${c.name}: Actions cell bottom ${c.bottom[1]} vs row ${c.bottom[0]}`)
   }
   assert.equal(await rows.nth(0).locator('td:last-child button', { hasText: 'Revoke' }).count(), 1)
   assert.equal(await rows.nth(1).locator('td:last-child button').count(), 0)
+})
+
+test('Humans: every user row\'s Actions cell lines up with the rest of its row', async t => {
+  const { page } = await openPage(t, app, '/users', { role: 'admin', viewport: { width: 1440, height: 900 } })
+  const rows = page.locator('tbody tr').filter({ has: page.getByRole('button', { name: 'Edit', exact: true }) })
+  await rows.first().waitFor()
+  const cells = await rows.evaluateAll(list => list.map(tr => {
+    const first = tr.querySelector('td:first-child').getBoundingClientRect()
+    const last = tr.querySelector('td:last-child').getBoundingClientRect()
+    return { name: tr.querySelector('td').textContent.trim(), top: [first.top, last.top], bottom: [first.bottom, last.bottom] }
+  }))
+  assert.ok(cells.length >= 2, `user rows on screen: ${cells.length}`)
+  for (const c of cells) {
+    assert.ok(Math.abs(c.top[1] - c.top[0]) <= 0.5, `${c.name}: Actions cell top ${c.top[1]} vs row ${c.top[0]}`)
+    assert.ok(Math.abs(c.bottom[1] - c.bottom[0]) <= 0.5, `${c.name}: Actions cell bottom ${c.bottom[1]} vs row ${c.bottom[0]}`)
+  }
 })

@@ -1587,12 +1587,12 @@ onUnmounted(() => {
               <td>{{ u.phone || '-' }}</td>
               <td><span :class="'badge badge-' + u.role" data-help="users.role">{{ u.role }}</span></td>
               <td><span :class="'badge badge-' + u.status" data-help="users.status">{{ u.status }}</span></td>
-              <td class="actions">
+              <td class="actions-cell"><div class="actions">
                 <button class="btn btn-sm" data-help="users.edit" @click="openEditUser(u)">Edit</button>
                 <button class="btn btn-sm" data-help="users.suspend" @click="confirmSuspend(u)">
                   {{ u.status === 'active' ? 'Suspend' : 'Activate' }}
                 </button>
-              </td>
+              </div></td>
             </tr>
           </tbody>
         </table>
