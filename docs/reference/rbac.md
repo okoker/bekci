@@ -124,7 +124,6 @@ Request
 |----------|--------|------|-------|----------|--------|-------|
 | `/api/targets/{id}/checks` | GET | anyAuth | Y | Y | Y | List checks for target |
 | `/api/checks/{id}/run` | POST | opAuth | Y | Y | N | Trigger immediate check run |
-| `/api/checks/{id}/results` | GET | anyAuth | Y | Y | Y | View check results |
 
 ### Dashboard
 

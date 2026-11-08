@@ -30,13 +30,3 @@ func (s *Server) handleRunCheckNow(w http.ResponseWriter, r *http.Request) {
 	s.audit(r, "run_check", "check", id, "name="+check.Name, "success")
 	writeJSON(w, http.StatusOK, map[string]string{"status": "queued"})
 }
-
-func (s *Server) handleCheckResults(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	results, err := s.store.GetRecentResults(id, 24)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to get results")
-		return
-	}
-	writeJSON(w, http.StatusOK, results)
-}

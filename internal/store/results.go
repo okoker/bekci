@@ -86,33 +86,6 @@ func (s *Store) SaveResult(r *CheckResult) error {
 	return tx.Commit()
 }
 
-// GetRecentResults returns raw results for a check within the last N hours.
-func (s *Store) GetRecentResults(checkID string, hours int) ([]CheckResult, error) {
-	rows, err := s.db.Query(`
-		SELECT id, check_id, status, response_ms, message, metrics, checked_at
-		FROM check_results
-		WHERE check_id = ? AND checked_at >= datetime('now', ?)
-		ORDER BY checked_at ASC
-	`, checkID, formatHoursOffset(hours))
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var results []CheckResult
-	for rows.Next() {
-		var r CheckResult
-		if err := rows.Scan(&r.ID, &r.CheckID, &r.Status, &r.ResponseMs, &r.Message, &r.Metrics, &r.CheckedAt); err != nil {
-			return nil, err
-		}
-		results = append(results, r)
-	}
-	if results == nil {
-		results = []CheckResult{}
-	}
-	return results, rows.Err()
-}
-
 // GetRecentResultsSlim returns only status, response_ms, checked_at for bar rendering.
 func (s *Store) GetRecentResultsSlim(checkID string, hours int) ([]CheckResultSlim, error) {
 	rows, err := s.db.Query(`

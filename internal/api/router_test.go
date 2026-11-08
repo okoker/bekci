@@ -52,6 +52,7 @@ func TestUnknownAPIPathsReturnJSON(t *testing.T) {
 		{http.MethodDelete, "/api/login"},
 		{http.MethodGet, "/api"},
 		{http.MethodGet, "/api/targets/"},
+		{http.MethodGet, "/api/checks/some-id/results"}, // A-078: unused endpoint removed
 	} {
 		code, ctype, body := do(tc.method, tc.path)
 		if code != http.StatusNotFound {

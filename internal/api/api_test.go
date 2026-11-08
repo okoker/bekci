@@ -888,26 +888,6 @@ func TestTargetCheckAndDeleteFlow(t *testing.T) {
 		t.Fatalf("expected updated check name, got %v", checks[0]["name"])
 	}
 
-	now := time.Now()
-	for _, result := range []store.CheckResult{
-		{CheckID: checkID, Status: "up", ResponseMs: 120, Message: "ok", Metrics: "{}", CheckedAt: now.Add(-2 * time.Hour)},
-		{CheckID: checkID, Status: "down", ResponseMs: 350, Message: "failed", Metrics: "{}", CheckedAt: now.Add(-30 * time.Minute)},
-	} {
-		r := result
-		if err := st.SaveResult(&r); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	resp, err = client.Get(ts.URL + "/api/checks/" + checkID + "/results")
-	if err != nil {
-		t.Fatal(err)
-	}
-	results := parseJSONArray(t, resp)
-	if len(results) != 2 {
-		t.Fatalf("expected 2 check results, got %d", len(results))
-	}
-
 	resp = doJSON(t, client, http.MethodPost, ts.URL+"/api/checks/"+checkID+"/run", nil)
 	if resp.StatusCode != 200 {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)

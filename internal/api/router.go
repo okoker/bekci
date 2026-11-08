@@ -178,7 +178,6 @@ func (s *Server) Handler() http.Handler {
 	// Checks (read-only + run)
 	mux.Handle("GET /api/targets/{id}/checks", anyAuth(s.handleListChecks))
 	mux.Handle("POST /api/checks/{id}/run", opAuth(s.handleRunCheckNow))
-	mux.Handle("GET /api/checks/{id}/results", anyAuth(s.handleCheckResults))
 
 	// Dashboard
 	mux.Handle("GET /api/dashboard/status", anyAuth(s.handleDashboardStatus))

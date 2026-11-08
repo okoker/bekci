@@ -565,16 +565,16 @@ func TestSaveAndQueryResults(t *testing.T) {
 		}
 	}
 
-	results, err := s.GetRecentResults(checkID, 24)
+	results, err := s.GetRecentResultsByWindow(checkID, 24*3600)
 	if err != nil {
-		t.Fatalf("GetRecentResults: %v", err)
+		t.Fatalf("GetRecentResultsByWindow: %v", err)
 	}
 	if len(results) != 5 {
 		t.Fatalf("results len = %d, want 5", len(results))
 	}
 	for i := 1; i < len(results); i++ {
-		if results[i].CheckedAt.Before(results[i-1].CheckedAt) {
-			t.Fatalf("results not in ASC order at index %d", i)
+		if results[i].CheckedAt.After(results[i-1].CheckedAt) {
+			t.Fatalf("results not in DESC order at index %d", i)
 		}
 	}
 }

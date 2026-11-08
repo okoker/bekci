@@ -695,7 +695,6 @@ Replaces all recipients for the target.
 |--------|------|------|-------------|
 | GET | `/api/targets/{id}/checks` | any | List checks for a target |
 | POST | `/api/checks/{id}/run` | operator+ | Trigger immediate check execution |
-| GET | `/api/checks/{id}/results` | any | Get recent results (last 24h) |
 
 ### GET /api/targets/{id}/checks
 
@@ -728,25 +727,6 @@ Queues the check for immediate execution via the scheduler.
 | Error | Code |
 |-------|------|
 | Check not found | 404 |
-
-### GET /api/checks/{id}/results
-
-Returns raw check results from the last 24 hours.
-
-**Response (200):**
-```json
-[
-  {
-    "id": 1,
-    "check_id": "uuid",
-    "status": "up",
-    "response_ms": 45,
-    "message": "HTTP 200 OK",
-    "metrics": "{}",
-    "checked_at": "2026-01-15T10:00:00Z"
-  }
-]
-```
 
 ---
 
@@ -956,7 +936,7 @@ Returns enabled targets with their checks, last status, response time, and 90-da
   }
 ]
 ```
-> Note: Unlike GET /api/checks/{id}/results (which returns full CheckResult with 7 fields), this endpoint returns only the fields needed for history bar rendering.
+> Note: This endpoint returns only the fields needed for history bar rendering (status, response time, time), not full check results.
 
 **Response (200) -- range=90d (default):**
 ```json

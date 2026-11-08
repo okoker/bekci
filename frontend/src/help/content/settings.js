@@ -1,15 +1,15 @@
 // Help for the Settings tabs, one help page each (design §7.11). Facts, by tab:
 // General: sign-in length internal/auth/auth.go:107-128; results purge cmd/bekci/main.go:252-262 and
-//   internal/store/results.go:269-290 (rollups 90 days), only 4-hour views read raw results
+//   internal/store/results.go:242-263 (rollups 90 days), only 4-hour views read raw results
 //   (dashboard_handlers.go:187-202); audit and alert retention main.go:287-305; backup copies
-//   backup_handlers.go:240-310; public SOC router.go:152-153, 171-173, 197-199, SocView.vue, its data
+//   backup_handlers.go:240-310; public SOC router.go:152-153, 171-173, 196-198, SocView.vue, its data
 //   dashboard_handlers.go dashboardCheck/dashboardTarget (:10-36) and handleCheckHistory (4h, 90d);
 //   rate limit middleware.go:114-135; SNMP masking settings_handlers.go:174-186, 314-322,
 //   SNMP cache internal/scheduler/scheduler.go:45-66.
 // Tags: internal/store/tags.go (normalize :28-37, look-alikes :39-60, delete :114-158, rename :162-201).
 // SLA: sla_handlers.go:143-162, dashboard_handlers.go:133-152, SettingsView.vue saveSettings.
 // Alerting: internal/alerter/alerter.go (Dispatch :25-196, CheckRealerts :200-345, webhook
-//   :359-384, tests :444-529), system_alert.go, webhook.go:82, alert_handlers.go:95-197.
+//   :359-384, tests :444-529), system_alert.go, webhook.go:82, alert_handlers.go:95-200.
 // Backup: backup_handlers.go (export :25-39, full :131-238, passphrase :331-338, saved :340-370,
 //   schedule :540-600), internal/store/backup.go (export, restore :386-420).
 // Fail2Ban: fail2ban_handlers.go, SettingsView.vue (30-second poll).

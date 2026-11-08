@@ -113,12 +113,14 @@ func (s *Server) handleTestEmail(w http.ResponseWriter, r *http.Request) {
 
 	toEmail := strings.TrimSpace(req.Email)
 	if toEmail != "" && !validEmail(toEmail) {
+		s.audit(r, "test_email", "settings", "", "invalid email address", "failure")
 		writeError(w, http.StatusBadRequest, "invalid email address")
 		return
 	}
 	if toEmail == "" {
 		user, err := s.store.GetUserByID(claims.Subject)
 		if err != nil || user == nil {
+			s.audit(r, "test_email", "settings", "", "user not found", "failure")
 			writeError(w, http.StatusNotFound, "user not found")
 			return
 		}
@@ -158,6 +160,7 @@ func (s *Server) handleTestSignal(w http.ResponseWriter, r *http.Request) {
 		Phone string `json:"phone"`
 	}
 	if err := readJSON(w, r, &req); err != nil {
+		s.audit(r, "test_signal", "settings", "", "invalid request body", "failure")
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
