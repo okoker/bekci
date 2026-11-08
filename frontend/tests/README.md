@@ -79,6 +79,10 @@ HTTP; Page Hash; `somehost.com/health/` keeps its slash), with no line while Hos
 or for other check types; Save sends `somehost.com/health/` as typed; and a Save the server refuses
 shows its message just above the Save button, in the window.
 
+`host-wrap.test.mjs` covers long Hosts (A-082 allows a path, so they are normal): on Targets at 1440,
+1280 and 1100 px and on Search at 1440 and 1100 px, a Host with a long path is shown whole, its cell
+and the row's last cell end inside the card, and the page does not scroll sideways.
+
 `targets-tag-filter.test.mjs` covers the Targets filter bar: a Tags chip has only its Remove button
 (no pin), and tags, Location and Project combine so each one narrows the list; removing a chip
 widens it again.

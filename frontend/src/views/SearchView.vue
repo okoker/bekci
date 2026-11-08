@@ -800,6 +800,8 @@ onMounted(async () => {
 .host-cell {
   font-family: monospace;
   font-size: 0.85rem;
+  /* A Host may carry a path (A-082): a long one wraps instead of pushing the table out of the card */
+  overflow-wrap: anywhere;
 }
 .row-expanded > td { background: #e8ecf1; }
 

@@ -365,7 +365,7 @@ onMounted(async () => {
                   {{ t.name }}
                 </span>
               </td>
-              <td>{{ t.host }}</td>
+              <td class="host-cell">{{ t.host }}</td>
               <td>
                 <span v-if="isTargetPaused(t)" class="badge badge-paused">paused</span>
                 <span v-else-if="t.state" :class="['badge', stateClass(t.state?.current_state)]">
@@ -1153,6 +1153,8 @@ onMounted(async () => {
 /* Actions column: the td stays a real table cell; the buttons wrap inside it, so the table never needs
    more than the card's width (the global .actions rule is flex + nowrap and is for the div, not the cell) */
 td.actions-cell { width: 13rem; }
+/* A Host may carry a path (A-082): a long one wraps instead of pushing the table out of the card */
+td.host-cell { overflow-wrap: anywhere; }
 td.actions-cell .actions {
   flex-wrap: wrap;
   white-space: normal;
