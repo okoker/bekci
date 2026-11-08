@@ -387,7 +387,7 @@ async function runAllChecks(targetId) {
 async function onTargetSaved() {
   showEditModal.value = false
   await loadData()
-  success.value = 'Target updated'
+  success.value = editTargetId.value ? 'Target updated' : 'Target created'
 }
 
 onMounted(async () => {
