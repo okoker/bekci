@@ -28,23 +28,27 @@ func Run(checkType, host string, configJSON string) *Result {
 	start := time.Now()
 	var r *Result
 
+	// The Host may carry a path (www.example.com/health): HTTP and Page Hash
+	// request it (buildHTTPURL); every other check uses the name only.
+	name, _ := SplitHost(host)
+
 	switch checkType {
 	case "http":
 		r = runHTTP(host, config)
 	case "tcp":
-		r = runTCP(host, config)
+		r = runTCP(name, config)
 	case "ping":
-		r = runPing(host, config)
+		r = runPing(name, config)
 	case "dns":
-		r = runDNS(host, config)
+		r = runDNS(name, config)
 	case "page_hash":
 		r = runPageHash(host, config)
 	case "tls_cert":
-		r = runTLSCert(host, config)
+		r = runTLSCert(name, config)
 	case "snmp_v2c":
-		r = runSNMPv2c(host, config)
+		r = runSNMPv2c(name, config)
 	case "snmp_v3":
-		r = runSNMPv3(host, config)
+		r = runSNMPv3(name, config)
 	default:
 		r = &Result{
 			Status:  "down",

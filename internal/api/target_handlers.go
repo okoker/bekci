@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/bekci/internal/checker"
 	"github.com/bekci/internal/store"
 )
 
@@ -132,6 +133,10 @@ func (s *Server) handleCreateTarget(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Name == "" || req.Host == "" {
 		writeError(w, http.StatusBadRequest, "name and host are required")
+		return
+	}
+	if msg := checker.HostError(req.Host); msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
 	if req.PreferredCheckType != "" && !validCheckTypes[req.PreferredCheckType] {
@@ -346,6 +351,10 @@ func (s *Server) handleUpdateTarget(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Name == "" || req.Host == "" {
 		writeError(w, http.StatusBadRequest, "name and host are required")
+		return
+	}
+	if msg := checker.HostError(req.Host); msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
 	if req.PreferredCheckType != "" && !validCheckTypes[req.PreferredCheckType] {

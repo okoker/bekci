@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"sync"
 	"testing"
 )
@@ -58,23 +59,35 @@ func TestEndpointGetsOneLeadingSlash(t *testing.T) {
 	}
 }
 
+// The cases live in testdata/http_urls.json, shared with the target form's
+// address line (frontend/tests/condition-rules.test.mjs).
 func TestBuildHTTPURL(t *testing.T) {
-	cases := []struct {
-		scheme, host string
-		port         int
-		endpoint     string
-		want         string
-	}{
-		{"https", "example.com", 0, "health", "https://example.com/health"},
-		{"https", "example.com", 0, "/health", "https://example.com/health"},
-		{"https", "example.com", 0, "///health", "https://example.com/health"},
-		{"https", "example.com", 0, "", "https://example.com"},
-		{"http", "example.com", 8080, "?x=1", "http://example.com:8080/?x=1"},
-		{"http", "::1", 8080, "health", "http://[::1]:8080/health"},
-		{"http", "::1", 0, "health", "http://[::1]/health"},
-		{"https", "example.com/", 0, "health", "https://example.com/health"},
+	var table struct {
+		Cases []struct {
+			Scheme   string `json:"scheme"`
+			Host     string `json:"host"`
+			Port     int    `json:"port"`
+			Endpoint string `json:"endpoint"`
+			Want     string `json:"want"`
+		} `json:"cases"`
 	}
-	for _, tc := range cases {
+	data, err := os.ReadFile("testdata/http_urls.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(data, &table); err != nil {
+		t.Fatal(err)
+	}
+	if len(table.Cases) == 0 {
+		t.Fatal("testdata/http_urls.json has no cases")
+	}
+	for _, c := range table.Cases {
+		tc := struct {
+			scheme, host string
+			port         int
+			endpoint     string
+			want         string
+		}{c.Scheme, c.Host, c.Port, c.Endpoint, c.Want}
 		if got := buildHTTPURL(tc.scheme, tc.host, tc.port, tc.endpoint); got != tc.want {
 			t.Errorf("buildHTTPURL(%q,%q,%d,%q) = %q, want %q", tc.scheme, tc.host, tc.port, tc.endpoint, got, tc.want)
 		}

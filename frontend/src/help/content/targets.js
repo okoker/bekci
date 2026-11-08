@@ -1,5 +1,5 @@
 // Help for Targets (design §7.3). Facts: the helper inventory of TargetsView.vue;
-// Run Now internal/api/check_handlers.go:17-31; pause audit target_handlers.go:536, 556-567.
+// Run Now internal/api/check_handlers.go:17-31; pause audit target_handlers.go:545, 565-576.
 export const targets = {
   summary: {
     name: 'Targets',

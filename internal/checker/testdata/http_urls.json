@@ -1,0 +1,25 @@
+{
+  "about": "The URL an HTTP or Page Hash check requests for a scheme, target Host, port and Endpoint (buildHTTPURL, internal/checker/url.go). Read by TestBuildHTTPURL and by the target form's address line (frontend/tests/condition-rules.test.mjs), so the two cannot drift. Host is a name or IP, optionally followed by a path; an Endpoint of empty or / adds nothing to the Host's path.",
+  "cases": [
+    {"scheme": "https", "host": "example.com", "port": 0, "endpoint": "health", "want": "https://example.com/health"},
+    {"scheme": "https", "host": "example.com", "port": 0, "endpoint": "/health", "want": "https://example.com/health"},
+    {"scheme": "https", "host": "example.com", "port": 0, "endpoint": "///health", "want": "https://example.com/health"},
+    {"scheme": "https", "host": "example.com", "port": 0, "endpoint": "", "want": "https://example.com"},
+    {"scheme": "http", "host": "example.com", "port": 8080, "endpoint": "?x=1", "want": "http://example.com:8080/?x=1"},
+    {"scheme": "http", "host": "::1", "port": 8080, "endpoint": "health", "want": "http://[::1]:8080/health"},
+    {"scheme": "http", "host": "::1", "port": 0, "endpoint": "health", "want": "http://[::1]/health"},
+    {"scheme": "https", "host": "example.com/", "port": 0, "endpoint": "health", "want": "https://example.com/health"},
+    {"scheme": "https", "host": "example.com", "port": 0, "endpoint": "/", "want": "https://example.com/"},
+    {"scheme": "https", "host": "example.com/", "port": 0, "endpoint": "/", "want": "https://example.com/"},
+    {"scheme": "https", "host": "example.com/", "port": 8443, "endpoint": "/", "want": "https://example.com:8443/"},
+    {"scheme": "https", "host": "www.somehost.com/health", "port": 0, "endpoint": "/", "want": "https://www.somehost.com/health"},
+    {"scheme": "https", "host": "www.somehost.com/health", "port": 0, "endpoint": "", "want": "https://www.somehost.com/health"},
+    {"scheme": "https", "host": "somehost.com/health/", "port": 0, "endpoint": "/", "want": "https://somehost.com/health/"},
+    {"scheme": "https", "host": "www.somehost.com/health", "port": 8443, "endpoint": "/", "want": "https://www.somehost.com:8443/health"},
+    {"scheme": "http", "host": "somehost.com/app", "port": 0, "endpoint": "/status", "want": "http://somehost.com/app/status"},
+    {"scheme": "http", "host": "somehost.com/app/", "port": 0, "endpoint": "status", "want": "http://somehost.com/app/status"},
+    {"scheme": "http", "host": "somehost.com/app", "port": 0, "endpoint": "?x=1", "want": "http://somehost.com/app/?x=1"},
+    {"scheme": "http", "host": "::1/health", "port": 0, "endpoint": "/", "want": "http://[::1]/health"},
+    {"scheme": "http", "host": "::1/health", "port": 8080, "endpoint": "/", "want": "http://[::1]:8080/health"}
+  ]
+}

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/url"
+	"sort"
 	"strings"
 	"testing"
 
@@ -251,5 +253,55 @@ func TestV1Hosts_Snapshot(t *testing.T) {
 	resp.Body.Close()
 	if resp.StatusCode != 401 {
 		t.Fatalf("expected 401 after revoke, got %d", resp.StatusCode)
+	}
+}
+
+// A-082: a Host may carry a path, so the lookup matches on the name part of
+// both the stored Host and the query, ignoring case.
+func TestV1Hosts_NamePartMatch(t *testing.T) {
+	ts, st := setupTestServer(t)
+	seedHostTarget(t, st, "Site root", "www.somehost.com", nil, "", "", "", "")
+	seedHostTarget(t, st, "Site health", "www.somehost.com/health", nil, "", "", "", "")
+	seedHostTarget(t, st, "Other", "other.com/www.somehost.com", nil, "", "", "", "")
+	_, token, err := st.CreateAPIToken("soar", "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	names := func(query string) []string {
+		t.Helper()
+		req, _ := http.NewRequest("GET", ts.URL+"/api/v1/hosts?host="+url.QueryEscape(query), nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode != 200 {
+			t.Fatalf("query %q: status %d: %s", query, resp.StatusCode, body)
+		}
+		var envelope struct {
+			Targets []v1HostSnapshot `json:"targets"`
+		}
+		if err := json.Unmarshal(body, &envelope); err != nil {
+			t.Fatal(err)
+		}
+		var got []string
+		for _, s := range envelope.Targets {
+			got = append(got, s.Name+"="+s.Host)
+		}
+		sort.Strings(got)
+		return got
+	}
+
+	want := []string{"Site health=www.somehost.com/health", "Site root=www.somehost.com"}
+	for _, q := range []string{"www.somehost.com", "WWW.SomeHost.com", "www.somehost.com/health", "www.somehost.com/other"} {
+		if got := names(q); strings.Join(got, ",") != strings.Join(want, ",") {
+			t.Errorf("query %q: got %v, want %v", q, got, want)
+		}
+	}
+	if got := names("/health"); len(got) != 0 {
+		t.Errorf("query with no name: got %v, want none", got)
 	}
 }

@@ -1,29 +1,36 @@
 package checker
 
 import (
-	"fmt"
 	"net"
 	"strconv"
 	"strings"
 )
 
-// buildHTTPURL builds the URL for the HTTP and Page Hash checks. IPv6 hosts are
-// bracketed. A non-empty endpoint gets exactly one leading "/" (any extra
-// leading slashes are dropped, so "health", "/health" and "//health" all mean
-// /health); an empty endpoint leaves the URL at the root. A trailing "/" on the
-// host is dropped so it cannot double up with the endpoint's slash.
+// buildHTTPURL builds the URL for the HTTP and Page Hash checks from the
+// target Host (a name or IP, optionally followed by a path; SplitHost), the
+// check's port and its Endpoint. IPv6 names are bracketed. An Endpoint of ""
+// or "/" adds nothing to the Host's path (with no path, "" leaves the URL at
+// the bare host and "/" asks for the root). Any other Endpoint goes after the
+// Host's path with exactly one "/" between them, so "health", "/health" and
+// "//health" all mean /health. Mirrored by checkURL in
+// frontend/src/conditionRules.js; both are pinned by testdata/http_urls.json.
 func buildHTTPURL(scheme, host string, port int, endpoint string) string {
-	hostPart := host
-	if strings.Contains(host, ":") {
-		hostPart = "[" + host + "]"
-	}
-	base := fmt.Sprintf("%s://%s", scheme, hostPart)
+	name, path := SplitHost(host)
+	hostPart := name
 	if port > 0 {
-		base = fmt.Sprintf("%s://%s", scheme, net.JoinHostPort(host, strconv.Itoa(port)))
+		hostPart = net.JoinHostPort(name, strconv.Itoa(port))
+	} else if strings.Contains(name, ":") {
+		hostPart = "[" + name + "]"
 	}
-	base = strings.TrimRight(base, "/")
-	if endpoint == "" {
-		return base
+	base := scheme + "://" + hostPart
+	if endpoint == "" || endpoint == "/" {
+		if path != "" {
+			return base + path
+		}
+		if endpoint == "" {
+			return base
+		}
+		return base + "/"
 	}
-	return base + "/" + strings.TrimLeft(endpoint, "/")
+	return base + strings.TrimRight(path, "/") + "/" + strings.TrimLeft(endpoint, "/")
 }

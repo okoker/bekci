@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bekci/internal/checker"
 	"github.com/bekci/internal/store"
 )
 
@@ -32,8 +33,11 @@ type v1LastCheck struct {
 	ResponseMs int64   `json:"response_ms,omitempty"`
 }
 
-// handleV1Hosts returns an array of targets whose host field
-// case-insensitively matches the ?host= query param. Each element carries
+// handleV1Hosts returns an array of targets whose host name
+// case-insensitively matches the ?host= query param's. A Host may carry a
+// path (www.example.com/health), so both sides are compared by their name
+// part (checker.SplitHost): ?host=www.example.com finds www.example.com and
+// www.example.com/health alike. Each element carries
 // the preferred check's last result plus project/location/contacts/
 // notes/tags. Returns {"targets":[]} when no match.
 //
@@ -52,10 +56,13 @@ func (s *Server) handleV1Hosts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Case-insensitive exact match on targets.host.
+	// Case-insensitive match on the name part of targets.host. A query with
+	// no name (?host=/health) matches nothing.
 	var matched []*store.Target
+	queryName, _ := checker.SplitHost(host)
 	for i := range all {
-		if strings.EqualFold(strings.TrimSpace(all[i].Host), host) {
+		name, _ := checker.SplitHost(strings.TrimSpace(all[i].Host))
+		if queryName != "" && strings.EqualFold(name, queryName) {
 			matched = append(matched, &all[i])
 		}
 	}

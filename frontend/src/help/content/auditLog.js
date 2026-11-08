@@ -3,7 +3,7 @@
 // "api-token:" only on the rate limit middleware.go:125, audit.go:68-82; failed sign-in
 // auth_handlers.go:41; colours SettingsView.vue actionClass; retention cmd/bekci/main.go:287-305;
 // restore wipe internal/store/backup.go:400-418; not recorded auth_handlers.go:32-35,
-// middleware.go:108-111, v1_hosts.go:103-110; update_settings settings_handlers.go:335.
+// middleware.go:108-111, v1_hosts.go:110-117; update_settings settings_handlers.go:335.
 export const auditLog = {
   summary: {
     name: 'Audit Log',

@@ -287,6 +287,19 @@ Kills all sessions for the user, forcing re-login.
 | POST | `/api/targets/{id}/pause` | operator+ | Pause target (stops checks) |
 | POST | `/api/targets/{id}/unpause` | operator+ | Unpause target (resumes checks) |
 
+**Target host.** `host` is a name or IP address, optionally followed by a path: `www.example.com`, `www.example.com/health`, `10.0.0.5/status/`. Checks split it at the first `/` (`checker.SplitHost`, `internal/checker/host.go`): HTTP and Page Hash request the path (see the `http` endpoint below); TCP, ping, DNS (the `query` fallback), TLS (address and SNI) and SNMP use the name only. Create and update trim the host, then refuse it with 400 and one of these messages (`checker.HostError`):
+
+| Host holds | Message |
+|-------|---------|
+| a space or control character | `Host can't contain spaces.` |
+| `://` | `Leave out http:// or https://: each HTTP or Page Hash check has its own Scheme.` |
+| `?` or `#` | `Put a query (? or #) in the check's Endpoint, not in Host.` |
+| nothing before the first `/` | `Host needs a name or IP address before the path.` |
+| `@` before the path | `Host can't contain @ before the path.` |
+| `:` before the path, unless the name is an IPv6 address without brackets | `Leave out the port: each check has its own Port field. Write an IPv6 address without brackets.` |
+
+Non-ASCII letters and `_` are accepted. The host is stored and returned as typed (after trimming), so target lists, the dashboard, the SOC wall, `/api/v1/hosts`, the audit log and alerts (`target_address`, the email and Signal "Host" line) show the path too. A config restore does not check hosts: a restored host is stored as it was saved.
+
 ### GET /api/targets
 
 Returns summary list (no full conditions, includes condition count and state).
@@ -333,7 +346,7 @@ Creates target, checks, rule, and rule conditions in one transaction. Creator is
 ```json
 {
   "name": "string (required)",
-  "host": "string (required)",
+  "host": "string (required): a name or IP, optionally followed by a path (see Target host above)",
   "description": "string",
   "enabled": true,
   "operator": "AND (kept for backward compat, used as fallback for empty group_operator)",
@@ -383,6 +396,7 @@ The target editor keeps Save clickable for invalid thresholds. Clicking Save sho
 | Error | Code |
 |-------|------|
 | Missing name/host | 400 |
+| Host refused (see Target host above; the message says why) | 400 |
 | No conditions provided | 400 |
 | Invalid operator | 400 |
 | Invalid category | 400 |
@@ -480,6 +494,7 @@ Conditions can include `check_id` to update existing checks:
 | Error | Code |
 |-------|------|
 | Missing name/host | 400 |
+| Host refused (see Target host above; the message says why) | 400 |
 | No conditions provided | 400 |
 | Invalid operator/category/check_type | 400 |
 | Multi-failure threshold requires a window longer than 1800 seconds (no changes saved) | 400 |
@@ -744,7 +759,7 @@ The JSON string `"null"` uses the same defaults as `"{}"`. The scheduler initial
 |-------|------|---------|-------------|
 | `scheme` | string | `"https"` | `http` or `https` |
 | `port` | int | `0` | Port (0 = scheme default: 80/443) |
-| `endpoint` | string | `"/"` | URL path. A missing leading `/` is added and extra leading `/` are dropped (`health`, `/health` and `//health` all fetch `/health`); empty fetches `/` |
+| `endpoint` | string | `"/"` | URL path, after the target host's path if it has one. Empty or `/` adds nothing: the host's path as typed (trailing `/` kept), or `/` when the host has none. Any other value goes after the host's path with exactly one `/` between: a missing leading `/` is added and extra leading `/` are dropped (`health`, `/health` and `//health` all fetch `/health`; host `example.com/app` + `status` fetches `/app/status`). The URL is `scheme://name[:port]` + path (`buildHTTPURL`, `internal/checker/url.go`; cases in `internal/checker/testdata/http_urls.json`) |
 | `expect_status` | int | `200` | Expected HTTP status code |
 | `skip_tls_verify` | bool | `false` | Skip TLS cert verification |
 | `timeout_s` | int | `10` | Request timeout (seconds) |
@@ -791,7 +806,7 @@ Metrics: `packet_loss`, `avg_rtt_ms`, `packets_sent`, `packets_recv`. Status "do
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `query` | string | target host | Domain to resolve |
+| `query` | string | target host name (the host without its path) | Domain to resolve |
 | `record_type` | string | `"A"` | `A`, `AAAA`, `MX`, or `CNAME` |
 | `expect_value` | string | `""` | Expected value (empty = any resolution is "up") |
 | `nameserver` | string | `""` | Custom nameserver (empty = system resolver) |
@@ -809,7 +824,7 @@ Metrics: `query`, `record_type`, `resolved` (array). Trailing dots stripped for 
 |-------|------|---------|-------------|
 | `scheme` | string | `"https"` | `http` or `https` |
 | `port` | int | `0` | Port (0 = scheme default) |
-| `endpoint` | string | `"/"` | URL path to fetch. Leading `/` handled as for the HTTP check |
+| `endpoint` | string | `"/"` | URL path to fetch, combined with the target host's path as for the HTTP check |
 | `baseline_hash` | string | `""` | SHA256 of expected body (empty = capture mode) |
 | `skip_tls_verify` | bool | `false` | Skip TLS cert verification |
 | `timeout_s` | int | `10` | Request timeout (seconds) |
@@ -832,7 +847,7 @@ Metrics: `hash`, `baseline_hash`, `url`, `baseline_captured`. On first run (empt
 { "port": 443, "warn_days": 14 }
 ```
 
-Metrics: `days_left`, `issuer`, `subject`, `not_after`, `not_before`. Sends the target host as SNI so the server presents the certificate for that name. Connects with `InsecureSkipVerify`: chain trust and hostname are **not** verified — only the leaf certificate's expiry is checked, so an untrusted or mismatched certificate is still "up" unless it is within `warn_days` of expiry. Status "down" if cert expires within `warn_days` or already expired.
+Metrics: `days_left`, `issuer`, `subject`, `not_after`, `not_before`. Connects to the target host name (the host without its path) and sends it as SNI so the server presents the certificate for that name. Connects with `InsecureSkipVerify`: chain trust and hostname are **not** verified — only the leaf certificate's expiry is checked, so an untrusted or mismatched certificate is still "up" unless it is within `warn_days` of expiry. Status "down" if cert expires within `warn_days` or already expired.
 
 ### snmp_v2c
 
@@ -1154,6 +1169,7 @@ Bekci POSTs the following JSON to `webhook_url` on `firing`, `recovery`, `re-ale
 ```
 
 **Notes:**
+- `target_address` is the target's host as typed, so it carries the path when the host has one (`www.example.com/health`; see Target host). The `test` event sends `127.0.0.1`.
 - `tags` is an array of uppercase free-form labels attached to the target (from `tag_options` where `grp='tag'`). Always present; `[]` when the target has no tags. The `test` event sends `["TEST"]` as a sentinel.
 - `failing_checks` is `[]` for `recovery` and `test`; populated for `firing` and `re-alert` with every check whose last result isn't `up`.
 - `down_since` + `duration` are only included on `recovery`.
@@ -1747,13 +1763,13 @@ Machine-facing endpoints for remote consumers (monitoring dashboards, runbook sc
 
 ### GET /api/v1/hosts
 
-Return a point-in-time snapshot of any target(s) whose `host` field matches the query param. Two targets can legitimately share a host value; in that case, the response array carries one element per target.
+Return a point-in-time snapshot of any target(s) whose host name matches the query param. Two targets can legitimately share a host name (`www.example.com` and `www.example.com/health`); in that case, the response array carries one element per target.
 
 **Query params:**
 
 | Param | Required | Notes |
 |-------|----------|-------|
-| `host` | Yes | Case-insensitive exact match against `targets.host`. No wildcards. |
+| `host` | Yes | Case-insensitive exact match of the name part: the query and each `targets.host` are cut at their first `/` (`checker.SplitHost`), so `www.example.com`, `WWW.example.com` and `www.example.com/other` all find `www.example.com` and `www.example.com/health`. A query with nothing before its first `/` finds nothing. No wildcards. The response's `host` is the stored value, path included. |
 
 **Response (200):**
 ```json
