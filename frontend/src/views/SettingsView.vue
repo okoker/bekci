@@ -1191,6 +1191,7 @@ onUnmounted(() => {
       <button
         v-else-if="activeTab === 'users' && auth.isAdmin && usersSubTab === 'api-access' && !apiTokenJustCreated"
         class="btn btn-primary"
+        data-help="apiAccess.create"
         @click="apiTokenShowCreate = !apiTokenShowCreate"
       >
         {{ apiTokenShowCreate ? 'Cancel' : 'Create Token' }}
@@ -1765,7 +1766,7 @@ onUnmounted(() => {
         <template v-if="!apiTokenJustCreated">
           <div v-if="apiTokenShowCreate" class="card">
             <form @submit.prevent="createAPIToken">
-              <div class="form-group">
+              <div class="form-group" data-help="apiAccess.name">
                 <label class="required">Token name</label>
                 <input v-model="apiTokenNewName" placeholder="e.g. grafana-prod, zabbix-dr" maxlength="80" required />
                 <p class="text-muted" style="margin-top: 0.25rem; font-size: 0.85rem;">

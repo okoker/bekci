@@ -245,6 +245,22 @@ test('with help off, the window opens from the form: header, three shelves of tw
   await modal.waitFor() // the form is still open
 })
 
+// The target form shows a Timeout for HTTP (and TCP, ping, SNMP), so the table lists it too. Page Hash and
+// TLS certificate have no Timeout field in the form (they run at 10 s), so their rows don't list one.
+test('the table lists the timeout of an HTTP recipe, as it does for TCP and ping', async t => {
+  const { page, modal } = await openForm(t)
+  await openRecipes(modal)
+  const w = win(page)
+  const settings = async id => {
+    await pick(page, id)
+    return (await w.locator('.recipe-table tbody tr').first().locator('td').nth(1).innerText())
+  }
+  const http = await settings('B2')
+  assert.equal(recipe('B2').conditions[0].check_type, 'http')
+  assert.equal(http, 'HTTPS, endpoint /, expected status 200, timeout 10 s')
+  assert.equal(await settings('B1'), 'ping count 3, timeout 5 s')
+})
+
 test('the diagram: groups in blue boxes, AND between conditions, slate OR pills between groups; tests that must pass are green, with the legend', async t => {
   const { page, modal } = await openForm(t)
   await openRecipes(modal)

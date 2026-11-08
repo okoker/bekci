@@ -129,6 +129,10 @@ Help is not modal, so other windows can be open under or over it. Each press clo
   target form's per-condition and per-group fields: a mark on every instance). Controls hidden by role
   (`v-if="auth.isOperator"` and the like) are simply absent, so there is no role list to keep in sync.
   Rows that arrive after help was turned on get their marks when they render.
+- **API Access** (`views/SettingsView.vue`): Create Token in the page header has its own note
+  (`apiAccess.create`). The Token name note (`apiAccess.name`) sits on the Create form's field while the
+  form is open and on the table's Name header while it is closed: the form comes first in the page, so it
+  takes the one mark. Both places read right with the same text.
 
 ### How a page adds help
 
@@ -303,7 +307,7 @@ empty or fails the need's pattern, the recipe's message.
   or off (`:509`). It is disabled until Edit or Clone has loaded the target, and the form registers
   `help.formApply` only then (`:224`, `:275-281`). A load sequence number keeps a form closed while
   loading from ending the wait of the next one (`:381-409`).
-- **Use this recipe** in the window calls the form (`help/RecipesWindow.vue:117-122`). A form that holds
+- **Use this recipe** in the window calls the form (`help/RecipesWindow.vue:118-123`). A form that holds
   conditions first asks, in an in-app dialog (`components/TargetEditModal.vue:790-797`): "Replace the N conditions in this form with
   this recipe? On a saved target, Save then deletes the replaced checks and their history, SLA
   included." ("the 1 condition" for one), with Replace and Cancel; Esc is Cancel. The warning is true:
@@ -326,12 +330,12 @@ Drawn by the help layer over the target form, with help on or off; 40px margins,
 frame. The left column holds the three shelves; the right the chosen recipe: shelf, name, what it
 catches, the rule diagram (`help/RuleDiagram.vue`: blue group boxes, AND/OR between chips, slate OR
 pills, green chips for tests that must be passing, with a legend), "Read it as", "What alerts, and what
-doesn't", "Before you use it", and "What it puts in the form". The footer's centred button "Use this
+doesn't", "Before you use it", and "What it puts in the form" (a row per condition; it lists the timeout for HTTP, TCP and ping, the checks whose form shows a Timeout field, and not for Page Hash and TLS certificate, whose form has none). The footer's centred button "Use this
 recipe for your monitoring target!" (at least 460px wide) shows only while a target form is open.
 Opened elsewhere (from the lesson) the window is read-only: the footer says "To use a recipe, press +
 Target, then Start from a recipe." to operators and admins, and nothing to viewers
-(`help/RecipesWindow.vue:219-223`). Focus moves into the window and back to its opener on close
-(`:124-136`). The window, like the lesson, has `aria-modal` but no Tab trap, as the app's own modals.
+(`help/RecipesWindow.vue:220-224`). Focus moves into the window and back to its opener on close
+(`:125-137`). The window, like the lesson, has `aria-modal` but no Tab trap, as the app's own modals.
 
 ## The rule lesson (`help/LessonPanel.vue`)
 

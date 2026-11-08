@@ -177,7 +177,7 @@ onBeforeUnmount(() => {
           <!-- 4 -->
           <section class="lesson-part">
             <h3 class="lesson-heading">{{ PARTS[3] }}</h3>
-            <p>Groups never confirm each other: each group is a separate way to be down, so adding a group adds alerts.</p>
+            <p>Groups never confirm each other: each group is a separate way to be down, so adding a group adds ways to be alerted.</p>
           </section>
 
           <!-- 5 -->

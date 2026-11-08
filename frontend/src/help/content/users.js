@@ -63,6 +63,10 @@ export const apiAccess = {
     text: "issues tokens that let other systems, such as Grafana or Zabbix, read Bekci's machine API.",
   },
   items: {
+    create: {
+      title: 'Create Token',
+      text: ['Opens a form for a new token. Give it a name and press Create: Bekci then shows the token once.'],
+    },
     once: {
       title: 'New token',
       text: ["The token is shown this once. Copy it now: Bekci keeps only a fingerprint and can't show it again."],

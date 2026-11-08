@@ -429,8 +429,8 @@ test('Audit Log is for operators and admins: a viewer is sent to the Dashboard a
 
 const USERS = [['users.create', 'Create User'], ['users.role', 'Role'], ['users.status', 'Status'], ['users.edit', 'Edit'],
   ['users.suspend', 'Suspend and Activate'], ['users.priv', 'Role privileges']]
-const API_ACCESS = [['apiAccess.name', 'Token name'], ['apiAccess.prefix', 'Prefix'], ['apiAccess.used', 'Last used'],
-  ['apiAccess.revoke', 'Revoke']]
+const API_ACCESS = [['apiAccess.create', 'Create Token'], ['apiAccess.name', 'Token name'], ['apiAccess.prefix', 'Prefix'],
+  ['apiAccess.used', 'Last used'], ['apiAccess.revoke', 'Revoke']]
 const usersReady = page => page.locator('tbody tr', { hasText: 'operator@example.com' }).waitFor()
 const tokensReady = page => page.locator('tbody tr', { hasText: 'grafana' }).waitFor()
 
@@ -474,11 +474,42 @@ test('API Access: a new token\'s card gets the New token mark', async t => {
   await page.getByPlaceholder('e.g. grafana-prod, zabbix-dr').fill('zabbix')
   await page.locator('form .btn', { hasText: /^Create$/ }).click()
   await page.locator('.token-reveal').waitFor()
-  await waitForIds(page, ['apiAccess.once', ...idsOf(API_ACCESS), ...HEADER])
+  // The page's Create Token button is gone while the new token is on show
+  await waitForIds(page, ['apiAccess.once', ...idsOf(API_ACCESS).filter(id => id !== 'apiAccess.create'), ...HEADER])
   await mark(page, 'apiAccess.once').click()
   await waitForTitle(page, 'New token')
   assert.match(await note(page).innerText(), /shown this once/)
   assert.deepEqual(writes, [{ method: 'POST', path: '/api/api-tokens', body: { name: 'zabbix' } }])
+})
+
+test('API Access: Create Token has its note; with its form open the Token name mark moves to the form\'s field', async t => {
+  const { page } = await withHelp(t, '/users', { role: 'admin' }, async page => {
+    await usersReady(page)
+    await page.getByRole('button', { name: 'API Access', exact: true }).click()
+    await tokensReady(page)
+  })
+  await waitForIds(page, [...idsOf(API_ACCESS), ...HEADER])
+  // Form closed: the Token name mark is on the table's Name header
+  await mark(page, 'apiAccess.name').click()
+  await waitForTitle(page, 'Token name')
+  assert.equal(await page.locator('[data-help-on]').evaluate(el => el.closest('table') !== null), true, 'on the table header')
+  await page.keyboard.press('Escape')
+  await note(page).waitFor({ state: 'detached' })
+  await mark(page, 'apiAccess.create').click()
+  await waitForTitle(page, 'Create Token')
+  assert.match(await note(page).innerText(), /Give it a name and press Create: Bekci then shows the token once/)
+  assert.equal(await page.locator('[data-help-on]').innerText(), 'Create Token', 'on the page\'s button')
+  await page.keyboard.press('Escape')
+  await note(page).waitFor({ state: 'detached' })
+  // Form open: the same note, now beside the field, one mark only
+  await page.locator('.page-header .btn', { hasText: 'Create Token' }).click()
+  await page.locator('form input[placeholder="e.g. grafana-prod, zabbix-dr"]').waitFor()
+  await waitForIds(page, [...idsOf(API_ACCESS), ...HEADER])
+  assert.equal((await markIds(page)).filter(id => id === 'apiAccess.name').length, 1, 'one Token name mark')
+  await mark(page, 'apiAccess.name').click()
+  await waitForTitle(page, 'Token name')
+  assert.equal(await page.locator('[data-help-on]').evaluate(el => el.querySelector('input[placeholder="e.g. grafana-prod, zabbix-dr"]') !== null), true,
+    'on the form\'s Token name field')
 })
 
 test('Users: the Edit and Suspend windows hide the page\'s marks; they come back when it closes', async t => {

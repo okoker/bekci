@@ -70,6 +70,7 @@ function settingsOf(r, c) {
       if (k.port) add('port ', 'port')
       add('endpoint ', 'endpoint')
       add('expected status ', 'expect_status')
+      add('timeout ', 'timeout_s', seconds)
       if (k.skip_tls_verify) items.push({ text: 'Skip TLS Verify' })
       break
     case 'page_hash':
