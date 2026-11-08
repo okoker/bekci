@@ -1800,9 +1800,9 @@ onUnmounted(() => {
                   <span v-if="t.revoked_at" class="badge badge-suspended">Revoked {{ fmtDateTime(t.revoked_at) }}</span>
                   <span v-else class="badge badge-active">Active</span>
                 </td>
-                <td class="actions">
+                <td class="actions-cell"><div class="actions">
                   <button v-if="!t.revoked_at" class="btn btn-sm btn-danger" data-help="apiAccess.revoke" @click="revokeAPIToken(t.id, t.name)">Revoke</button>
-                </td>
+                </div></td>
               </tr>
               <tr v-if="apiTokens.length === 0">
                 <td colspan="6" class="text-muted" style="padding: 1rem; text-align: center;">No API tokens yet. Create one to give a remote consumer read access to <code>/api/v1/*</code>.</td>
