@@ -229,7 +229,7 @@ test('Search: the State note draws the table\'s badges; Pause, Delete and Unpaus
   assert.equal(await note(page).locator('.badge').filter({ hasText: /^—$/ }).count(), 0, '— is not drawn as a badge')
   await page.keyboard.press('Escape')
   await note(page).waitFor({ state: 'detached' })
-  // Delete is grey on the Search page (no .btn-danger rule there): the note draws it the same
+  // The note draws Delete in the colours of the row's own Delete button (red, as on Targets)
   await mark(page, 'search.acts').click()
   await waitForTitle(page, 'Actions')
   const live = await page.locator('tbody .actions .btn', { hasText: /^Delete$/ }).first().evaluate(el => getComputedStyle(el).color + getComputedStyle(el).borderTopColor)

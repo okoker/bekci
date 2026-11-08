@@ -852,6 +852,11 @@ onMounted(async () => {
   border-color: #bbf7d0;
 }
 .btn-unpause:hover { background: #dcfce7; }
+.btn-danger {
+  color: #991b1b;
+  border-color: #fca5a5;
+}
+.btn-danger:hover { background: #fee2e2; }
 
 /* Expanded detail panel — matches TargetsView checks-panel */
 .detail-panel {

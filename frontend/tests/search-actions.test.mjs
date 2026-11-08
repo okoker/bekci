@@ -40,3 +40,22 @@ test('Search: saving an Edit says the target was updated', async t => {
   assert.equal(await saveFrom(page, row, 'Edit'), 'Target updated')
   assert.ok(writes.some(w => w.method === 'PUT' && w.path === '/api/targets/t1'), 'the edit was sent as an update')
 })
+
+// How a button looks: the colours a person sees
+const look = button => button.evaluate(el => {
+  const s = getComputedStyle(el)
+  return { color: s.color, border: s.borderTopColor }
+})
+
+test('Search: the Delete button is red, like the Delete button on Targets', async t => {
+  const targets = await openPage(t, app, '/targets', { role: 'operator' })
+  const reference = await look(targets.page.locator('tbody tr').filter({ hasText: 'Core switch' })
+    .getByRole('button', { name: 'Delete', exact: true }))
+  assert.equal(reference.color, 'rgb(153, 27, 27)', 'reference: Targets shows a red Delete')
+
+  const { page, row } = await searchCore(t)
+  assert.deepEqual(await look(row.getByRole('button', { name: 'Delete', exact: true })), reference, 'row Delete')
+  await row.getByRole('button', { name: 'Delete', exact: true }).click()
+  const confirm = page.locator('.modal-card').getByRole('button', { name: 'Delete', exact: true })
+  assert.deepEqual(await look(confirm), reference, 'Delete in the confirm dialog')
+})

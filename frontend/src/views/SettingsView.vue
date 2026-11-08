@@ -1412,11 +1412,11 @@ onUnmounted(() => {
             <tbody>
               <tr>
                 <td><span class="sla-badge-example sla-badge-up-ex">UP</span></td>
-                <td>The target's most recent check succeeded. The target is currently reachable and responding normally.</td>
+                <td>The target's alert conditions are not met, so it is working as its checks define. One failed check does not turn it DOWN until it reaches its Fail Count.</td>
               </tr>
               <tr>
                 <td><span class="sla-badge-example sla-badge-down-ex">DOWN</span></td>
-                <td>The target's most recent check failed. The target is currently unreachable or not responding as expected.</td>
+                <td>The target's alert conditions are met: its checks have failed as often as its rule requires (the Fail Count). A paused target shows PAUSED instead.</td>
               </tr>
               <tr>
                 <td><span class="sla-badge-example sla-badge-healthy-ex">HEALTHY</span></td>
@@ -1428,7 +1428,7 @@ onUnmounted(() => {
               </tr>
             </tbody>
           </table>
-          <p class="text-muted sla-info-note">UP/DOWN reflects the <strong>current</strong> state of a single check. HEALTHY/UNHEALTHY reflects <strong>long-term</strong> reliability over 90 days. A target can be <span class="sla-badge-example sla-badge-up-ex">UP</span> right now but still <span class="sla-badge-example sla-badge-unhealthy-ex">UNHEALTHY</span> if past outages have pulled its overall uptime below the SLA threshold.</p>
+          <p class="text-muted sla-info-note">UP/DOWN is the target's <strong>current</strong> alert rule state, not the result of a single check. HEALTHY/UNHEALTHY reflects <strong>long-term</strong> reliability over 90 days. A target can be <span class="sla-badge-example sla-badge-up-ex">UP</span> right now but still <span class="sla-badge-example sla-badge-unhealthy-ex">UNHEALTHY</span> if past outages have pulled its overall uptime below the SLA threshold.</p>
         </div>
       </div>
     </div>
@@ -1436,7 +1436,7 @@ onUnmounted(() => {
     <!-- ── Audit Log Tab ── -->
     <div v-if="activeTab === 'audit' && auth.isOperator">
       <div class="audit-header">
-        <span class="text-muted" data-help="auditLog.audit">{{ auditTotal }} events</span>
+        <span class="text-muted" data-help="auditLog.audit">{{ auditTotal }} {{ auditTotal === 1 ? 'event' : 'events' }}</span>
         <input
           ref="auditSearchInput"
           v-model="auditSearch"

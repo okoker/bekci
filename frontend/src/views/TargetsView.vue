@@ -1149,4 +1149,14 @@ onMounted(async () => {
   .guide-diagram { flex-direction: column; }
   .guide-dg-or { padding: 0.1rem 0; }
 }
+
+/* Actions column: in a window narrower than the page (1100px plus margins) the buttons wrap inside the cell
+   instead of pushing the page sideways. Wider, they stay on one line as before: wrapping there would let
+   the table share the width differently and wrap them although they fit. */
+@media (max-width: 1199px) {
+  td.actions {
+    flex-wrap: wrap;
+    white-space: normal;
+  }
+}
 </style>
