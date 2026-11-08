@@ -88,7 +88,7 @@ function settingsOf(r, c) {
       add('timeout ', 'timeout_s', seconds)
       break
     case 'dns':
-      items.push({ text: k.query ? `query ${k.query}` : 'query empty = target host' })
+      items.push({ text: k.query ? `query ${k.query}` : 'query empty = target host name' })
       add('record ', 'record_type')
       if (k.nameserver) add('nameserver ', 'nameserver')
       if (k.expect_value || needFor('expect_value')) add('expected value ', 'expect_value')

@@ -31,7 +31,10 @@ export const targetForm = {
     },
     host: {
       title: 'Host',
-      text: ['The address Bekci tests: a hostname or IP. Every check on this target uses it, except a DNS check given its own Query.'],
+      text: [
+        'The address Bekci tests: a hostname or IP, optionally followed by a path (www.example.com/health). HTTP and Page Hash checks ask for that path, with their Endpoint after it; every other check uses only the name. A DNS check given its own Query asks for that instead.',
+        "Leave out http:// or https:// and the port: each check has its own Scheme and Port. Adding a path to a Host with a Page Hash check changes the page it reads, so clear that check's Baseline Hash to capture the new page.",
+      ],
       box: 'label',
     },
     category: {

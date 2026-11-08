@@ -6,7 +6,7 @@ import { help, toggleHelp, openRecipes, LazyHelpBar, LazyRuleCard } from '../hel
 import { applyConditions, needOf, needError } from '../help/applyConditions.js'
 import {
   checkTypes, getDefaultConfig, getDefaultCondition, maxFailWindow, minFailWindow,
-  failWindowError, valueError, packetLossHint,
+  failWindowError, valueError, packetLossHint, hostError, checkURL,
 } from '../conditionRules'
 
 const props = defineProps({
@@ -126,6 +126,10 @@ const hasValueError = computed(() => form.value.conditions.some(cond => valueErr
 // or not in the form it needs: Save waits for it, with the recipe's message
 const hasNeedError = computed(() => form.value.conditions.some(cond =>
   (cond.needs || []).some(need => needError(cond, need.field))))
+
+// A Host the server would refuse (a scheme, a port, a query, spaces): the field
+// shows the server's message and Save waits (conditionRules.js hostError)
+const hasHostError = computed(() => hostError(form.value.host) !== '')
 
 // Unique check types from current conditions — for preferred check dropdown
 const availableCheckTypes = computed(() => {
@@ -324,7 +328,7 @@ async function loadTargetDetail(id) {
 // Save
 async function saveTarget() {
   formError.value = ''
-  if (hasFailWindowError.value || hasValueError.value || hasNeedError.value) return
+  if (hasFailWindowError.value || hasValueError.value || hasNeedError.value || hasHostError.value) return
   try {
     const payload = {
       name: form.value.name,
@@ -424,7 +428,6 @@ watch(() => props.show, async (val) => {
           <span class="form-help-icon" aria-hidden="true"></span>Help
         </button>
       </div>
-      <div v-if="formError" class="error-msg" style="margin-bottom: 0.75rem;">{{ formError }}</div>
       <form @submit.prevent="saveTarget">
         <!-- Target fields -->
         <div class="form-row">
@@ -434,7 +437,8 @@ watch(() => props.show, async (val) => {
           </div>
           <div class="form-group" data-help="targetForm.host">
             <label class="required">Host</label>
-            <input v-model="form.host" required placeholder="e.g. google.com" />
+            <input v-model="form.host" required placeholder="e.g. google.com"
+              v-custom-validity="hostError(form.host)" />
           </div>
         </div>
         <div class="form-group">
@@ -590,6 +594,7 @@ watch(() => props.show, async (val) => {
                         <input type="number" v-model.number="cond.config.expect_status" />
                       </div>
                     </div>
+                    <p v-if="checkURL(cond.config, form.host)" class="text-muted input-hint check-url">Checks {{ checkURL(cond.config, form.host) }}</p>
                     <div class="form-row">
                       <div class="form-group" data-help="targetForm.timeout">
                         <label>Timeout (s)</label>
@@ -637,8 +642,8 @@ watch(() => props.show, async (val) => {
                   <template v-if="cond.check_type === 'dns'">
                     <div class="form-row">
                       <div class="form-group">
-                        <label>Query (empty = target host)</label>
-                        <input v-model="cond.config.query" placeholder="Leave empty for target host" />
+                        <label>Query (empty = target host name)</label>
+                        <input v-model="cond.config.query" placeholder="Leave empty for target host name" />
                       </div>
                       <div class="form-group">
                         <label>Record Type</label>
@@ -678,6 +683,7 @@ watch(() => props.show, async (val) => {
                         <input v-model="cond.config.endpoint" placeholder="/" />
                       </div>
                     </div>
+                    <p v-if="checkURL(cond.config, form.host)" class="text-muted input-hint check-url">Checks {{ checkURL(cond.config, form.host) }}</p>
                     <div class="form-group" data-help="targetForm.baseline">
                       <label>Baseline Hash (empty = auto-capture)</label>
                       <input v-model="cond.config.baseline_hash" placeholder="Leave empty to auto-capture" />
@@ -778,6 +784,9 @@ watch(() => props.show, async (val) => {
           </div>
         </div>
 
+        <!-- Next to Save, where the person pressed it: a refusal at the top of
+             this long form went unseen -->
+        <div v-if="formError" class="error-msg" style="margin-bottom: 0.75rem;">{{ formError }}</div>
         <div class="form-actions" data-help="targetForm.save">
           <button type="submit" class="btn btn-primary" :disabled="form.conditions.length === 0">Save</button>
           <button type="button" class="btn" @click="close">Cancel</button>
@@ -1172,6 +1181,12 @@ watch(() => props.show, async (val) => {
   display: block;
   font-size: 0.75rem;
   margin-top: 0.25rem;
+}
+
+/* The address an HTTP or Page Hash check requests; a long one wraps instead of widening the form */
+.check-url {
+  margin: -0.25rem 0 0.75rem;
+  overflow-wrap: anywhere;
 }
 
 .validation-warning {

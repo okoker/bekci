@@ -95,3 +95,68 @@ export function packetLossHint(cond) {
   parts.push('More pings give finer steps; each adds about a second to the check.')
   return parts.join(' ')
 }
+
+// A target Host is a name or IP, optionally followed by a path
+// (www.example.com/health). These mirror the server's SplitHost, HostError and
+// buildHTTPURL (internal/checker/host.go, url.go); frontend/tests/condition-rules.test.mjs
+// runs them against the same tables (internal/checker/testdata/), so the form
+// and the server agree.
+export function splitHost(host) {
+  const i = host.indexOf('/')
+  return i >= 0 ? [host.slice(0, i), host.slice(i)] : [host, '']
+}
+
+// The server's net.ParseIP, for a name holding ":" (only IPv6 can).
+function isIPv6(name) {
+  if (!/^[0-9A-Fa-f:.]+$/.test(name)) return false
+  try {
+    new URL(`http://[${name}]/`)
+    return true
+  } catch {
+    return false
+  }
+}
+
+// Why Save refuses a Host, or '' when it is fine. Trims first, as the server
+// does; an empty Host is left to the field's "required".
+export function hostError(host) {
+  const h = String(host ?? '').trim()
+  if (h === '') return ''
+  if (/[\p{White_Space}\p{Cc}]/u.test(h)) return "Host can't contain spaces."
+  if (h.includes('://')) return "Leave out http:// or https://: each HTTP or Page Hash check has its own Scheme."
+  if (/[?#]/.test(h)) return "Put a query (? or #) in the check's Endpoint, not in Host."
+  const [name] = splitHost(h)
+  if (name === '') return 'Host needs a name or IP address before the path.'
+  if (name.includes('@')) return "Host can't contain @ before the path."
+  if (name.includes(':') && !isIPv6(name)) {
+    return "Leave out the port: each check has its own Port field. Write an IPv6 address without brackets."
+  }
+  return ''
+}
+
+// The URL an HTTP or Page Hash check requests: the Host's name (and port), the
+// Host's path as typed, then the Endpoint; an Endpoint of '' or '/' adds nothing.
+export function buildHTTPURL(scheme, host, port, endpoint) {
+  const [name, path] = splitHost(host)
+  const bracketed = name.includes(':') ? `[${name}]` : name
+  const base = `${scheme}://${port > 0 ? `${bracketed}:${port}` : bracketed}`
+  if (endpoint === '' || endpoint === '/') {
+    if (path !== '') return base + path
+    return endpoint === '' ? base : `${base}/`
+  }
+  return `${base}${path.replace(/\/+$/, '')}/${endpoint.replace(/^\/+/, '')}`
+}
+
+// The address shown under an HTTP or Page Hash Endpoint, with the defaults the
+// check applies (checker.go configStr/configInt: a missing or empty scheme is
+// https, an empty Endpoint is "/", a port that is not a number is 0). '' while
+// the Host is empty or refused, or the scheme is one the check rejects.
+export function checkURL(config, host) {
+  const h = String(host ?? '').trim()
+  if (h === '' || hostError(h)) return ''
+  const str = (v, d) => (typeof v === 'string' && v !== '' ? v : d)
+  const scheme = str(config?.scheme, 'https')
+  if (scheme !== 'http' && scheme !== 'https') return ''
+  const port = typeof config?.port === 'number' && Number.isFinite(config.port) ? Math.trunc(config.port) : 0
+  return buildHTTPURL(scheme, h, port, str(config?.endpoint, '/'))
+}

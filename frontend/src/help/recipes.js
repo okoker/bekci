@@ -308,7 +308,7 @@ export const recipes = [
     before: [
       'Bekci follows redirects, so a redirect to a login page counts as reachable.',
       'Set Expected Status to what the page returns today: usually 404 or 403.',
-      'The admin path must start with "/". The check adds the path straight after the host, so an empty path becomes "/" (the home page, which answers and so false-alarms) and a path without the "/" gives a broken address.',
+      'The admin path must start with "/". The check adds it after the Host (and after the path in the Host, if it has one), so an empty path asks for the Host\'s own page, usually the home page, which answers and so false-alarms.',
       OWN,
     ],
     preferred: 'http',

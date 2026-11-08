@@ -66,7 +66,18 @@ gets the same greater than / number rule, also for a saved rule whose value is n
 
 `condition-rules.test.mjs` (Node only, no browser) pins the target form's pure validation rules in
 `src/conditionRules.js`: the TCP default config, the failure-window minimum and its error text, the
-number check for Response (ms) and Packet loss (%), and the packet-loss hint.
+number check for Response (ms) and Packet loss (%), and the packet-loss hint. For the target Host
+(A-082) it runs `hostError` and `buildHTTPURL` over the server's own tables,
+`internal/checker/testdata/host_rules.json` and `http_urls.json`, so the form and the server cannot
+drift, and checks that `checkURL` applies the defaults the check applies (https, Endpoint `/`, port 0).
+
+`host-path.test.mjs` covers the target Host in the target editor (A-082): `https://example.com` and
+`example.com:8443` get the server's message on the field, and Save sends nothing, also when the
+browser's own check is bypassed; under the HTTP and Page Hash Endpoint, "Checks …" shows the address
+the check will request (`www.somehost.com/health`, then with port 8443, Endpoint `status`, Scheme
+HTTP; Page Hash; `somehost.com/health/` keeps its slash), with no line while Host is empty or refused
+or for other check types; Save sends `somehost.com/health/` as typed; and a Save the server refuses
+shows its message just above the Save button, in the window.
 
 `targets-tag-filter.test.mjs` covers the Targets filter bar: a Tags chip has only its Remove button
 (no pin), and tags, Location and Project combine so each one narrows the list; removing a chip
