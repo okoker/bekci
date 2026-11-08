@@ -4,10 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
-	"strconv"
-	"strings"
 	"time"
 )
 
@@ -22,16 +19,7 @@ func runPageHash(host string, config map[string]any) *Result {
 	skipTLS := configBool(config, "skip_tls_verify", false)
 	timeoutS := configInt(config, "timeout_s", 10)
 
-	// Build URL (bracket IPv6 addresses)
-	hostPart := host
-	if strings.Contains(host, ":") {
-		hostPart = "[" + host + "]"
-	}
-	url := fmt.Sprintf("%s://%s", scheme, hostPart)
-	if port > 0 {
-		url = fmt.Sprintf("%s://%s", scheme, net.JoinHostPort(host, strconv.Itoa(port)))
-	}
-	url += endpoint
+	url := buildHTTPURL(scheme, host, port, endpoint)
 
 	transport := sharedTransport
 	if skipTLS {

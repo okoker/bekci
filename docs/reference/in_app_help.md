@@ -283,9 +283,9 @@ fill in, which the data leaves empty.
 
 PRIMARY is the first check of the preferred type by name (`internal/store/checks.go:72-82`, checks in
 name order, `:43`). Facts the recipe texts rely on: HTTP follows up to 9 redirects (CheckRedirect
-refuses the 10th, `internal/checker/http.go:41-46`); an HTTP or Page Hash URL is the host plus the
-endpoint with no "/" added (`http.go:32`), hence S4's pattern; Page Hash is down for a changed page and
-also for an unreachable or non-2xx one (`internal/checker/page_hash.go:50-98`), hence S1's pairing; a DNS
+refuses the 10th, `internal/checker/http.go:29-34`); an HTTP or Page Hash URL is the host plus one "/" and
+the endpoint (`http.go:20`, `url.go`): a missing "/" is added, but an empty endpoint is the home page, hence S4's pattern; Page Hash is down for a changed page and
+also for an unreachable or non-2xx one (`internal/checker/page_hash.go:38-86`), hence S1's pairing; a DNS
 check with an empty query asks for the target's host, so S2's target must be a name, and a lookup that
 fails is down too, so S2 also alerts when both resolvers fail to answer while the canary passes
 (`internal/checker/dns.go:82-106`); with Port must stay closed any failed connection is up and a

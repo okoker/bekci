@@ -744,7 +744,7 @@ The JSON string `"null"` uses the same defaults as `"{}"`. The scheduler initial
 |-------|------|---------|-------------|
 | `scheme` | string | `"https"` | `http` or `https` |
 | `port` | int | `0` | Port (0 = scheme default: 80/443) |
-| `endpoint` | string | `"/"` | URL path |
+| `endpoint` | string | `"/"` | URL path. A missing leading `/` is added and extra leading `/` are dropped (`health`, `/health` and `//health` all fetch `/health`); empty fetches `/` |
 | `expect_status` | int | `200` | Expected HTTP status code |
 | `skip_tls_verify` | bool | `false` | Skip TLS cert verification |
 | `timeout_s` | int | `10` | Request timeout (seconds) |
@@ -809,7 +809,7 @@ Metrics: `query`, `record_type`, `resolved` (array). Trailing dots stripped for 
 |-------|------|---------|-------------|
 | `scheme` | string | `"https"` | `http` or `https` |
 | `port` | int | `0` | Port (0 = scheme default) |
-| `endpoint` | string | `"/"` | URL path to fetch |
+| `endpoint` | string | `"/"` | URL path to fetch. Leading `/` handled as for the HTTP check |
 | `baseline_hash` | string | `""` | SHA256 of expected body (empty = capture mode) |
 | `skip_tls_verify` | bool | `false` | Skip TLS cert verification |
 | `timeout_s` | int | `10` | Request timeout (seconds) |
