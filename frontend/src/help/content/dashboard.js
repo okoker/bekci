@@ -19,7 +19,7 @@ export const dashboard = {
       title: 'Target rows',
       text: [
         'Click to unfold its checks; one target opens at a time.',
-        'Order: down targets first; then targets under their SLA goal; then the rest; paused ones last within each group; within a group, the lowest uptime of any of its checks first.',
+        'Order: down targets first; then targets under their SLA goal; then the rest; paused targets always last. Within each group, the lowest uptime of any of its checks first.',
       ],
     },
     updown: {

@@ -108,7 +108,7 @@ Help is not modal, so other windows can be open under or over it. Each press clo
   that renders controls from a list takes keys from a `<page>Anchors` map in `anchors.js` (Settings ›
   General: `settingsGeneralAnchors`).
 - **Page.** Each view's root names its help page with `data-help-page`: `dashboard`
-  (`views/DashboardView.vue:332`), `targets` (`views/TargetsView.vue:305`), `search`
+  (`views/DashboardView.vue:337`), `targets` (`views/TargetsView.vue:305`), `search`
   (`views/SearchView.vue:403`), `sla` (`views/SlaView.vue:290`), `alerts` (`views/AlertsView.vue:52`),
   `profile` (`views/ProfileView.vue:54`). Settings computes its id from the tab on show
   (`views/SettingsView.vue:406-413`, root `:1180`): `settingsGeneral`, `settingsTags`, `settingsSla`,

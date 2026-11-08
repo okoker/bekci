@@ -164,7 +164,8 @@ function toggleCheck(e, checkId) {
   expandedCheckId.value = expandedCheckId.value === checkId ? null : checkId
 }
 
-// Filter by category, sort: problems first, then SLA unhealthy, then healthy, then paused
+// Filter by category, sort: down first, then under the SLA goal, then healthy; paused targets always last
+// (isTargetDown is false for a paused target, so the paused test must come before the SLA one)
 const filteredAndSortedTargets = computed(() => {
   let list = dashboardData.value
   if (activeCategory.value !== 'All') {
@@ -175,6 +176,12 @@ const filteredAndSortedTargets = computed(() => {
     const bPaused = isTargetPaused(b)
     const aDown = isTargetDown(a)
     const bDown = isTargetDown(b)
+    if (aPaused && !bPaused) return 1
+    if (!aPaused && bPaused) return -1
+    if (aPaused && bPaused) {
+      const pausedDiff = a._worstUptime - b._worstUptime
+      return pausedDiff !== 0 ? pausedDiff : a.name.localeCompare(b.name)
+    }
     if (aDown && !bDown) return -1
     if (!aDown && bDown) return 1
     if (aDown && bDown) return a._worstUptime - b._worstUptime
@@ -182,8 +189,6 @@ const filteredAndSortedTargets = computed(() => {
     const bUnhealthy = b.sla_status === 'unhealthy'
     if (aUnhealthy && !bUnhealthy) return -1
     if (!aUnhealthy && bUnhealthy) return 1
-    if (aPaused && !bPaused) return 1
-    if (!aPaused && bPaused) return -1
     const diff = a._worstUptime - b._worstUptime
     return diff !== 0 ? diff : a.name.localeCompare(b.name)
   })
