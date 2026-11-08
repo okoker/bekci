@@ -287,11 +287,11 @@ Kills all sessions for the user, forcing re-login.
 | POST | `/api/targets/{id}/pause` | operator+ | Pause target (stops checks) |
 | POST | `/api/targets/{id}/unpause` | operator+ | Unpause target (resumes checks) |
 
-**Target host.** `host` is a name or IP address, optionally followed by a path: `www.example.com`, `www.example.com/health`, `10.0.0.5/status/`. Checks split it at the first `/` (`checker.SplitHost`, `internal/checker/host.go`): HTTP and Page Hash request the path (see the `http` endpoint below); TCP, ping, DNS (the `query` fallback), TLS (address and SNI) and SNMP use the name only. Create and update trim the host, then refuse it with 400 and one of these messages (`checker.HostError`):
+**Target host.** `host` is a name or IP address, optionally followed by a path: `www.example.com`, `www.example.com/health`, `10.0.0.5/status/`. Checks split it at the first `/` (`checker.SplitHost`, `internal/checker/host.go`): HTTP and Page Hash request the path (see the `http` endpoint below); TCP, ping, DNS (the `query` fallback), TLS (address and SNI) and SNMP use the name only. Create and update trim the host (Go `strings.TrimSpace`: Unicode White_Space), then refuse it with 400 and one of these messages (`checker.HostError`):
 
 | Host holds | Message |
 |-------|---------|
-| a space or control character | `Host can't contain spaces.` |
+| a space (Unicode White_Space), a control character or an invisible format character such as a byte-order mark or zero-width space | `Host can't contain spaces or invisible characters.` |
 | `://` | `Leave out http:// or https://: each HTTP or Page Hash check has its own Scheme.` |
 | `?` or `#` | `Put a query (? or #) in the check's Endpoint, not in Host.` |
 | nothing before the first `/` | `Host needs a name or IP address before the path.` |

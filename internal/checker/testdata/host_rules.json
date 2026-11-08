@@ -1,5 +1,5 @@
 {
-  "about": "What Save accepts as a target Host (HostError, internal/checker/host.go): a name or IP, optionally followed by a path. error is the exact refusal message, empty when the Host is accepted. Hosts here are already trimmed, as the server trims before checking. Read by TestHostError, the target API tests and the target form (frontend/tests/condition-rules.test.mjs), so the server and the form cannot drift.",
+  "about": "What Save accepts as a target Host (HostError, internal/checker/host.go): a name or IP, optionally followed by a path. error is the exact refusal message, empty when the Host is accepted. Hosts here are already trimmed: the server trims with Go's strings.TrimSpace (Unicode White_Space) before checking, and the form trims the same way. Read by TestHostError, the target API tests and the target form (frontend/tests/condition-rules.test.mjs), so the server and the form cannot drift.",
   "cases": [
     {"host": "", "error": ""},
     {"host": "example.com", "error": ""},
@@ -15,9 +15,9 @@
     {"host": "srv_01.corp.local", "error": ""},
     {"host": "somehost.com/a:b", "error": ""},
     {"host": "somehost.com/@team", "error": ""},
-    {"host": "a b", "error": "Host can't contain spaces."},
-    {"host": "example.com/a b", "error": "Host can't contain spaces."},
-    {"host": "example.com\tx", "error": "Host can't contain spaces."},
+    {"host": "a b", "error": "Host can't contain spaces or invisible characters."},
+    {"host": "example.com/a b", "error": "Host can't contain spaces or invisible characters."},
+    {"host": "example.com\tx", "error": "Host can't contain spaces or invisible characters."},
     {"host": "https://example.com", "error": "Leave out http:// or https://: each HTTP or Page Hash check has its own Scheme."},
     {"host": "http://example.com/health", "error": "Leave out http:// or https://: each HTTP or Page Hash check has its own Scheme."},
     {"host": "HTTPS://example.com:8443", "error": "Leave out http:// or https://: each HTTP or Page Hash check has its own Scheme."},
@@ -29,6 +29,18 @@
     {"host": "example.com:8443", "error": "Leave out the port: each check has its own Port field. Write an IPv6 address without brackets."},
     {"host": "example.com:8443/health", "error": "Leave out the port: each check has its own Port field. Write an IPv6 address without brackets."},
     {"host": "[::1]", "error": "Leave out the port: each check has its own Port field. Write an IPv6 address without brackets."},
-    {"host": "10.0.0.5:22", "error": "Leave out the port: each check has its own Port field. Write an IPv6 address without brackets."}
+    {"host": "10.0.0.5:22", "error": "Leave out the port: each check has its own Port field. Write an IPv6 address without brackets."},
+    {"host": "\ufeffexample.com", "error": "Host can't contain spaces or invisible characters."},
+    {"host": "a\u200bb.example.com", "error": "Host can't contain spaces or invisible characters."},
+    {"host": "example.com\u00a0x", "error": "Host can't contain spaces or invisible characters."},
+    {"host": "::ffff:1.2.3.4", "error": ""},
+    {"host": "1:2:3:4:5:6:7:8", "error": ""},
+    {"host": "fe80::1/status", "error": ""},
+    {"host": "1:2", "error": "Leave out the port: each check has its own Port field. Write an IPv6 address without brackets."},
+    {"host": "1::2::3", "error": "Leave out the port: each check has its own Port field. Write an IPv6 address without brackets."},
+    {"host": ":::", "error": "Leave out the port: each check has its own Port field. Write an IPv6 address without brackets."},
+    {"host": "::g", "error": "Leave out the port: each check has its own Port field. Write an IPv6 address without brackets."},
+    {"host": "1:2:3:4:5:6:7:8:9", "error": "Leave out the port: each check has its own Port field. Write an IPv6 address without brackets."},
+    {"host": "fe80::1%eth0", "error": "Leave out the port: each check has its own Port field. Write an IPv6 address without brackets."}
   ]
 }

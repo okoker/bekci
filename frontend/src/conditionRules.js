@@ -117,12 +117,20 @@ function isIPv6(name) {
   }
 }
 
+// The server's strings.TrimSpace: Unicode White_Space only. JavaScript's trim()
+// differs (it also trims a byte-order mark, and keeps U+0085).
+function trimHost(host) {
+  return String(host ?? '').replace(/^\p{White_Space}+|\p{White_Space}+$/gu, '')
+}
+
 // Why Save refuses a Host, or '' when it is fine. Trims first, as the server
 // does; an empty Host is left to the field's "required".
 export function hostError(host) {
-  const h = String(host ?? '').trim()
+  const h = trimHost(host)
   if (h === '') return ''
-  if (/[\p{White_Space}\p{Cc}]/u.test(h)) return "Host can't contain spaces."
+  // Spaces, control characters and invisible format characters (a pasted
+  // byte-order mark or zero-width space) would all break the check's address
+  if (/[\p{White_Space}\p{Cc}\p{Cf}]/u.test(h)) return "Host can't contain spaces or invisible characters."
   if (h.includes('://')) return "Leave out http:// or https://: each HTTP or Page Hash check has its own Scheme."
   if (/[?#]/.test(h)) return "Put a query (? or #) in the check's Endpoint, not in Host."
   const [name] = splitHost(h)
@@ -152,7 +160,7 @@ export function buildHTTPURL(scheme, host, port, endpoint) {
 // https, an empty Endpoint is "/", a port that is not a number is 0). '' while
 // the Host is empty or refused, or the scheme is one the check rejects.
 export function checkURL(config, host) {
-  const h = String(host ?? '').trim()
+  const h = trimHost(host)
   if (h === '' || hostError(h)) return ''
   const str = (v, d) => (typeof v === 'string' && v !== '' ? v : d)
   const scheme = str(config?.scheme, 'https')

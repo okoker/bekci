@@ -97,7 +97,7 @@ Help is not modal, so other windows can be open under or over it. Each press clo
 1. a page's own window: the SLA zoom, an audit entry, Search's save box. Their handlers sit on
    `document`, run before help's (on `window`), and mark the key used (`preventDefault`);
 2. the target form's "Replace the N conditions…" question: Esc is its Cancel
-   (`components/TargetEditModal.vue:260-266`, also on `document`);
+   (`components/TargetEditModal.vue:263-269`, also on `document`);
 3. the recipes window, then the lesson under it, then the open note, then help itself
    (`help/useHelp.js:55-67`).
 
@@ -114,7 +114,7 @@ Help is not modal, so other windows can be open under or over it. Each press clo
   (`views/SettingsView.vue:406-413`, root `:1180`): `settingsGeneral`, `settingsTags`, `settingsSla`,
   `settingsAlerting`, `settingsBackup`, `settingsFail2ban`, `settingsHealth`, `auditLog`, `users`,
   `apiAccess`; so the same key on two tabs (`refresh` on Fail2Ban and System Health) doesn't clash.
-  The target form names `targetForm` (`components/TargetEditModal.vue:418-419`); it sits inside its
+  The target form names `targetForm` (`components/TargetEditModal.vue:422-423`); it sits inside its
   view, so it wins while open. The header's controls use page `header` (`HEADER_PAGE`) and are added
   after the page's own on every page.
 - **Scope.** Marks are looked for only inside the **last** element carrying `data-help-scope`
@@ -177,7 +177,7 @@ Help is not modal, so other windows can be open under or over it. Each press clo
 - **The open control** gets a 2px turquoise outline with a faint glow (`data-help-on`). A note whose
   text depends on its control's figures reads them from `data-help-args` and follows them while open
   (the form's Fail Count and Time Window; `help/HelpLayer.vue:145-152`;
-  `components/TargetEditModal.vue:747`, `:753`).
+  `components/TargetEditModal.vue:752`, `:758`).
 - **Closing.** The same mark again, Esc, or a click elsewhere on the page closes the note; help stays
   on (`help/HelpLayer.vue:242-254`). Not closing it: a click on help's own parts, a press on a
   scrollbar (the window's or a scrolling element's, such as the form overlay), and a click into a
@@ -194,7 +194,7 @@ Help is not modal, so other windows can be open under or over it. Each press clo
 - In normal flow under the header, full width, so it pushes the page down
   (`components/DefaultLayout.vue:199`). Inside the target form, which covers the header, the form
   draws its own copy across the top of its overlay and the layout's is hidden meanwhile
-  (`components/TargetEditModal.vue:420`, `:1212`).
+  (`components/TargetEditModal.vue:424`, `:1217`).
 - Left: the page's summary (`help/HelpBar.vue:12`, `:27-29`). Right: "Click any ? to read it" and the
   stepper ‹ › while there are marks; the stepper reads "N notes" until a note opens, then "n of N",
   counting each key once (`:17-21`); "Written for Bekci 3.5.0", plus "(running X)" when the server
@@ -203,11 +203,11 @@ Help is not modal, so other windows can be open under or over it. Each press clo
 ## Target form help
 
 - The form overlay covers the header, so the form has its own turquoise "Help" button in its title
-  row (`components/TargetEditModal.vue:426-429`). If help is already on when the form opens, it opens
+  row (`components/TargetEditModal.vue:430-433`). If help is already on when the form opens, it opens
   with help on.
 - At 1280px and wider the plain-words card sits left of the form and notes open in the right margin;
   narrower, the card sits above Condition Groups and notes open beside their field, below it
-  when they fit (`components/TargetEditModal.vue:191-205`, cards at `:421-422` and `:505-506`).
+  when they fit (`components/TargetEditModal.vue:194-208`, cards at `:425-426` and `:510-511`).
 - Per-condition and per-group fields have a mark on every instance; the stepper counts each key once.
   The Fail Count note draws an eight-result timeline with that condition's own interval and count
   (`failCountTimeline`, `help/explainRule.js:70`), at the interval Bekci runs (`checkInterval`: blank =
@@ -309,20 +309,20 @@ empty or fails the need's pattern, the recipe's message.
   `help.formApply` only then (`:224`, `:275-281`). A load sequence number keeps a form closed while
   loading from ending the wait of the next one (`:381-409`).
 - **Use this recipe** in the window calls the form (`help/RecipesWindow.vue:118-123`). A form that holds
-  conditions first asks, in an in-app dialog (`components/TargetEditModal.vue:799-806`): "Replace the N conditions in this form with
+  conditions first asks, in an in-app dialog (`components/TargetEditModal.vue:804-811`): "Replace the N conditions in this form with
   this recipe? On a saved target, Save then deletes the replaced checks and their history, SLA
   included." ("the 1 condition" for one), with Replace and Cancel; Esc is Cancel. The warning is true:
   saving a target deletes every check no longer in the form (`internal/store/targets.go:372-383`) and
   its results go with it (`ON DELETE CASCADE`). Nothing is sent until Save.
-- After it goes in (`components/TargetEditModal.vue:244-250`), the form scrolls to Condition Groups and a turquoise banner says
+- After it goes in (`components/TargetEditModal.vue:247-253`), the form scrolls to Condition Groups and a turquoise banner says
   "Filled in from the recipe <name>. Fill in the fields marked in turquoise, then Save." (or "Check the
   settings, then Save.") with **Undo**, which puts back the previous conditions and Preferred Check,
-  check ids included (`components/TargetEditModal.vue:270-275`, banner `:518-521`).
+  check ids included (`components/TargetEditModal.vue:273-278`, banner `:523-526`).
 - A needed field is empty, dashed turquoise, with an italic placeholder; the marking clears once it
   has a value. Save is refused while one is empty (or S4's path doesn't start with "/"), through the
-  form's custom-validity popup with the recipe's message and a `saveTarget` guard (`components/TargetEditModal.vue:127-128`, `:331`).
-  Changing a recipe condition's check type drops its needs (`components/TargetEditModal.vue:96-101`).
-- Save builds its payload field by field (`components/TargetEditModal.vue:333-360`), so the `needs` key never reaches the server.
+  form's custom-validity popup with the recipe's message and a `saveTarget` guard (`components/TargetEditModal.vue:130-131`, `:334`).
+  Changing a recipe condition's check type drops its needs (`components/TargetEditModal.vue:99-104`).
+- Save builds its payload field by field (`components/TargetEditModal.vue:336-363`), so the `needs` key never reaches the server.
   After that the form is an ordinary form.
 
 ### The window (`help/RecipesWindow.vue`)

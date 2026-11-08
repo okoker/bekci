@@ -69,15 +69,17 @@ gets the same greater than / number rule, also for a saved rule whose value is n
 number check for Response (ms) and Packet loss (%), and the packet-loss hint. For the target Host
 (A-082) it runs `hostError` and `buildHTTPURL` over the server's own tables,
 `internal/checker/testdata/host_rules.json` and `http_urls.json`, so the form and the server cannot
-drift, and checks that `checkURL` applies the defaults the check applies (https, Endpoint `/`, port 0).
+drift, checks that `checkURL` applies the defaults the check applies (https, Endpoint `/`, port 0),
+and that both trim exactly what the server's `strings.TrimSpace` trims (not JavaScript's `trim()`).
 
 `host-path.test.mjs` covers the target Host in the target editor (A-082): `https://example.com` and
 `example.com:8443` get the server's message on the field, and Save sends nothing, also when the
 browser's own check is bypassed; under the HTTP and Page Hash Endpoint, "Checks …" shows the address
 the check will request (`www.somehost.com/health`, then with port 8443, Endpoint `status`, Scheme
 HTTP; Page Hash; `somehost.com/health/` keeps its slash), with no line while Host is empty or refused
-or for other check types; Save sends `somehost.com/health/` as typed; and a Save the server refuses
-shows its message just above the Save button, in the window.
+or for other check types; Save sends `somehost.com/health/` as typed; a Save the server refuses
+shows its message just above the Save button, in the window; and a target that fails to load says so
+at the top of the form, before its first field.
 
 `host-wrap.test.mjs` covers long Hosts (A-082 allows a path, so they are normal): on Targets at 1440,
 1280 and 1100 px and on Search at 1440 and 1100 px, a Host with a long path is shown whole, its cell

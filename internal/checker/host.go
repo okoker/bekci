@@ -27,8 +27,12 @@ func HostError(host string) string {
 	if host == "" {
 		return ""
 	}
-	if strings.IndexFunc(host, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) >= 0 {
-		return "Host can't contain spaces."
+	// Spaces, control characters and invisible format characters (a pasted
+	// byte-order mark or zero-width space) would all break the check's address.
+	if strings.IndexFunc(host, func(r rune) bool {
+		return unicode.IsSpace(r) || unicode.IsControl(r) || unicode.Is(unicode.Cf, r)
+	}) >= 0 {
+		return "Host can't contain spaces or invisible characters."
 	}
 	if strings.Contains(host, "://") {
 		return "Leave out http:// or https://: each HTTP or Page Hash check has its own Scheme."

@@ -69,3 +69,11 @@ test('checkURL applies the check defaults the server applies', () => {
   assert.equal(checkURL({}, 'https://example.com'), '')
   assert.equal(checkURL({ scheme: 'ftp' }, 'example.com'), '')
 })
+
+test('hostError and checkURL trim exactly what the server trims (Unicode White_Space)', () => {
+  // Go's strings.TrimSpace trims NEL (U+0085) and no-break space, but not a BOM (U+FEFF)
+  assert.equal(hostError('\u0085example.com '), '')
+  assert.equal(checkURL({}, '\u0085example.com '), 'https://example.com/')
+  assert.equal(hostError('﻿example.com'), "Host can't contain spaces or invisible characters.")
+  assert.equal(checkURL({}, '﻿example.com'), '')
+})

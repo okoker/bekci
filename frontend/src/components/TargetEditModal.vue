@@ -20,6 +20,9 @@ const emit = defineEmits(['close', 'saved'])
 // Form state
 const form = ref(getEmptyForm())
 const formError = ref('')
+// A target that failed to load: said at the top of the form, where the person
+// is looking when it opens (a Save refusal goes next to the Save button instead)
+const loadError = ref('')
 const projectOptions = ref([])
 const locationOptions = ref([])
 const categoryOptions = ref([])
@@ -321,7 +324,7 @@ async function loadTargetDetail(id) {
     }
     selectedRecipients.value = data.recipient_ids || []
   } catch (e) {
-    formError.value = 'Failed to load target details'
+    loadError.value = 'Failed to load target details'
   }
 }
 
@@ -388,6 +391,7 @@ let loadSeq = 0
 watch(() => props.show, async (val) => {
   if (!val) return
   formError.value = ''
+  loadError.value = ''
   pendingRecipe.value = null
   recipeBanner.value = null
   loadAllUsers()
@@ -428,6 +432,7 @@ watch(() => props.show, async (val) => {
           <span class="form-help-icon" aria-hidden="true"></span>Help
         </button>
       </div>
+      <div v-if="loadError" class="error-msg" style="margin-bottom: 0.75rem;">{{ loadError }}</div>
       <form @submit.prevent="saveTarget">
         <!-- Target fields -->
         <div class="form-row">

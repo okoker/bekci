@@ -143,3 +143,43 @@ test('a Save the server refuses shows its message next to the Save button', asyn
     return r.top >= 0 && r.bottom <= window.innerHeight
   }), true, 'message is in the window')
 })
+
+test('a target that fails to load says so at the top of the form, where the person is looking', async t => {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+  const browserErrors = []
+  page.on('pageerror', error => browserErrors.push(error.message))
+  t.after(async () => {
+    await page.close()
+    assert.deepEqual(browserErrors, [], 'browser JavaScript errors')
+  })
+  page.setDefaultTimeout(3000)
+  const target = { id: 'gone', name: 'Old server', host: 'old.example.com', category: 'Other', enabled: true,
+    tags: [], recipient_ids: [], condition_count: 1, state: { current_state: 'healthy' } }
+  await page.route(`${baseURL}api/**`, async route => {
+    const url = new URL(route.request().url())
+    let json
+    if (url.pathname === '/api/me') json = { id: 'operator', username: 'tester', role: 'operator' }
+    else if (url.pathname === '/api/tags') json = url.searchParams.get('group') === 'category' ? [{ id: 'other', value: 'Other' }] : []
+    else if (url.pathname === '/api/users') json = []
+    else if (url.pathname === '/api/system/health') json = {
+      net: { status: 'ok', latency_ms: 1 }, disk: { total_gb: 100, free_gb: 80 },
+      cpu: { load1: 0, num_cpu: 4 }, scheduler: { status: 'ok', active_checks: 0, stale_seconds: 0 },
+    }
+    else if (url.pathname === '/api/targets') json = [target]
+    else if (url.pathname === '/api/targets/gone') return route.fulfill({ status: 500, json: { error: 'database is locked' } })
+    else return route.fulfill({ status: 404, json: { error: 'Unexpected fixture request' } })
+    await route.fulfill({ json })
+  })
+  await page.goto(`${baseURL}targets`)
+  await page.getByRole('button', { name: 'Edit', exact: true }).click()
+  const modal = page.locator('.modal-card')
+  const error = modal.locator('.error-msg', { hasText: 'Failed to load target details' })
+  await error.waitFor({ state: 'visible' })
+  // Above the form's fields, not down by the Save button
+  assert.equal(await error.evaluate(el => !!(el.compareDocumentPosition(document.querySelector('.modal-card form input'))
+    & Node.DOCUMENT_POSITION_FOLLOWING)), true, 'the message comes before the first field')
+  assert.equal(await error.evaluate(el => {
+    const r = el.getBoundingClientRect()
+    return r.top >= 0 && r.bottom <= window.innerHeight
+  }), true, 'the message is in the window')
+})
