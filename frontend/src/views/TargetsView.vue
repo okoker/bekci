@@ -388,15 +388,15 @@ onMounted(async () => {
                 <span :class="['badge', t.enabled ? 'badge-active' : 'badge-suspended']">{{ t.enabled ? 'yes' : 'no' }}</span>
                 <span v-if="!t.enabled" class="badge badge-disabled">DISABLED</span>
               </td>
-              <td class="actions" @click.stop>
-                <template v-if="auth.isOperator">
+              <td class="actions-cell" @click.stop>
+                <div v-if="auth.isOperator" class="actions">
                   <button v-if="isTargetPaused(t)" class="btn btn-sm btn-unpause" @click="unpauseTarget(t.id)">Unpause</button>
                   <button v-else class="btn btn-sm btn-pause" @click="pauseTarget(t.id)">Pause</button>
                   <button class="btn btn-sm" @click="runAllChecks(t.id)">Run Now</button>
                   <button class="btn btn-sm" @click="openForm(t)">Edit</button>
                   <button class="btn btn-sm" @click="cloneTarget(t)">Clone</button>
                   <button class="btn btn-sm btn-danger" @click="deleteTarget(t.id)">Delete</button>
-                </template>
+                </div>
               </td>
             </tr>
             <!-- Expanded: checks list -->
@@ -1150,13 +1150,11 @@ onMounted(async () => {
   .guide-dg-or { padding: 0.1rem 0; }
 }
 
-/* Actions column: in a window narrower than the page (1100px plus margins) the buttons wrap inside the cell
-   instead of pushing the page sideways. Wider, they stay on one line as before: wrapping there would let
-   the table share the width differently and wrap them although they fit. */
-@media (max-width: 1199px) {
-  td.actions {
-    flex-wrap: wrap;
-    white-space: normal;
-  }
+/* Actions column: the td stays a real table cell; the buttons wrap inside it, so the table never needs
+   more than the card's width (the global .actions rule is flex + nowrap and is for the div, not the cell) */
+td.actions-cell { width: 13rem; }
+td.actions-cell .actions {
+  flex-wrap: wrap;
+  white-space: normal;
 }
 </style>
