@@ -167,14 +167,14 @@ The public landing page (the "Sentinel" design) lives in `_website/` (`index.htm
 Versions above are the `package.json` ranges. `package-lock.json` resolves vue 3.5.28 and @vitejs/plugin-vue 6.0.4; every other package resolves to the version shown.
 
 ### Frontend Build Output
-Measured from the build in `cmd/bekci/frontend_dist/assets/` on 08/11/2026 (v3.5.0, in-app help, the A-072, A-075, A-076, A-080, A-081 fixes, the Actions cells on API Access, Humans and Search, and A-082's Host check and address line) (raw bytes; gzip -9; kB = 1000 bytes). Figures change with every frontend build.
+Measured from the build in `cmd/bekci/frontend_dist/assets/` on 08/11/2026 (v3.5.0, in-app help, the A-072, A-075, A-076, A-080, A-081 fixes, the Actions cells on API Access, Humans and Search, and A-082's Host check, address line and Host wrapping) (raw bytes; gzip -9; kB = 1000 bytes). Figures change with every frontend build.
 
 | Asset | Size (raw) | Size (gzipped) |
 |-------|-----------|----------------|
-| index-*.js (main, the one `index.html` loads) | 334.61 kB | 107.02 kB |
-| index-*.css | 54.81 kB | 10.08 kB |
-| SearchView-*.js | 16.10 kB | 5.49 kB |
-| SearchView-*.css | 5.81 kB | 1.61 kB |
+| index-*.js (main, the one `index.html` loads) | 334.63 kB | 107.03 kB |
+| index-*.css | 54.86 kB | 10.09 kB |
+| SearchView-*.js | 16.10 kB | 5.50 kB |
+| SearchView-*.css | 5.83 kB | 1.62 kB |
 | SlaView-*.js | 239.93 kB | 82.96 kB |
 | SlaView-*.css | 3.72 kB | 1.11 kB |
 
