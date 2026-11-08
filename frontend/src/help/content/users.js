@@ -1,6 +1,6 @@
 // Help for Users: the Humans and API Access tabs (design §7.10). Facts: internal/api/user_handlers.go
-// (create :28-104, no username change :128-197, blank keeps :181-188, last admin :167-179 and
-// :215-227, sign-outs :239-244 and :286-289); no delete route router.go:119-124; roles router.go;
+// (create :28-104, no username change :128-190, blank clears and omitted keeps :175-181, last admin :161-173 and
+// :208-220, sign-outs :232-237 and :279-282); no delete route router.go:119-124; roles router.go;
 // tokens internal/store/api_tokens.go (unique name, soft revoke :105-125, hash only :30-35, prefix
 // :62, last used :149-150, no expiry), internal/api/api_tokens_handlers.go; rate limit
 // middleware.go:114-135, v1_rate_limit.go.
@@ -38,7 +38,7 @@ export const users = {
     edit: {
       title: 'Edit',
       text: [
-        'Changes email, phone and role. A field left blank keeps its old value.',
+        'Changes email, phone and role. Emptying the email or phone field clears it.',
         "Reset Password, in the same window, takes effect at once and signs that person out everywhere, you included if it's your own account.",
       ],
       place: 'left',

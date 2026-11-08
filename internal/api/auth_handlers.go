@@ -114,23 +114,17 @@ func (s *Server) handleGetMe(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleUpdateMe(w http.ResponseWriter, r *http.Request) {
 	claims := getClaims(r)
 	var req struct {
-		Email string `json:"email"`
-		Phone string `json:"phone"`
+		Email *string `json:"email"`
+		Phone *string `json:"phone"`
 	}
 	if err := readJSON(w, r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
-	req.Email = maxLen(strings.TrimSpace(req.Email), 100)
-	req.Phone = maxLen(strings.TrimSpace(req.Phone), 20)
-
-	if req.Email != "" && !validEmail(req.Email) {
-		writeError(w, http.StatusBadRequest, "invalid email address")
-		return
-	}
-	if req.Phone != "" && !validPhone(req.Phone) {
-		writeError(w, http.StatusBadRequest, "invalid phone number")
+	email, phone, msg := cleanContactFields(req.Email, req.Phone)
+	if msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
 
@@ -140,21 +134,20 @@ func (s *Server) handleUpdateMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	email := req.Email
-	if email == "" {
-		email = user.Email
+	// A field left out of the body keeps its stored value; a blank one clears it.
+	if email == nil {
+		email = &user.Email
 	}
-	phone := req.Phone
-	if phone == "" {
-		phone = user.Phone
+	if phone == nil {
+		phone = &user.Phone
 	}
 
-	if err := s.store.UpdateUser(user.ID, email, phone, user.Role); err != nil {
+	if err := s.store.UpdateUser(user.ID, *email, *phone, user.Role); err != nil {
 		slog.Error("update profile failed", "user_id", user.ID, "error", err)
 		writeError(w, http.StatusInternalServerError, "update failed")
 		return
 	}
-	s.audit(r, "update_profile", "user", user.ID, "email="+email+" phone="+phone, "success")
+	s.audit(r, "update_profile", "user", user.ID, "email="+*email+" phone="+*phone, "success")
 	writeJSON(w, http.StatusOK, map[string]string{"message": "profile updated"})
 }
 

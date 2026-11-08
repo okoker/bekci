@@ -98,7 +98,7 @@ Sets `Set-Cookie: token=<jwt>; Path=/; MaxAge=<session_timeout>; HttpOnly; Secur
 
 ### PUT /api/me
 
-**Request:** (all fields optional, empty = keep current)
+**Request:** (all fields optional; a field left out keeps its stored value, an empty string clears it)
 ```json
 {
   "email": "new@example.com",
@@ -211,7 +211,7 @@ Invalidates all other sessions on success.
 
 ### PUT /api/users/{id}
 
-**Request:** (all fields optional, empty = keep current)
+**Request:** (all fields optional; `email` and `phone` left out keep the stored value, an empty string clears them; an empty `role` keeps the current role)
 ```json
 {
   "email": "string",

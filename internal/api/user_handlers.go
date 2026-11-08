@@ -128,24 +128,18 @@ func (s *Server) handleGetUser(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var req struct {
-		Email string `json:"email"`
-		Phone string `json:"phone"`
-		Role  string `json:"role"`
+		Email *string `json:"email"`
+		Phone *string `json:"phone"`
+		Role  string  `json:"role"`
 	}
 	if err := readJSON(w, r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
-	req.Email = maxLen(strings.TrimSpace(req.Email), 100)
-	req.Phone = maxLen(strings.TrimSpace(req.Phone), 20)
-
-	if req.Email != "" && !validEmail(req.Email) {
-		writeError(w, http.StatusBadRequest, "invalid email address")
-		return
-	}
-	if req.Phone != "" && !validPhone(req.Phone) {
-		writeError(w, http.StatusBadRequest, "invalid phone number")
+	email, phone, msg := cleanContactFields(req.Email, req.Phone)
+	if msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
 
@@ -178,21 +172,20 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	email := req.Email
-	if email == "" {
-		email = user.Email
+	// A field left out of the body keeps its stored value; a blank one clears it.
+	if email == nil {
+		email = &user.Email
 	}
-	phone := req.Phone
-	if phone == "" {
-		phone = user.Phone
+	if phone == nil {
+		phone = &user.Phone
 	}
 
-	if err := s.store.UpdateUser(id, email, phone, role); err != nil {
+	if err := s.store.UpdateUser(id, *email, *phone, role); err != nil {
 		s.audit(r, "update_user", "user", id, "update failed", "failure")
 		writeError(w, http.StatusInternalServerError, "update failed")
 		return
 	}
-	s.audit(r, "update_user", "user", id, fmt.Sprintf("old_role=%s new_role=%s email=%s phone=%s", user.Role, role, email, phone), "success")
+	s.audit(r, "update_user", "user", id, fmt.Sprintf("old_role=%s new_role=%s email=%s phone=%s", user.Role, role, *email, *phone), "success")
 	writeJSON(w, http.StatusOK, map[string]string{"message": "user updated"})
 }
 
@@ -296,4 +289,26 @@ func (s *Server) handleResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	s.audit(r, "reset_password", "user", id, fmt.Sprintf("username=%s reset_by=%s", user.Username, resetBy), "success")
 	writeJSON(w, http.StatusOK, map[string]string{"message": "password reset"})
+}
+
+// cleanContactFields trims and validates the optional email and phone of a
+// profile update. A nil result means the field was not in the request (keep the
+// stored value); a pointer to "" means it was blanked (clear it). The third
+// result is an error message, empty when both fields are fine.
+func cleanContactFields(email, phone *string) (*string, *string, string) {
+	if email != nil {
+		e := maxLen(strings.TrimSpace(*email), 100)
+		if e != "" && !validEmail(e) {
+			return nil, nil, "invalid email address"
+		}
+		email = &e
+	}
+	if phone != nil {
+		p := maxLen(strings.TrimSpace(*phone), 20)
+		if p != "" && !validPhone(p) {
+			return nil, nil, "invalid phone number"
+		}
+		phone = &p
+	}
+	return email, phone, ""
 }

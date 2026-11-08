@@ -1,4 +1,4 @@
-// Help for Profile (design §7.8). Facts: internal/api/auth_handlers.go:125-126, 143-150, 171, 181-202;
+// Help for Profile (design §7.8). Facts: internal/api/auth_handlers.go:125-129, 137-143, 164, 174-195;
 // internal/api/validate.go:25-38.
 export const profile = {
   summary: {
@@ -20,7 +20,7 @@ export const profile = {
     },
     save: {
       title: 'Save',
-      text: ["Saves email and phone. A field left empty keeps its old value; it can't be cleared here."],
+      text: ["Saves email and phone. Emptying a field clears it."],
     },
     pw: {
       title: 'New Password',
