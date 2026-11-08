@@ -163,3 +163,13 @@ test('every Settings › General field has a key in settingsGeneralAnchors', asy
   assert.deepEqual(keys.filter(key => !Object.hasOwn(settingsGeneralAnchors, key)), [],
     'General settings with no settingsGeneralAnchors entry (their mark would be settingsGeneral.undefined)')
 })
+
+// A group is a separate way to be alerted: the notes must not say a group "adds alerts"
+test('no note says a group adds alerts; the Condition Groups notes say it adds ways to be alerted', async () => {
+  const { pages } = await import('../src/help/content/index.js')
+  const texts = Object.values(pages).flatMap(p => Object.values(p.items ?? {}).flatMap(i => [i.text].flat()))
+    .filter(s => typeof s === 'string')
+  assert.ok(texts.length > 50, 'the scan found the notes')
+  assert.deepEqual(texts.filter(s => s.includes('adds alerts')), [])
+  assert.ok(texts.some(s => s.includes('adding a group adds ways to be alerted')), 'the form note says so')
+})

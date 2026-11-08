@@ -218,7 +218,7 @@ export const targetForm = {
     },
     or: {
       title: 'OR between groups',
-      text: ['Groups are always joined by OR. Each group is a separate way to count as down, so adding a group adds alerts; it never confirms another group.'],
+      text: ['Groups are always joined by OR. Each group is a separate way to count as down, so adding a group adds ways to be alerted; it never confirms another group.'],
       tip: 'Want two tests to agree? Put them in the same group with AND.',
       each: true,
     },
