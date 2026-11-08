@@ -90,6 +90,8 @@ docker compose down && docker compose up -d --build   # rebuild + restart
 docker compose logs -f bekci                           # view logs
 ```
 
+The Docker build context is an allowlist in `.dockerignore`: only `go.mod`, `go.sum`, `cmd/`, `internal/` and `frontend/` go in, and inside `frontend/` not `node_modules`, `dist`, `tests`, databases, logs or `.jwt_secret`. A new top-level file stays out of the build until it is added there.
+
 ### Local (bare-metal) — optional
 ```bash
 make build        # frontend + embed copy + Go binary
